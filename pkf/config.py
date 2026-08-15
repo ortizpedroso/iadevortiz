@@ -158,6 +158,28 @@ def tool_rounds_for_agent(agent_name: str) -> int:
     return MAX_TOOL_ROUNDS
 
 
+GROQ_FALLBACK_MODEL = os.getenv("PKF_GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant")
+
+_GROQ_HEAVY_MODELS = {
+    "llama-3.3-70b-versatile",
+    "qwen-2.5-coder-32b",
+    "qwen-qwq-32b",
+    "mixtral-8x7b-32768",
+}
+
+
+def is_groq_client(base_url: str) -> bool:
+    return "groq.com" in (base_url or "").lower()
+
+
+def fallback_model_on_rate_limit(current_model: str, base_url: str = "") -> str | None:
+    if not is_groq_client(base_url):
+        return None
+    if current_model in _GROQ_HEAVY_MODELS:
+        return GROQ_FALLBACK_MODEL
+    return None
+
+
 def pkf_dir(workspace: Path) -> Path:
     path = workspace / PKF_DIR_NAME
     path.mkdir(parents=True, exist_ok=True)

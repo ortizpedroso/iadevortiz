@@ -6,9 +6,9 @@ import uuid
 from typing import TYPE_CHECKING
 
 import networkx as nx
-from openai import AsyncOpenAI
+from openai import APIStatusError, AsyncOpenAI
 
-from pkf.config import NODE_LIMIT, tool_rounds_for_agent
+from pkf.config import NODE_LIMIT, fallback_model_on_rate_limit, tool_rounds_for_agent
 from pkf.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
@@ -75,6 +75,17 @@ class Agent:
                 api_args["tools"] = self.tools.schemas()
             try:
                 completion = await self.client.chat.completions.create(**api_args)
+            except APIStatusError as exc:
+                if exc.status_code == 429:
+                    fb = fallback_model_on_rate_limit(self.model, str(getattr(self.client, "base_url", "")))
+                    if fb and fb != self.model:
+                        print(f"[{self.name}] Rate limit em {self.model}; tentando {fb}")
+                        self.model = fb
+                        continue
+                if native_tools and _looks_like_tool_unsupported(exc):
+                    native_tools = False
+                    continue
+                raise
             except Exception as exc:
                 if native_tools and _looks_like_tool_unsupported(exc):
                     native_tools = False
