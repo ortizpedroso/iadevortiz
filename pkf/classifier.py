@@ -77,10 +77,29 @@ class Intent:
     source: str
 
 
+BUILD_AGENTS = {"frontend", "backend", "logic", "tester"}
+
+
+def _agent_for_command(command: str, text: str, last_agent: str | None) -> str:
+    if command == "/spec":
+        return "architect"
+    if command == "/review":
+        return "reviewer"
+    if command == "/build":
+        for agent in ("backend", "frontend", "logic"):
+            if any(keyword in text for keyword in KEYWORD_MAP[agent]):
+                return agent
+        if last_agent in BUILD_AGENTS:
+            return last_agent
+        return "frontend"
+    return last_agent if last_agent in DEVELOPER_AGENTS else "architect"
+
+
 def classify_intent(user_input: str, last_agent: str | None = None) -> Intent:
     text = user_input.lower().strip()
     if text.startswith(("/spec", "/build", "/review")):
-        agent = last_agent if last_agent in DEVELOPER_AGENTS else "architect"
+        command = next(cmd for cmd in ("/spec", "/build", "/review") if text.startswith(cmd))
+        agent = _agent_for_command(command, text, last_agent)
         return Intent(agent=agent, kind="command", source="command")
     if text.startswith(("/status", "/agents", "/graph", "/help", "/workspace")):
         return Intent(agent=last_agent or "generalista", kind="command", source="command")

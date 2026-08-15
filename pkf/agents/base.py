@@ -16,6 +16,10 @@ if TYPE_CHECKING:
 
 TOOL_BLOCK = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.S)
 TOOL_FENCE = re.compile(r"```(?:tool|tool_call)\s*(\{.*?\})\s*```", re.S)
+TOOL_FUNCTION = re.compile(
+    r"<function=([a-z_]+)>\s*(\{.*?\})\s*</function>",
+    re.S | re.I,
+)
 
 
 class Agent:
@@ -214,18 +218,28 @@ def _iter_native_tool_calls(message) -> list[dict]:
 def parse_text_tool_calls(content: str) -> list[dict]:
     calls = []
     for block in (*TOOL_BLOCK.findall(content or ""), *TOOL_FENCE.findall(content or "")):
-        try:
-            data = json.loads(block)
-        except json.JSONDecodeError:
-            continue
-        name = data.get("name")
-        if not name:
-            continue
-        arguments = data.get("arguments", {})
-        if not isinstance(arguments, dict):
-            arguments = {}
-        calls.append({"id": f"call_{uuid.uuid4().hex[:8]}", "name": name, "arguments": arguments})
+        call = _tool_call_from_json(block)
+        if call:
+            calls.append(call)
+    for name, args in TOOL_FUNCTION.findall(content or ""):
+        call = _tool_call_from_json(args, name=name)
+        if call:
+            calls.append(call)
     return calls
+
+
+def _tool_call_from_json(block: str, name: str | None = None) -> dict | None:
+    try:
+        data = json.loads(block)
+    except json.JSONDecodeError:
+        return None
+    tool_name = name or data.get("name")
+    if not tool_name:
+        return None
+    arguments = data.get("arguments", data if name else {})
+    if not isinstance(arguments, dict):
+        arguments = {}
+    return {"id": f"call_{uuid.uuid4().hex[:8]}", "name": tool_name, "arguments": arguments}
 
 
 def _looks_like_tool_unsupported(exc: Exception) -> bool:

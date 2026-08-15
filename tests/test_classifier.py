@@ -15,9 +15,15 @@ def test_frontend_keyword():
     assert intent.kind == "feature"
 
 
-def test_review_command_keeps_last_developer():
+def test_review_command_routes_to_reviewer():
     intent = classify_intent("/review", last_agent="backend")
-    assert intent.agent == "backend"
+    assert intent.agent == "reviewer"
+    assert intent.kind == "command"
+
+
+def test_build_after_spec_routes_to_frontend():
+    intent = classify_intent("/build", last_agent="architect")
+    assert intent.agent == "frontend"
     assert intent.kind == "command"
 
 
@@ -41,8 +47,8 @@ def test_cycle_change_after_build_returns_to_spec():
     assert "spec será atualizada" in payload
 
 
-def test_parse_xml_tool_call():
-    text = '<tool_call>{"name": "read_file", "arguments": {"path": "a.py"}}</tool_call>'
+def test_parse_function_tool_call():
+    text = '<function=list_dir>{"path": "."}</function>'
     calls = parse_text_tool_calls(text)
-    assert calls[0]["name"] == "read_file"
-    assert calls[0]["arguments"]["path"] == "a.py"
+    assert calls[0]["name"] == "list_dir"
+    assert calls[0]["arguments"]["path"] == "."
