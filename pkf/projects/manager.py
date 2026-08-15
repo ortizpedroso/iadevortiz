@@ -36,6 +36,18 @@ def list_projects(global_root: Path) -> list[str]:
 
 
 def load_active_project(global_root: Path) -> str | None:
+    path = pkf_dir(global_root) / "project.json"
+    if not path.exists():
+        return _load_active_project_legacy(global_root)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    slug = data.get("active_project")
+    return slug if slug else None
+
+
+def _load_active_project_legacy(global_root: Path) -> str | None:
     path = pkf_dir(global_root) / "session.json"
     if not path.exists():
         return None
@@ -48,19 +60,12 @@ def load_active_project(global_root: Path) -> str | None:
 
 
 def save_active_project(global_root: Path, slug: str | None) -> None:
-    path = pkf_dir(global_root) / "session.json"
-    data: dict = {}
-    if path.exists():
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            data = {}
-    if slug:
-        data["active_project"] = slug
-    else:
-        data.pop("active_project", None)
+    path = pkf_dir(global_root) / "project.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    if slug:
+        path.write_text(json.dumps({"active_project": slug}, ensure_ascii=False, indent=2), encoding="utf-8")
+    elif path.exists():
+        path.unlink()
 
 
 def slug_from_request(text: str) -> str:

@@ -30,7 +30,9 @@ def get_ai_client(provider_name: str) -> tuple[AsyncOpenAI, ProviderConfig]:
 
 async def ping_provider(client: AsyncOpenAI) -> tuple[bool, str]:
     try:
-        await client.models.list()
+        import asyncio
+
+        await asyncio.wait_for(client.models.list(), timeout=8.0)
         return True, "ok"
     except Exception as exc:
         return False, str(exc)

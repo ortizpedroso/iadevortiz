@@ -49,7 +49,20 @@ class ProjectGraph:
         except json.JSONDecodeError:
             return
         for item in data.get("nodes", []):
-            node = GraphNode(**item)
+            if not isinstance(item, dict):
+                continue
+            try:
+                node = GraphNode(
+                    id=str(item.get("id", "node")),
+                    agent=str(item.get("agent", "frontend")),
+                    kind=str(item.get("kind", "predefined")),
+                    parent=item.get("parent"),
+                    status=str(item.get("status", "idle")),
+                    labels=list(item.get("labels") or []),
+                    files=list(item.get("files") or []),
+                )
+            except (TypeError, ValueError):
+                continue
             self.nodes[node.id] = node
         self.ensure_predefined()
 

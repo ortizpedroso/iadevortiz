@@ -57,19 +57,31 @@ def create_app(router: Router) -> FastAPI:
 
     @app.get("/api/session")
     async def session():
-        healthy, detail = await ping_provider(router.client)
-        snapshot = router.snapshot()
-        snapshot["provider_ok"] = healthy
-        project_preview = preview_info(router.workspace)
-        snapshot["project_preview"] = project_preview
-        if project_preview.get("entry"):
-            snapshot["project_preview"]["path"] = f"/preview/{project_preview['entry']}"
-        if not healthy:
-            snapshot["provider_error"] = explain_provider_error(router.provider_name, Exception(detail))
-        return {
-            "session": snapshot,
-            "messages": app.state.history.messages,
-        }
+        try:
+            healthy, detail = await ping_provider(router.client)
+            snapshot = router.snapshot()
+            snapshot["provider_ok"] = healthy
+            project_preview = snapshot.get("project_preview") or preview_info(router.workspace)
+            snapshot["project_preview"] = project_preview
+            if project_preview.get("entry"):
+                snapshot["project_preview"]["path"] = f"/preview/{project_preview['entry']}"
+            if not healthy:
+                snapshot["provider_error"] = explain_provider_error(
+                    router.provider_name, Exception(detail)
+                )
+            return {
+                "session": snapshot,
+                "messages": app.state.history.messages,
+            }
+        except Exception as exc:
+            return {
+                "session": {
+                    "provider_ok": False,
+                    "provider_error": explain_provider_error(router.provider_name, exc),
+                    "project_preview": {"available": False},
+                },
+                "messages": app.state.history.messages,
+            }
 
     @app.post("/api/reset")
     async def reset():

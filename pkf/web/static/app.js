@@ -10,6 +10,7 @@ let busy = false;
 let session = {};
 let authRequired = false;
 let previewPath = null;
+let socketReady = false;
 
 function getToken() {
   const fromUrl = new URLSearchParams(location.search).get("token");
@@ -121,8 +122,8 @@ function removeTransient(sel = "[data-transient]") {
 function setBusy(next) {
   busy = next;
   sendBtn.disabled = busy || !promptEl.value.trim();
-  $("#conn-dot").dataset.state = next ? "busy" : socket?.readyState === 1 ? "on" : "off";
-  $("#header-status").textContent = next ? "Trabalhando…" : "Pronto";
+  $("#conn-dot").dataset.state = next ? "busy" : socketReady ? "on" : "off";
+  $("#header-status").textContent = next ? "Trabalhando…" : socketReady ? "Pronto" : "Conectando…";
 }
 
 function previewUrl(path) {
@@ -214,43 +215,69 @@ function handleEvent(event) {
 }
 
 function connect() {
+  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  socketReady = false;
+  setBusy(false);
   socket = new WebSocket(wsUrl());
   socket.addEventListener("open", () => {
-    $("#conn-dot").dataset.state = "on";
+    socketReady = true;
+    $("#conn-dot").dataset.state = busy ? "busy" : "on";
+    $("#header-status").textContent = busy ? "Trabalhando…" : "Pronto";
+    autoGrow();
   });
   socket.addEventListener("message", (ev) => {
     handleEvent(JSON.parse(ev.data));
   });
   socket.addEventListener("close", (ev) => {
+    socketReady = false;
     $("#conn-dot").dataset.state = "off";
+    $("#header-status").textContent = "Reconectando…";
     if (authRequired && ev.code === 4401) {
       showAuthGate();
       return;
     }
     setTimeout(connect, 1500);
   });
+  socket.addEventListener("error", () => {
+    socketReady = false;
+  });
 }
 
 async function bootstrap() {
-  const health = await fetch("/api/health");
-  if (health.ok) {
-    const info = await health.json();
-    authRequired = !!info.auth_required;
+  try {
+    const health = await fetch("/api/health");
+    if (health.ok) {
+      const info = await health.json();
+      authRequired = !!info.auth_required;
+    }
+    if (authRequired && !getToken()) {
+      showAuthGate();
+      return;
+    }
+    const res = await fetch("/api/session", { headers: authHeaders() });
+    if (res.status === 401) {
+      authRequired = true;
+      showAuthGate();
+      return;
+    }
+    const data = await res.json();
+    applySession(data.session || {});
+    (data.messages || []).forEach((msg) => addMessage(msg));
+  } catch {
+    addError("Não foi possível carregar a sessão. Você ainda pode enviar mensagens.");
   }
-  const res = await fetch("/api/session", { headers: authHeaders() });
-  if (res.status === 401) {
-    authRequired = true;
-    showAuthGate();
-    return;
-  }
-  const data = await res.json();
-  applySession(data.session || {});
-  (data.messages || []).forEach((msg) => addMessage(msg));
 }
 
 function sendMessage(text) {
   const content = text.trim();
-  if (!content || busy || !socket || socket.readyState !== 1) return;
+  if (!content || busy) return;
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    addError("Ainda conectando ao servidor… aguarde um instante e tente de novo.");
+    connect();
+    return;
+  }
   addMessage({ role: "user", content });
   addThinking();
   setBusy(true);
@@ -300,4 +327,5 @@ $("#toggle-sidebar").addEventListener("click", () => {
 $("#preview-side").addEventListener("click", openPreviewSide);
 $("#close-preview").addEventListener("click", closePreviewSide);
 
-bootstrap().then(connect).catch(() => connect());
+connect();
+bootstrap();

@@ -38,7 +38,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         expected = auth_token()
         if not expected:
             return await call_next(request)
-        if request.url.path.startswith("/assets/") or request.url.path == "/api/health":
+        if request.url.path.startswith("/assets/") or request.url.path in {"/api/health", "/"}:
             return await call_next(request)
         token = _extract_token(request)
         if token != expected:
