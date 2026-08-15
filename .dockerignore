@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Dados locais
+.env
+.pkf/
+knowledge_graph.png
+
+# Repositório pesado (não precisa na VPS)
+system_prompts_leaks/
+Anthropic/
+OpenAI/
+Google/
+xAI/
+Perplexity/
+Microsoft/
+Cursor/
+Meta/
+Mistral/
+Kimi/
+DeepSeek/
+GLM/
+OpenCode/
+Pi/
+Notion/
+Qwen/
+Misc/
+assets/
+.github/
+
+# Git / IDE
+.git/
+.gitignore
+.cursor/
+*.md
+!PKF.md

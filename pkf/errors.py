@@ -1,0 +1,22 @@
+from __future__ import annotations
+
+
+def explain_provider_error(provider: str, exc: Exception) -> str:
+    text = str(exc).strip() or exc.__class__.__name__
+    lowered = text.lower()
+    connection = any(token in lowered for token in ("connection", "connect", "timeout", "refused", "offline"))
+
+    if provider == "ollama" and connection:
+        return (
+            "O Ollama não está rodando em http://localhost:11434.\n\n"
+            "1. Instale: https://ollama.com/download\n"
+            "2. Abra o aplicativo Ollama no Windows\n"
+            "3. No terminal: ollama pull llama3:8b\n"
+            "4. Recarregue esta página e envie de novo.\n\n"
+            "Se preferir nuvem: pare a UI (Ctrl+C) e rode python -m pkf kimi --ui"
+        )
+    if provider == "kimi" and ("api" in lowered or "401" in lowered or "key" in lowered):
+        return "Falha no Kimi. Confira MOONSHOT_API_KEY no arquivo .env."
+    if connection:
+        return f"Não foi possível conectar ao provedor '{provider}'. {text}"
+    return f"Erro no provedor '{provider}': {text}"

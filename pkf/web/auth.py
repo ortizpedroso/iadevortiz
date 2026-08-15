@@ -1,0 +1,46 @@
+from __future__ import annotations
+
+import os
+
+from fastapi import HTTPException, Request, WebSocket
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from pkf.config import auth_token
+
+
+def _extract_token(request: Request) -> str | None:
+    header = request.headers.get("Authorization", "")
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    return request.query_params.get("token") or request.headers.get("X-PKF-Token")
+
+
+def _extract_ws_token(websocket: WebSocket) -> str | None:
+    return websocket.query_params.get("token") or websocket.headers.get("X-PKF-Token")
+
+
+def check_auth_token(token: str | None) -> None:
+    expected = auth_token()
+    if expected and token != expected:
+        raise HTTPException(status_code=401, detail="Token inválido ou ausente.")
+
+
+def check_ws_auth(websocket: WebSocket) -> bool:
+    expected = auth_token()
+    if not expected:
+        return True
+    token = _extract_ws_token(websocket)
+    return token == expected
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        expected = auth_token()
+        if not expected:
+            return await call_next(request)
+        if request.url.path.startswith("/assets/") or request.url.path == "/api/health":
+            return await call_next(request)
+        token = _extract_token(request)
+        if token != expected:
+            raise HTTPException(status_code=401, detail="Token inválido ou ausente.")
+        return await call_next(request)
