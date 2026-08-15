@@ -20,6 +20,7 @@ from pkf.workflow.cycle import DevCycle, parse_command
 from pkf.workflow.orchestrator import run_build_tasks
 from pkf.workflow.planner import plan_build
 from pkf.projects.manager import slug_from_request
+from pkf.web.preview import preview_info
 from pkf.workspace import Workspace
 
 
