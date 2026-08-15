@@ -19,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
         "provider",
         nargs="?",
         default=None,
-        help="Provedor: ollama, kimi ou openai (padrão: PKF_PROVIDER ou ollama)",
+        help="Provedor: ollama, groq, gemini, kimi ou openai",
     )
     parser.add_argument(
         "--workspace",

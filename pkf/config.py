@@ -76,7 +76,23 @@ def providers() -> dict[str, ProviderConfig]:
             api_key=os.getenv("MOONSHOT_API_KEY", ""),
             model=os.getenv("KIMI_MODEL", "kimi-k3"),
         ),
+        "groq": ProviderConfig(
+            name="groq",
+            base_url=os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
+            api_key=os.getenv("GROQ_API_KEY", ""),
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        ),
+        "gemini": ProviderConfig(
+            name="gemini",
+            base_url=os.getenv(
+                "GEMINI_BASE_URL",
+                "https://generativelanguage.googleapis.com/v1beta/openai/",
+            ),
+            api_key=os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", "")),
+            model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
+        ),
     }
+    configs = {k: v for k, v in configs.items() if v.api_key or k in ("ollama",)}
     openai_key = os.getenv("OPENAI_API_KEY", "")
     if openai_key:
         configs["openai"] = ProviderConfig(
@@ -93,6 +109,10 @@ def default_provider() -> str:
     if explicit:
         return explicit
     if os.getenv("PKF_ENV") == "production":
+        if os.getenv("GROQ_API_KEY"):
+            return "groq"
+        if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+            return "gemini"
         if os.getenv("MOONSHOT_API_KEY"):
             return "kimi"
         if os.getenv("OPENAI_API_KEY"):

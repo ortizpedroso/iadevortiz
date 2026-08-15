@@ -17,6 +17,16 @@ def explain_provider_error(provider: str, exc: Exception) -> str:
         )
     if provider == "kimi" and ("api" in lowered or "401" in lowered or "key" in lowered):
         return "Falha no Kimi. Confira MOONSHOT_API_KEY no arquivo .env."
+    if provider == "groq" and ("api" in lowered or "401" in lowered or "key" in lowered):
+        return (
+            "Falha no Groq. Crie uma chave grátis em https://console.groq.com/keys "
+            "e configure GROQ_API_KEY no .env."
+        )
+    if provider == "gemini" and ("api" in lowered or "401" in lowered or "key" in lowered):
+        return (
+            "Falha no Gemini. Crie uma chave grátis em https://aistudio.google.com/apikey "
+            "e configure GEMINI_API_KEY no .env."
+        )
     if connection:
         return f"Não foi possível conectar ao provedor '{provider}'. {text}"
     return f"Erro no provedor '{provider}': {text}"
