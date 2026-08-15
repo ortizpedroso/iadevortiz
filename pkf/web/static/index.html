@@ -25,37 +25,15 @@
         </div>
       </div>
 
-      <button class="btn-new" id="new-chat" type="button">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        Novo chat
-      </button>
+      <button class="btn-new" id="new-chat" type="button">Novo projeto</button>
 
-      <section class="side-block">
-        <h2>Ciclo</h2>
-        <dl class="meta" id="cycle-meta">
-          <div><dt>Fase</dt><dd id="meta-phase">IDLE</dd></div>
-          <div><dt>Spec</dt><dd id="meta-spec">—</dd></div>
-          <div><dt>Status</dt><dd id="meta-spec-status">—</dd></div>
-          <div><dt>Agente</dt><dd id="meta-agent">—</dd></div>
-        </dl>
-      </section>
-
-      <section class="side-block">
-        <h2>Agentes</h2>
-        <ul class="agent-list" id="agent-list"></ul>
-      </section>
-
-      <section class="side-block workspace">
-        <h2>Workspace</h2>
-        <p id="meta-workspace">—</p>
-        <p class="provider" id="meta-provider">—</p>
-        <a class="preview-link" id="preview-link" href="#" target="_blank" rel="noopener" hidden>Abrir preview ↗</a>
+      <section class="side-block project-block">
+        <h2>Projeto atual</h2>
+        <p id="meta-project">Nenhum ainda</p>
       </section>
     </aside>
 
-    <div class="main">
+    <div class="workspace-area">
       <header class="topbar">
         <button class="icon-btn" id="toggle-sidebar" type="button" aria-label="Abrir ou fechar menu">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
@@ -63,54 +41,55 @@
           </svg>
         </button>
         <div class="topbar-title">
-          <span id="header-agent">Pronto</span>
+          <span id="header-status">Pronto</span>
           <span class="dot" id="conn-dot" data-state="off" aria-label="Status da conexão"></span>
         </div>
+        <div class="preview-actions" id="preview-actions" hidden>
+          <button type="button" class="btn-preview" id="preview-side">Ver ao lado</button>
+          <a class="btn-preview external" id="preview-external" href="#" target="_blank" rel="noopener">Abrir no navegador ↗</a>
+        </div>
       </header>
-      <div class="banner" id="provider-banner" hidden></div>
 
-      <aside class="spec-panel" id="spec-panel" hidden>
-        <header>
-          <h2 id="spec-title">Spec</h2>
-          <p>Revise a spec e a stack sugerida. Você pode alterar as tecnologias antes de aprovar.</p>
-        </header>
-        <section class="spec-stack" id="spec-stack"></section>
-        <pre class="spec-body" id="spec-body"></pre>
-        <button type="button" class="btn-approve" id="spec-approve">Aprovar spec e iniciar build</button>
-      </aside>
+      <div class="content-split" id="content-split">
+        <div class="chat-pane">
+          <div class="banner" id="provider-banner" hidden></div>
+          <div class="progress-banner" id="progress-banner" hidden></div>
 
-      <main class="thread" id="thread" tabindex="0">
-        <div class="empty" id="empty-state">
-          <h1>O que vamos construir?</h1>
-          <p>Descreva um recurso, peça um review ou use um comando do ciclo.</p>
-          <div class="suggestions">
-            <button type="button" data-fill="/spec tela de login">/spec tela de login</button>
-            <button type="button" data-fill="Revise o roteador em pkf/router.py">Revisar o roteador</button>
-            <button type="button" data-fill="/build">/build</button>
-            <button type="button" data-fill="/status">/status</button>
-          </div>
+          <main class="thread" id="thread" tabindex="0">
+            <div class="empty" id="empty-state">
+              <h1>O que vamos construir?</h1>
+              <p>Descreva seu app, site ou funcionalidade. A PKF cuida do resto.</p>
+              <div class="suggestions">
+                <button type="button" data-fill="Cardápio digital whitelabel para restaurantes">Cardápio digital</button>
+                <button type="button" data-fill="Landing page para startup de IA">Landing page</button>
+                <button type="button" data-fill="Painel admin com login e dashboard">Painel admin</button>
+              </div>
+            </div>
+            <div class="messages" id="messages" hidden></div>
+          </main>
+
+          <footer class="composer-wrap">
+            <form class="composer" id="composer">
+              <label class="sr-only" for="prompt">Mensagem para a PKF</label>
+              <textarea id="prompt" rows="1" placeholder="Descreva o que você quer construir…"></textarea>
+              <button class="send" type="submit" id="send" aria-label="Enviar" disabled>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </button>
+            </form>
+            <p class="hint">Enter envia · Shift+Enter quebra linha</p>
+          </footer>
         </div>
-        <div class="messages" id="messages" hidden></div>
-      </main>
 
-      <footer class="composer-wrap">
-        <div class="chips" role="group" aria-label="Comandos">
-          <button type="button" data-insert="/spec "> /spec</button>
-          <button type="button" data-insert="/build"> /build</button>
-          <button type="button" data-insert="/review"> /review</button>
-          <button type="button" data-insert="/workspace"> /workspace</button>
-        </div>
-        <form class="composer" id="composer">
-          <label class="sr-only" for="prompt">Mensagem para a PKF</label>
-          <textarea id="prompt" rows="1" placeholder="Pergunte, descreva um recurso ou use /spec, /build, /review"></textarea>
-          <button class="send" type="submit" id="send" aria-label="Enviar" disabled>
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </button>
-        </form>
-        <p class="hint">Enter envia · Shift+Enter quebra linha</p>
-      </footer>
+        <aside class="preview-pane" id="preview-pane" hidden>
+          <header class="preview-pane-header">
+            <strong>Preview do projeto</strong>
+            <button type="button" class="icon-btn" id="close-preview" aria-label="Fechar preview">✕</button>
+          </header>
+          <iframe id="preview-frame" title="Preview do projeto" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+        </aside>
+      </div>
     </div>
   </div>
   <script src="/assets/app.js"></script>

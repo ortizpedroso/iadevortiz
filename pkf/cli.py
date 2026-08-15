@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> None:
 
     workspace = Workspace(Path(args.workspace).resolve())
     fallback = args.fallback if args.fallback is not None else default_fallback(provider)
-    router = Router(provider, workspace, fallback_provider=fallback)
+    router = Router(provider, workspace, fallback_provider=fallback, ui_mode=bool(args.ui))
     host = args.host or ui_host()
     port = args.port or ui_port()
     if args.ui:

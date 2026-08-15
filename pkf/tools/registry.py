@@ -5,6 +5,22 @@ from dataclasses import dataclass
 from pkf.tools.impl import dispatch, parse_arguments
 from pkf.workspace import Workspace
 
+_SHARED_DEV = [
+    "project_context",
+    "list_dir",
+    "read_file",
+    "write_file",
+    "edit_file",
+    "search_code",
+    "code_index",
+    "run_command",
+    "get_spec",
+    "save_spec",
+    "graph_view",
+    "graph_assign_file",
+    "verify_build",
+]
+
 TOOL_DEFINITIONS: dict[str, dict] = {
     "list_dir": {
         "description": "Lista arquivos e pastas de um diretório do workspace.",
@@ -32,6 +48,19 @@ TOOL_DEFINITIONS: dict[str, dict] = {
             "required": ["path", "content"],
         },
     },
+    "edit_file": {
+        "description": "Substitui um trecho em arquivo existente (preferível a reescrever tudo).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "old_string": {"type": "string"},
+                "new_string": {"type": "string"},
+                "replace_all": {"type": "boolean"},
+            },
+            "required": ["path", "old_string", "new_string"],
+        },
+    },
     "search_code": {
         "description": "Busca um padrão regex no código do workspace.",
         "parameters": {
@@ -41,6 +70,13 @@ TOOL_DEFINITIONS: dict[str, dict] = {
                 "path": {"type": "string", "description": "Pasta ou arquivo inicial."},
             },
             "required": ["query"],
+        },
+    },
+    "code_index": {
+        "description": "Indexa o codebase ou busca no índice (query opcional).",
+        "parameters": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
         },
     },
     "run_command": {
@@ -81,61 +117,80 @@ TOOL_DEFINITIONS: dict[str, dict] = {
         },
     },
     "project_context": {
-        "description": "Resumo do workspace: stack e arquivos de primeiro nível.",
+        "description": "Resumo do workspace, stack e grafo do projeto.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "graph_view": {
+        "description": "Mostra nós do grafo do projeto (frontend, backend, dinâmicos).",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    "graph_assign_file": {
+        "description": "Associa um arquivo a um nó do grafo.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "node_id": {"type": "string"},
+                "path": {"type": "string"},
+            },
+            "required": ["node_id", "path"],
+        },
+    },
+    "graph_add_node": {
+        "description": "Cria nó dinâmico quando há 3+ itens relacionados.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "node_id": {"type": "string"},
+                "parent": {"type": "string"},
+                "labels": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["parent", "labels"],
+        },
+    },
+    "verify_build": {
+        "description": "Verifica se arquivos foram gerados no workspace após build.",
         "parameters": {"type": "object", "properties": {}},
     },
 }
 
 AGENT_TOOLS = {
-    "architect": ["project_context", "list_dir", "read_file", "search_code", "get_spec", "save_spec"],
-    "frontend": [
+    "architect": [
         "project_context",
         "list_dir",
         "read_file",
-        "write_file",
         "search_code",
-        "run_command",
+        "code_index",
         "get_spec",
         "save_spec",
+        "graph_view",
+        "graph_add_node",
     ],
-    "backend": [
-        "project_context",
-        "list_dir",
-        "read_file",
-        "write_file",
-        "search_code",
-        "run_command",
-        "get_spec",
-        "save_spec",
-    ],
-    "logic": [
-        "project_context",
-        "list_dir",
-        "read_file",
-        "write_file",
-        "search_code",
-        "run_command",
-        "get_spec",
-        "save_spec",
-    ],
+    "frontend": _SHARED_DEV,
+    "backend": _SHARED_DEV,
+    "logic": _SHARED_DEV,
     "reviewer": [
         "project_context",
         "list_dir",
         "read_file",
         "search_code",
+        "code_index",
         "get_spec",
         "save_review",
+        "graph_view",
+        "verify_build",
     ],
     "tester": [
         "project_context",
         "list_dir",
         "read_file",
         "write_file",
+        "edit_file",
         "search_code",
         "run_command",
         "get_spec",
+        "verify_build",
     ],
-    "generalista": ["project_context", "list_dir", "read_file", "search_code"],
+    "generalista": ["project_context", "list_dir", "read_file", "search_code", "graph_view"],
 }
 
 

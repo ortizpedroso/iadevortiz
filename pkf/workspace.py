@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from pkf.config import DEFAULT_IGNORES, SECRET_NAMES, SECRET_SUFFIXES
+from pkf.projects.manager import ensure_project, load_active_project, save_active_project
 
 
 class WorkspaceError(ValueError):
@@ -10,10 +11,34 @@ class WorkspaceError(ValueError):
 
 
 class Workspace:
-    def __init__(self, root: Path | str):
-        self.root = Path(root).resolve()
-        if not self.root.exists():
-            raise WorkspaceError(f"Workspace não existe: {self.root}")
+    def __init__(self, root: Path | str, project: str | None = None):
+        self.global_root = Path(root).resolve()
+        if not self.global_root.exists():
+            self.global_root.mkdir(parents=True, exist_ok=True)
+        if project is None:
+            project = load_active_project(self.global_root)
+        self.project = project
+        if project:
+            ensure_project(self.global_root, project)
+            self.root = self.global_root / "projects" / project
+        else:
+            self.root = self.global_root
+
+    def set_project(self, slug: str) -> None:
+        slug = slug.strip().lower()
+        ensure_project(self.global_root, slug)
+        self.project = slug
+        self.root = self.global_root / "projects" / slug
+        save_active_project(self.global_root, slug)
+
+    def clear_project(self) -> None:
+        self.project = None
+        self.root = self.global_root
+        save_active_project(self.global_root, None)
+
+    @property
+    def project_label(self) -> str:
+        return self.project or "(sem projeto ativo)"
 
     def resolve(self, rel_path: str) -> Path:
         raw = Path(rel_path)
@@ -58,7 +83,8 @@ class Workspace:
             if len(entries) >= max_entries:
                 break
         lines = [
-            f"Workspace: {self.root}",
+            f"Projeto: {self.project_label}",
+            f"Pasta: {self.root}",
             f"Stack detectado: {', '.join(stack) if stack else 'indefinido'}",
             "Conteúdo de primeiro nível:",
             *entries,

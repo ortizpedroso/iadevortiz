@@ -106,7 +106,8 @@ def _auto_spec_instruction(remainder: str, spec_name: str | None) -> str:
         "Use project_context para analisar o workspace e stack existente. "
         "Inclua frontmatter JSON com title, status pending_approval, suggested_stack (frontend, backend, database, deploy) "
         "e confirmed_stack vazio. A stack sugerida é recomendação — o usuário pode alterar antes de aprovar. "
-        "Salve com save_spec. Após salvar, diga que a spec está na tela aguardando aprovação do usuário. "
+        "Salve com save_spec. O sistema aprovará e implementará automaticamente — "
+        "não peça ao usuário para aprovar manualmente nem mencione painéis internos. "
         f"Nome sugerido da spec: {target}.{extra}"
     )
 

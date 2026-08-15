@@ -14,6 +14,7 @@ from pkf.providers import ping_provider
 from pkf.router import Router
 from pkf.spec.store import active_spec_preview, approve_spec, update_spec_stack
 from pkf.workflow.cycle import DevCycle
+from pkf.workspace_index import build_file_tree, list_changes
 from pkf.web.auth import AuthMiddleware, check_ws_auth, _extract_token
 from pkf.web.history import ChatHistory
 from pkf.web.preview import find_preview_entry, preview_info, redirect_preview_entry, serve_preview_file
@@ -91,6 +92,14 @@ def create_app(router: Router) -> FastAPI:
         preview["name"] = name
         return {"ok": True, "spec": preview, "session": router.snapshot()}
 
+    @app.get("/api/files")
+    async def files_tree():
+        return {"tree": build_file_tree(router.workspace)}
+
+    @app.get("/api/changes")
+    async def recent_changes():
+        return {"changes": list_changes(router.workspace)}
+
     @app.post("/api/spec/stack")
     async def spec_stack(payload: dict = Body(default_factory=dict)):
         name = payload.get("name") or router.cycle.active_spec
@@ -139,10 +148,11 @@ def create_app(router: Router) -> FastAPI:
                             }
                         )
                         continue
-                    agent = router.cycle.last_agent or "sistema"
+                    agent = "pkf" if router.ui_mode else (router.cycle.last_agent or "sistema")
                     message = {"role": "assistant", "content": reply or "", "agent": agent}
                     app.state.history.append(message)
-                    await websocket.send_json({"type": "done", **message, **router.snapshot()})
+                    payload = {"type": "done", **message, **router.snapshot()}
+                    await websocket.send_json(payload)
         except WebSocketDisconnect:
             pass
         finally:

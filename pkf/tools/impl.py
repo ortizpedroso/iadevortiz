@@ -7,8 +7,10 @@ from pathlib import Path
 
 from pkf.config import COMMAND_TIMEOUT, MAX_FILE_BYTES, MAX_SEARCH_MATCHES, pkf_dir
 from pkf.spec.document import parse_spec
+from pkf.graph.project import ProjectGraph
 from pkf.spec.store import save_spec_document
 from pkf.workspace import Workspace, WorkspaceError
+from pkf.workspace_index import build_code_index, query_code_index, record_change, verify_workspace_files
 
 ALLOWED_COMMANDS = (
     "python",
@@ -85,9 +87,38 @@ def write_file(workspace: Workspace, path: str, content: str) -> str:
     allowed_internal = rel.startswith(".pkf/specs/") or rel.startswith(".pkf/reviews/")
     if workspace.is_ignored(target) and not allowed_internal:
         return f"Escrita bloqueada em caminho ignorado: {path}"
+    action = "create" if not target.exists() else "overwrite"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8", newline="\n")
-    return f"Arquivo gravado: {workspace.rel(target)} ({len(content)} caracteres)"
+    record_change(workspace, rel, action, content[:300])
+    return f"Arquivo gravado: {rel} ({len(content)} caracteres)"
+
+
+def edit_file(
+    workspace: Workspace,
+    path: str,
+    old_string: str,
+    new_string: str,
+    replace_all: bool = False,
+) -> str:
+    target = workspace.resolve(path)
+    if workspace.is_secret(target):
+        return "Edição bloqueada: arquivo de credenciais."
+    rel = workspace.rel(target)
+    allowed_internal = rel.startswith(".pkf/specs/") or rel.startswith(".pkf/reviews/")
+    if workspace.is_ignored(target) and not allowed_internal:
+        return f"Edição bloqueada em caminho ignorado: {path}"
+    if not target.exists() or not target.is_file():
+        return f"Arquivo não encontrado: {path}"
+    content = target.read_text(encoding="utf-8")
+    if old_string not in content:
+        return f"Trecho não encontrado em {path}. Leia o arquivo e tente de novo."
+    count = content.count(old_string) if replace_all else min(1, content.count(old_string))
+    new_content = content.replace(old_string, new_string, count if replace_all else 1)
+    target.write_text(new_content, encoding="utf-8", newline="\n")
+    rel = workspace.rel(target)
+    record_change(workspace, rel, "edit", new_string[:300])
+    return f"Editado {rel}: {count} substituição(ões)."
 
 
 def search_code(workspace: Workspace, query: str, path: str = ".") -> str:
@@ -182,7 +213,44 @@ def save_review(workspace: Workspace, name: str, content: str) -> str:
 
 
 def project_context(workspace: Workspace) -> str:
-    return workspace.scan_summary()
+    graph = ProjectGraph(workspace.root)
+    base = workspace.scan_summary()
+    return f"{base}\n\n{graph.summary()}"
+
+
+def graph_view(workspace: Workspace) -> str:
+    return ProjectGraph(workspace.root).summary()
+
+
+def graph_assign_file(workspace: Workspace, node_id: str, path: str) -> str:
+    graph = ProjectGraph(workspace.root)
+    if node_id not in graph.nodes:
+        return f"Nó '{node_id}' não existe. Use graph_view."
+    graph.assign_file(node_id, path)
+    return f"Arquivo {path} associado ao nó {node_id}."
+
+
+def graph_add_node(workspace: Workspace, node_id: str, parent: str, labels: list) -> str:
+    graph = ProjectGraph(workspace.root)
+    if not isinstance(labels, list):
+        labels = [str(labels)]
+    node = graph.maybe_cluster_labels(parent, [str(x) for x in labels])
+    if not node:
+        return f"Necessários pelo menos 3 itens relacionados para criar nó dinâmico."
+    return f"Nó dinâmico '{node.id}' criado sob '{parent}'."
+
+
+def verify_build(workspace: Workspace) -> str:
+    result = verify_workspace_files(workspace)
+    if not result["ok"]:
+        return "Build incompleto: nenhum arquivo gerado no workspace."
+    return f"Build verificado: {result['count']} arquivo(s). Exemplos: {', '.join(result['files'][:8])}"
+
+
+def code_index(workspace: Workspace, query: str = "") -> str:
+    if query:
+        return query_code_index(workspace, query)
+    return build_code_index(workspace)
 
 
 def dispatch(workspace: Workspace, name: str, arguments: dict) -> str:
@@ -193,6 +261,14 @@ def dispatch(workspace: Workspace, name: str, arguments: dict) -> str:
             return read_file(workspace, arguments["path"])
         if name == "write_file":
             return write_file(workspace, arguments["path"], arguments.get("content", ""))
+        if name == "edit_file":
+            return edit_file(
+                workspace,
+                arguments["path"],
+                arguments["old_string"],
+                arguments.get("new_string", ""),
+                bool(arguments.get("replace_all")),
+            )
         if name == "search_code":
             return search_code(workspace, arguments["query"], arguments.get("path", "."))
         if name == "run_command":
@@ -205,6 +281,21 @@ def dispatch(workspace: Workspace, name: str, arguments: dict) -> str:
             return save_review(workspace, arguments["name"], arguments.get("content", ""))
         if name == "project_context":
             return project_context(workspace)
+        if name == "graph_view":
+            return graph_view(workspace)
+        if name == "graph_assign_file":
+            return graph_assign_file(workspace, arguments["node_id"], arguments["path"])
+        if name == "graph_add_node":
+            return graph_add_node(
+                workspace,
+                arguments.get("node_id", ""),
+                arguments.get("parent", "frontend"),
+                arguments.get("labels", []),
+            )
+        if name == "verify_build":
+            return verify_build(workspace)
+        if name == "code_index":
+            return code_index(workspace, arguments.get("query", ""))
         return f"Ferramenta desconhecida: {name}"
     except (KeyError, TypeError) as exc:
         return f"Argumentos inválidos para {name}: {exc}"

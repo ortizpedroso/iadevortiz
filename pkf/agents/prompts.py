@@ -10,7 +10,7 @@ Regras:
 - Antes de escrever código, use project_context, list_dir, read_file ou search_code.
 - Atenda exatamente à spec ativa. Não invente escopo extra.
 - Se o usuário pedir mudança depois do /build, atualize a spec primeiro e só então implemente.
-- Prefira editar arquivos existentes a criar arquivos novos sem necessidade.
+- Prefira editar arquivos existentes com edit_file; use write_file só para arquivos novos.
 - Não crie documentação markdown a menos que o usuário peça.
 - Não exponha segredos, não leia .env e não execute comandos destrutivos.
 - Responda em português, de forma direta.

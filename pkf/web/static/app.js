@@ -5,21 +5,11 @@ const promptEl = $("#prompt");
 const sendBtn = $("#send");
 const threadEl = $("#thread");
 
-const AGENT_LABELS = {
-  architect: "Architect",
-  frontend: "Frontend",
-  backend: "Backend",
-  logic: "Logic",
-  reviewer: "Reviewer",
-  tester: "Tester",
-  generalista: "Generalista",
-  sistema: "Sistema",
-};
-
 let socket = null;
 let busy = false;
 let session = {};
 let authRequired = false;
+let previewPath = null;
 
 function getToken() {
   const fromUrl = new URLSearchParams(location.search).get("token");
@@ -93,55 +83,33 @@ function scrollThread() {
   threadEl.scrollTop = threadEl.scrollHeight;
 }
 
-function addMessage({ role, content, agent }) {
+function addMessage({ role, content }) {
   showMessages();
   const article = document.createElement("article");
   article.className = `msg ${role}`;
-  const who = role === "user" ? "Você" : AGENT_LABELS[agent] || agent || "PKF";
+  const who = role === "user" ? "Você" : "PKF";
   article.innerHTML = `
-    <div class="msg-meta">
-      <span>${who}</span>
-      ${agent && role !== "user" ? `<span class="badge">${agent}</span>` : ""}
-    </div>
+    <div class="msg-meta"><span>${who}</span></div>
     <div class="bubble">${role === "user" ? `<p>${escapeHtml(content)}</p>` : renderMarkdown(content)}</div>
   `;
   messagesEl.appendChild(article);
   scrollThread();
-  return article;
 }
 
-function addThinking(agent) {
+function addThinking() {
   removeTransient();
   const el = document.createElement("div");
   el.className = "msg thinking-row";
   el.dataset.transient = "1";
-  el.innerHTML = `<div class="thinking"><b></b>${AGENT_LABELS[agent] || agent} está trabalhando…</div>`;
+  el.innerHTML = `<div class="thinking"><b></b>PKF está trabalhando…</div>`;
   messagesEl.appendChild(el);
-  showMessages();
-  scrollThread();
-}
-
-function addTool({ name, arguments: args, result, status }) {
-  removeTransient(".thinking-row");
-  const details = document.createElement("details");
-  details.className = "tool";
-  details.open = status === "running";
-  const preview = typeof args === "object" ? JSON.stringify(args) : String(args || "");
-  details.innerHTML = `
-    <summary>${status === "running" ? "Rodando" : "Ferramenta"} · ${escapeHtml(name)}</summary>
-    <pre>${escapeHtml(preview)}${result ? `\n\n${escapeHtml(result)}` : ""}</pre>
-  `;
-  const wrap = document.createElement("div");
-  wrap.className = "msg";
-  wrap.appendChild(details);
-  messagesEl.appendChild(wrap);
   showMessages();
   scrollThread();
 }
 
 function addError(content) {
   removeTransient();
-  addMessage({ role: "error", content, agent: "sistema" });
+  addMessage({ role: "error", content });
   const last = messagesEl.lastElementChild;
   if (last) last.classList.add("error");
 }
@@ -154,64 +122,7 @@ function setBusy(next) {
   busy = next;
   sendBtn.disabled = busy || !promptEl.value.trim();
   $("#conn-dot").dataset.state = next ? "busy" : socket?.readyState === 1 ? "on" : "off";
-}
-
-function renderSpecPanel(spec) {
-  const panel = $("#spec-panel");
-  if (!spec || !spec.body) {
-    panel.hidden = true;
-    return;
-  }
-  panel.hidden = false;
-  $("#spec-title").textContent = spec.title || spec.name || "Spec";
-  $("#spec-body").textContent = spec.body;
-  const stackEl = $("#spec-stack");
-  const suggested = spec.suggested_stack || {};
-  const confirmed = spec.confirmed_stack || {};
-  const keys = [...new Set([...Object.keys(suggested), ...Object.keys(confirmed), "frontend", "backend", "database", "deploy"])];
-  stackEl.innerHTML = keys
-    .map((key) => {
-      const val = confirmed[key] || suggested[key] || "";
-      return `<label>${key}<input data-stack-key="${key}" value="${escapeHtml(val)}" placeholder="${escapeHtml(suggested[key] || "")}" /></label>`;
-    })
-    .join("");
-  $("#spec-approve").disabled = spec.status === "approved";
-  panel.dataset.specName = spec.name || "";
-}
-
-async function approveSpec() {
-  const panel = $("#spec-panel");
-  const name = panel.dataset.specName;
-  const confirmed_stack = {};
-  $("#spec-stack input").forEach((input) => {
-    confirmed_stack[input.dataset.stackKey] = input.value.trim();
-  });
-  const res = await fetch("/api/spec/approve", {
-    method: "POST",
-    headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ name, confirmed_stack }),
-  });
-  if (!res.ok) return;
-  const data = await res.json();
-  applySession(data.session || {});
-  if (data.spec) renderSpecPanel(data.spec);
-  addMessage({
-    role: "assistant",
-    agent: "sistema",
-    content: "Spec aprovada. Agora você pode usar /build para implementar.",
-  });
-}
-
-function renderAgents(active) {
-  const list = $("#agent-list");
-  const names = session.agents || Object.keys(AGENT_LABELS);
-  list.innerHTML = names
-    .filter((name) => AGENT_LABELS[name])
-    .map(
-      (name) =>
-        `<li class="${name === active ? "active" : ""}"><i></i>${AGENT_LABELS[name]}</li>`
-    )
-    .join("");
+  $("#header-status").textContent = next ? "Trabalhando…" : "Pronto";
 }
 
 function previewUrl(path) {
@@ -220,29 +131,50 @@ function previewUrl(path) {
   return `${location.origin}${path}${qs}`;
 }
 
+function updatePreviewControls(preview) {
+  const actions = $("#preview-actions");
+  const external = $("#preview-external");
+  if (preview?.available && preview.path) {
+    previewPath = preview.path;
+    actions.hidden = false;
+    external.href = previewUrl(preview.path);
+  } else {
+    previewPath = null;
+    actions.hidden = true;
+  }
+}
+
+function openPreviewSide() {
+  if (!previewPath) return;
+  const pane = $("#preview-pane");
+  const frame = $("#preview-frame");
+  pane.hidden = false;
+  $("#content-split").classList.add("with-preview");
+  frame.src = previewUrl(previewPath);
+}
+
+function closePreviewSide() {
+  $("#preview-pane").hidden = true;
+  $("#content-split").classList.remove("with-preview");
+  $("#preview-frame").src = "about:blank";
+}
+
+function showProgress(message) {
+  const el = $("#progress-banner");
+  if (!message) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  el.hidden = false;
+  el.textContent = message;
+}
+
 function applySession(data) {
   session = { ...session, ...data };
-  $("#meta-phase").textContent = data.phase || "IDLE";
-  $("#meta-spec").textContent = data.active_spec || "—";
-  $("#meta-agent").textContent = data.last_agent || "—";
-  $("#meta-workspace").textContent = data.workspace || "—";
-  $("#meta-provider").textContent = data.model ? `${data.provider} · ${data.model}` : data.provider || "—";
-  $("#header-agent").textContent = data.last_agent
-    ? AGENT_LABELS[data.last_agent] || data.last_agent
-    : "Pronto";
-  if (data.spec_status) {
-    $("#meta-spec-status").textContent = data.spec_status;
-  }
-  renderSpecPanel(data.spec_preview);
-  renderAgents(data.last_agent);
-  const preview = data.project_preview || data.preview;
-  const link = $("#preview-link");
-  if (preview?.available && preview.path) {
-    link.hidden = false;
-    link.href = previewUrl(preview.path);
-  } else {
-    link.hidden = true;
-  }
+  const project = data.project_name || data.project;
+  $("#meta-project").textContent = project && project !== "(sem projeto ativo)" ? project : "Nenhum ainda";
+  updatePreviewControls(data.project_preview || data.preview);
   const banner = $("#provider-banner");
   if (data.provider_ok === false && data.provider_error) {
     banner.hidden = false;
@@ -254,30 +186,18 @@ function applySession(data) {
 }
 
 function handleEvent(event) {
-  if (event.type === "spec_preview") {
-    renderSpecPanel(event.spec);
-    applySession({ spec_preview: event.spec, spec_status: event.spec?.status });
+  if (event.type === "progress") {
+    showProgress(event.message);
+    addThinking();
     return;
   }
   if (event.type === "session") {
     applySession(event);
     return;
   }
-  if (event.type === "routing") {
-    applySession({ last_agent: event.agent });
-    if (event.kind !== "command") addThinking(event.agent);
-    return;
-  }
-  if (event.type === "thinking") {
-    addThinking(event.agent);
-    return;
-  }
-  if (event.type === "tool") {
-    addTool(event);
-    return;
-  }
   if (event.type === "error") {
     setBusy(false);
+    showProgress("");
     addError(event.content);
     return;
   }
@@ -286,6 +206,10 @@ function handleEvent(event) {
     addMessage(event);
     applySession(event);
     setBusy(false);
+    showProgress("");
+    if (event.project_preview?.available) {
+      updatePreviewControls(event.project_preview);
+    }
   }
 }
 
@@ -328,6 +252,7 @@ function sendMessage(text) {
   const content = text.trim();
   if (!content || busy || !socket || socket.readyState !== 1) return;
   addMessage({ role: "user", content });
+  addThinking();
   setBusy(true);
   socket.send(JSON.stringify({ type: "message", content }));
   promptEl.value = "";
@@ -354,31 +279,25 @@ promptEl.addEventListener("keydown", (event) => {
   }
 });
 
-document.querySelectorAll("[data-insert]").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    promptEl.value = btn.dataset.insert;
-    promptEl.focus();
-    autoGrow();
-  });
-});
-
 document.querySelectorAll("[data-fill]").forEach((btn) => {
   btn.addEventListener("click", () => sendMessage(btn.dataset.fill));
 });
 
 $("#new-chat").addEventListener("click", async () => {
-  if (!confirm("Começar um novo chat? O histórico desta tela será limpo.")) return;
+  if (!confirm("Começar um novo projeto? O histórico desta conversa será limpo.")) return;
   await fetch("/api/reset", { method: "POST", headers: authHeaders() });
   messagesEl.innerHTML = "";
   messagesEl.hidden = true;
   emptyEl.hidden = false;
-  applySession({ phase: "IDLE", active_spec: null, last_agent: null });
+  closePreviewSide();
+  applySession({ project: null, project_name: null, project_preview: { available: false } });
 });
 
 $("#toggle-sidebar").addEventListener("click", () => {
   $("#sidebar").classList.toggle("open");
 });
 
-$("#spec-approve").addEventListener("click", approveSpec);
+$("#preview-side").addEventListener("click", openPreviewSide);
+$("#close-preview").addEventListener("click", closePreviewSide);
 
 bootstrap().then(connect).catch(() => connect());

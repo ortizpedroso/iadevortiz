@@ -10,7 +10,7 @@ load_dotenv()
 
 PKF_DIR_NAME = ".pkf"
 NODE_LIMIT = 12
-MAX_TOOL_ROUNDS = 8
+MAX_TOOL_ROUNDS = 12
 RELEVANCE_THRESHOLD = 2
 API_TIMEOUT = 120.0
 COMMAND_TIMEOUT = 45
@@ -143,6 +143,12 @@ def ui_host() -> str:
 
 def ui_port() -> int:
     return int(os.getenv("PKF_PORT", "8765"))
+
+
+def model_for_task(task: str, default: str) -> str:
+    """Modelo por fase: PKF_BUILD_MODEL, PKF_SPEC_MODEL, etc."""
+    key = f"PKF_{task.upper()}_MODEL"
+    return os.getenv(key, "").strip() or default
 
 
 def pkf_dir(workspace: Path) -> Path:

@@ -8,12 +8,18 @@ from pkf.agents.base import Agent
 from pkf.agents.developer import DeveloperAgent
 from pkf.agents.prompts import AGENT_PROMPTS, DEVELOPER_AGENTS
 from pkf.classifier import Intent, classify_intent, classify_intent_llm
-from pkf.config import RELEVANCE_THRESHOLD, default_fallback
+from pkf.config import RELEVANCE_THRESHOLD, default_fallback, model_for_task
+from pkf.graph.project import ProjectGraph
 from pkf.memory.store import MemoryStore, export_graph
-from pkf.spec.store import active_spec_preview
+from pkf.spec.store import active_spec_preview, approve_spec, update_spec_stack
 from pkf.providers import get_ai_client
+from pkf.tools.impl import verify_build as verify_build_tool
+from pkf.workspace_index import begin_build_session
 from pkf.tools.registry import ToolRegistry, tools_for_agent
 from pkf.workflow.cycle import DevCycle, parse_command
+from pkf.workflow.orchestrator import run_build_tasks
+from pkf.workflow.planner import plan_build
+from pkf.projects.manager import slug_from_request
 from pkf.workspace import Workspace
 
 
@@ -26,9 +32,11 @@ class Router:
         client: AsyncOpenAI | None = None,
         model: str | None = None,
         supports_tools: bool = True,
+        ui_mode: bool = False,
     ):
         self.provider_name = provider_name
         self.workspace = workspace
+        self.ui_mode = ui_mode
         self.fallback_provider = fallback_provider if fallback_provider is not None else default_fallback(provider_name)
         if client is None:
             client, config = get_ai_client(provider_name)
@@ -48,29 +56,68 @@ class Router:
         self._event_handler = handler
 
     async def emit(self, event_type: str, **payload) -> None:
+        if self.ui_mode and event_type in {
+            "plan",
+            "parallel_start",
+            "parallel_done",
+            "parallel_error",
+            "build_verify",
+            "routing",
+            "tool",
+            "thinking",
+            "spec_preview",
+        }:
+            if event_type in {"parallel_start", "plan"}:
+                await self._emit_progress("Estou implementando seu projeto…")
+            return
         if self._event_handler:
             await self._event_handler({"type": event_type, **payload})
 
+    async def _emit_progress(self, message: str) -> None:
+        if self._event_handler:
+            await self._event_handler({"type": "progress", "message": message})
+
     def snapshot(self) -> dict:
         preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
+        graph = ProjectGraph(self.workspace.root)
+        project_preview = preview_info(self.workspace)
+        if project_preview.get("entry"):
+            project_preview["path"] = f"/preview/{project_preview['entry']}"
         return {
             "provider": self.provider_name,
             "model": self.model_to_use,
             "workspace": str(self.workspace.root),
+            "project": self.workspace.project,
+            "project_name": self.workspace.project_label,
             "phase": self.cycle.phase,
             "active_spec": self.cycle.active_spec,
             "spec_status": self.cycle.spec_status,
-            "spec_preview": preview,
-            "last_agent": self.cycle.last_agent,
+            "spec_preview": preview if not self.ui_mode else None,
+            "project_preview": project_preview,
+            "project_graph": graph.to_dict() if not self.ui_mode else None,
+            "last_agent": "pkf" if self.ui_mode else self.cycle.last_agent,
             "agents": list(AGENT_PROMPTS),
         }
+
+    def _ensure_project(self, text: str) -> None:
+        if self.workspace.project:
+            return
+        slug = slug_from_request(text)
+        self.workspace.set_project(slug)
+        self._register_core_agents()
+        self.cycle = DevCycle.load(self.workspace.root)
+
+    def _user_reply(self, message: str) -> str:
+        return message
 
     def reset_conversation(self) -> None:
         for agent in self.agents.values():
             if agent.messages:
                 agent.messages = [agent.messages[0]]
+        self.workspace.clear_project()
         self.cycle = DevCycle()
         self.cycle.persist(self.workspace.root)
+        self._register_core_agents()
 
     def _register_core_agents(self) -> None:
         context = self.workspace.scan_summary()
@@ -78,10 +125,11 @@ class Router:
             system_prompt = f"{prompt}\n\nContexto do projeto:\n{context}"
             tools = ToolRegistry(self.workspace, tools_for_agent(name))
             cls = DeveloperAgent if name in DEVELOPER_AGENTS else Agent
+            agent_model = model_for_task(name, self.model_to_use)
             self.agents[name] = cls(
                 name=name,
                 client=self.client,
-                model=self.model_to_use,
+                model=agent_model,
                 system_prompt=system_prompt,
                 router=self,
                 tools=tools,
@@ -154,7 +202,7 @@ class Router:
 
         if command == "/build":
             self.cycle = DevCycle.load(self.workspace.root)
-            if self.cycle.active_spec:
+            if self.cycle.active_spec and not self.ui_mode:
                 preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
                 if preview and preview.get("status") != "approved":
                     await self.emit("spec_preview", spec=preview)
@@ -162,8 +210,13 @@ class Router:
                         "A spec precisa ser aprovada antes do /build. "
                         "Revise o painel à direita, ajuste a stack se quiser e clique em Aprovar."
                     )
+            if self.cycle.active_spec and self.ui_mode:
+                await self._auto_approve_spec()
+            return await self._run_parallel_build(remainder)
 
         intent = await self._classify(user_input)
+        if intent.kind in {"feature", "change"} or command == "/spec":
+            self._ensure_project(user_input)
         agent = self.agents.get(intent.agent) or self.agents["generalista"]
         payload = user_input
         if agent.name in DEVELOPER_AGENTS:
@@ -184,8 +237,91 @@ class Router:
         self.cycle = DevCycle.load(self.workspace.root)
         preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
         if preview and preview.get("status") == "pending_approval":
+            if self.ui_mode:
+                await self._emit_progress("Planejando a implementação…")
+                await self._auto_approve_spec()
+                build_reply = await self._run_parallel_build("")
+                return build_reply
             await self.emit("spec_preview", spec=preview)
-        return reply
+        return self._user_reply(reply) if self.ui_mode and reply else reply
+
+    async def _auto_approve_spec(self) -> None:
+        name = self.cycle.active_spec
+        if not name:
+            return
+        preview = active_spec_preview(self.workspace.root, name)
+        if not preview or preview.get("status") == "approved":
+            return
+        confirmed = preview.get("suggested_stack") or {}
+        approve_spec(self.workspace.root, name, confirmed)
+        self.cycle = DevCycle.load(self.workspace.root)
+        self.cycle.spec_status = "approved"
+        self.cycle.persist(self.workspace.root)
+
+    async def _run_parallel_build(self, remainder: str) -> str:
+        self.cycle.phase = "BUILD"
+        if remainder:
+            self.cycle.set_spec(remainder)
+        self.cycle.persist(self.workspace.root)
+
+        tasks = plan_build(self.workspace.root, self.cycle.active_spec)
+        await self.emit(
+            "plan",
+            tasks=[{"agent": t.agent, "node": t.node_id} for t in tasks],
+        )
+
+        begin_build_session(self.workspace)
+        results = await run_build_tasks(self, tasks)
+        errors = [reply for _, reply in results if reply.startswith("Erro:")]
+        verify = verify_build_tool(self.workspace)
+        await self.emit("build_verify", result=verify)
+
+        if errors:
+            if self.ui_mode:
+                return (
+                    "Encontrei dificuldades ao implementar parte do projeto. "
+                    "Descreva o que deseja ajustar e tento de novo."
+                )
+            lines = ["## Build paralelo com erros", "", verify, ""]
+            for agent_name, reply in results:
+                lines.append(f"### {agent_name}")
+                lines.append(reply[:1500])
+                lines.append("")
+            lines.append("Review automático omitido devido a erros nos agentes.")
+            return "\n".join(lines)
+
+        if self.ui_mode:
+            info = preview_info(self.workspace)
+            if info.get("available"):
+                return (
+                    "Pronto! Seu projeto foi implementado.\n\n"
+                    "Use **Ver projeto** no topo para abrir o preview ao lado ou no navegador."
+                )
+            return (
+                "Implementação concluída. Assim que houver uma página (index.html), "
+                "o link **Ver projeto** aparecerá no topo."
+            )
+
+        lines = ["## Build paralelo concluído", "", verify, ""]
+        for agent_name, reply in results:
+            lines.append(f"### {agent_name}")
+            lines.append(reply[:1500])
+            lines.append("")
+
+        self.cycle.phase = "REVIEW"
+        self.cycle.last_agent = "reviewer"
+        self.cycle.persist(self.workspace.root)
+        await self.emit("routing", agent="reviewer", kind="command", source="auto")
+        _, review_payload = self.cycle.apply("/review", "command", "")
+        review_reply = await self.agents["reviewer"].process(review_payload)
+        if self.ui_mode:
+            return self._user_reply(
+                "Pronto! Seu projeto foi implementado.\n\n"
+                "Use **Ver projeto** no topo para abrir o preview ao lado ou no navegador."
+            )
+        lines.append("## Review automático")
+        lines.append(review_reply or "")
+        return "\n".join(lines)
 
     async def start_session(self) -> None:
         try:
@@ -239,7 +375,7 @@ def help_text() -> str:
     return """
 Comandos:
   /spec [nome]     Abre ou continua a especificação
-  /build [nome]    Implementa a spec ativa
+  /build [nome]    Implementa a spec (agentes em paralelo + review auto)
   /review          Revisa o código contra a spec
   /status          Mostra fase, spec e agente
   /agents          Lista agentes carregados
