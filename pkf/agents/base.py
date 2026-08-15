@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import networkx as nx
 from openai import AsyncOpenAI
 
-from pkf.config import MAX_TOOL_ROUNDS, NODE_LIMIT
+from pkf.config import NODE_LIMIT, tool_rounds_for_agent
 from pkf.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
@@ -32,12 +32,14 @@ class Agent:
         router: "Router",
         tools: ToolRegistry | None = None,
         supports_tools: bool = True,
+        max_tool_rounds: int | None = None,
     ):
         self.name = name
         self.client = client
         self.model = model
         self.router = router
         self.tools = tools
+        self.max_tool_rounds = max_tool_rounds or tool_rounds_for_agent(name)
         self.supports_tools = supports_tools and tools is not None and bool(tools.tool_names)
         self.messages: list[dict] = [{"role": "system", "content": system_prompt}]
         self.graph = nx.DiGraph()
@@ -67,7 +69,7 @@ class Agent:
 
     async def _complete_with_tools(self) -> str:
         native_tools = self.supports_tools
-        for _ in range(MAX_TOOL_ROUNDS):
+        for _ in range(self.max_tool_rounds):
             api_args: dict = {"model": self.model, "messages": self.messages}
             if native_tools:
                 api_args["tools"] = self.tools.schemas()
@@ -122,7 +124,26 @@ class Agent:
                             "content": f"Resultado de {call['name']}:\n{result[:8000]}",
                         }
                     )
-        return "Limite de ferramentas atingido. Resuma o que já foi feito e peça o próximo passo."
+        return await self._summarize_partial_progress()
+
+    async def _summarize_partial_progress(self) -> str:
+        self.messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Limite interno de ferramentas atingido. "
+                    "Resuma em linguagem simples o que já foi implementado no projeto "
+                    "e o que ainda falta. Não mencione ferramentas, agentes ou limites técnicos."
+                ),
+            }
+        )
+        completion = await self.client.chat.completions.create(
+            model=self.model,
+            messages=self.messages,
+        )
+        content = completion.choices[0].message.content or ""
+        self.messages.append({"role": "assistant", "content": content})
+        return content
 
     async def _cluster_nodes_if_needed(self) -> None:
         text_messages = [m for m in self.messages if m.get("role") in {"user", "assistant"} and m.get("content")]

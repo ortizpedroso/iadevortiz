@@ -10,7 +10,8 @@ load_dotenv()
 
 PKF_DIR_NAME = ".pkf"
 NODE_LIMIT = 12
-MAX_TOOL_ROUNDS = 12
+MAX_TOOL_ROUNDS = int(os.getenv("PKF_MAX_TOOL_ROUNDS", "16"))
+MAX_BUILD_TOOL_ROUNDS = int(os.getenv("PKF_BUILD_TOOL_ROUNDS", "30"))
 RELEVANCE_THRESHOLD = 2
 API_TIMEOUT = 120.0
 COMMAND_TIMEOUT = 45
@@ -149,6 +150,12 @@ def model_for_task(task: str, default: str) -> str:
     """Modelo por fase: PKF_BUILD_MODEL, PKF_SPEC_MODEL, etc."""
     key = f"PKF_{task.upper()}_MODEL"
     return os.getenv(key, "").strip() or default
+
+
+def tool_rounds_for_agent(agent_name: str) -> int:
+    if agent_name in {"frontend", "backend", "logic", "tester"}:
+        return MAX_BUILD_TOOL_ROUNDS
+    return MAX_TOOL_ROUNDS
 
 
 def pkf_dir(workspace: Path) -> Path:

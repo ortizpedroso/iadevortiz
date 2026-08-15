@@ -109,6 +109,11 @@ class Router:
         self.cycle = DevCycle.load(self.workspace.root)
 
     def _user_reply(self, message: str) -> str:
+        if "Limite de ferramentas atingido" in message:
+            return (
+                "Implementei parte do projeto, mas ainda não terminei tudo.\n\n"
+                "Use **Ver projeto** para ver o que já foi criado e me diga o que quer ajustar ou completar."
+            )
         return message
 
     def reset_conversation(self) -> None:
