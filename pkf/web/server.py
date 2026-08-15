@@ -5,13 +5,15 @@ import os
 import webbrowser
 from pathlib import Path
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from pkf.errors import explain_provider_error
 from pkf.providers import ping_provider
 from pkf.router import Router
+from pkf.spec.store import active_spec_preview, approve_spec, update_spec_stack
+from pkf.workflow.cycle import DevCycle
 from pkf.web.auth import AuthMiddleware, check_ws_auth, _extract_token
 from pkf.web.history import ChatHistory
 from pkf.web.preview import find_preview_entry, preview_info, redirect_preview_entry, serve_preview_file
@@ -57,9 +59,10 @@ def create_app(router: Router) -> FastAPI:
         healthy, detail = await ping_provider(router.client)
         snapshot = router.snapshot()
         snapshot["provider_ok"] = healthy
-        snapshot["preview"] = preview_info(router.workspace)
-        if snapshot["preview"].get("entry"):
-            snapshot["preview"]["path"] = f"/preview/{snapshot['preview']['entry']}"
+        project_preview = preview_info(router.workspace)
+        snapshot["project_preview"] = project_preview
+        if project_preview.get("entry"):
+            snapshot["project_preview"]["path"] = f"/preview/{project_preview['entry']}"
         if not healthy:
             snapshot["provider_error"] = explain_provider_error(router.provider_name, Exception(detail))
         return {
@@ -73,6 +76,31 @@ def create_app(router: Router) -> FastAPI:
             router.reset_conversation()
             app.state.history.clear()
         return {"ok": True, "session": router.snapshot()}
+
+    @app.post("/api/spec/approve")
+    async def spec_approve(payload: dict = Body(default_factory=dict)):
+        name = payload.get("name") or router.cycle.active_spec
+        if not name:
+            return {"ok": False, "error": "Nenhuma spec ativa"}
+        confirmed = payload.get("confirmed_stack") or {}
+        doc = approve_spec(router.workspace.root, name, confirmed)
+        router.cycle = DevCycle.load(router.workspace.root)
+        router.cycle.spec_status = "approved"
+        router.cycle.persist(router.workspace.root)
+        preview = doc.to_preview_dict()
+        preview["name"] = name
+        return {"ok": True, "spec": preview, "session": router.snapshot()}
+
+    @app.post("/api/spec/stack")
+    async def spec_stack(payload: dict = Body(default_factory=dict)):
+        name = payload.get("name") or router.cycle.active_spec
+        if not name:
+            return {"ok": False, "error": "Nenhuma spec ativa"}
+        confirmed = payload.get("confirmed_stack") or {}
+        doc = update_spec_stack(router.workspace.root, name, confirmed)
+        preview = doc.to_preview_dict()
+        preview["name"] = name
+        return {"ok": True, "spec": preview}
 
     @app.websocket("/ws")
     async def chat_socket(websocket: WebSocket):

@@ -10,6 +10,7 @@ from pkf.agents.prompts import AGENT_PROMPTS, DEVELOPER_AGENTS
 from pkf.classifier import Intent, classify_intent, classify_intent_llm
 from pkf.config import RELEVANCE_THRESHOLD, default_fallback
 from pkf.memory.store import MemoryStore, export_graph
+from pkf.spec.store import active_spec_preview
 from pkf.providers import get_ai_client
 from pkf.tools.registry import ToolRegistry, tools_for_agent
 from pkf.workflow.cycle import DevCycle, parse_command
@@ -51,12 +52,15 @@ class Router:
             await self._event_handler({"type": event_type, **payload})
 
     def snapshot(self) -> dict:
+        preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
         return {
             "provider": self.provider_name,
             "model": self.model_to_use,
             "workspace": str(self.workspace.root),
             "phase": self.cycle.phase,
             "active_spec": self.cycle.active_spec,
+            "spec_status": self.cycle.spec_status,
+            "spec_preview": preview,
             "last_agent": self.cycle.last_agent,
             "agents": list(AGENT_PROMPTS),
         }
@@ -148,6 +152,17 @@ class Router:
             await self.emit("routing", agent=memory_agent.name, kind="memory", source="memory")
             return await memory_agent.process(user_input)
 
+        if command == "/build":
+            self.cycle = DevCycle.load(self.workspace.root)
+            if self.cycle.active_spec:
+                preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
+                if preview and preview.get("status") != "approved":
+                    await self.emit("spec_preview", spec=preview)
+                    return (
+                        "A spec precisa ser aprovada antes do /build. "
+                        "Revise o painel à direita, ajuste a stack se quiser e clique em Aprovar."
+                    )
+
         intent = await self._classify(user_input)
         agent = self.agents.get(intent.agent) or self.agents["generalista"]
         payload = user_input
@@ -165,7 +180,12 @@ class Router:
         await self.emit("routing", agent=agent.name, kind=intent.kind, source=intent.source)
         self.cycle.last_agent = agent.name
         self.cycle.persist(self.workspace.root)
-        return await agent.process(payload)
+        reply = await agent.process(payload)
+        self.cycle = DevCycle.load(self.workspace.root)
+        preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
+        if preview and preview.get("status") == "pending_approval":
+            await self.emit("spec_preview", spec=preview)
+        return reply
 
     async def start_session(self) -> None:
         try:

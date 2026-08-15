@@ -23,6 +23,7 @@ def parse_command(user_input: str) -> tuple[str | None, str]:
 class DevCycle:
     phase: str = "IDLE"
     active_spec: str | None = None
+    spec_status: str | None = None
     last_agent: str | None = None
 
     @classmethod
@@ -35,6 +36,7 @@ class DevCycle:
             return cls(
                 phase=data.get("phase", "IDLE"),
                 active_spec=data.get("active_spec"),
+                spec_status=data.get("spec_status"),
                 last_agent=data.get("last_agent"),
             )
         except json.JSONDecodeError:
@@ -52,9 +54,10 @@ class DevCycle:
         """Atualiza a fase e devolve um prefixo de instrução para o agente."""
         if command == "/spec":
             self.phase = "SPEC"
+            self.spec_status = "pending_approval"
             if remainder:
                 self.set_spec(remainder.splitlines()[0][:60])
-            return self.phase, _spec_instruction(remainder, self.active_spec)
+            return self.phase, _auto_spec_instruction(remainder, self.active_spec)
         if command == "/build":
             self.phase = "BUILD"
             if remainder:
@@ -68,21 +71,26 @@ class DevCycle:
             self.phase = "SPEC"
             if remainder:
                 self.set_spec(remainder.splitlines()[0][:60])
-            return self.phase, _spec_instruction(remainder, self.active_spec)
+            self.spec_status = "pending_approval"
+            return self.phase, _auto_spec_instruction(remainder, self.active_spec)
 
-        if kind == "change" and self.phase in {"BUILD", "REVIEW"}:
+        if kind == "feature" and self.phase == "SPEC":
+            if remainder:
+                self.set_spec(remainder.splitlines()[0][:60])
+            self.spec_status = "pending_approval"
+            return self.phase, _auto_spec_instruction(remainder, self.active_spec)
+
+        if kind == "change":
             self.phase = "SPEC"
-            return self.phase, (
-                "O usuário pediu uma mudança após implementação. "
-                "Declare que a spec será atualizada, atualize com save_spec e só então descreva o impacto. "
-                f"Pedido: {remainder}"
-            )
+            self.spec_status = "pending_approval"
+            return self.phase, _change_spec_instruction(remainder, self.active_spec)
         return self.phase, remainder
 
     def status_text(self) -> str:
         spec = self.active_spec or "(nenhuma)"
         agent = self.last_agent or "(nenhum)"
-        return f"Fase: {self.phase}\nSpec ativa: {spec}\nÚltimo agente: {agent}"
+        status = self.spec_status or "(não definido)"
+        return f"Fase: {self.phase}\nSpec ativa: {spec}\nStatus da spec: {status}\nÚltimo agente: {agent}"
 
 
 def slugify(name: str) -> str:
@@ -90,12 +98,29 @@ def slugify(name: str) -> str:
     return cleaned or "spec"
 
 
-def _spec_instruction(remainder: str, spec_name: str | None) -> str:
+def _auto_spec_instruction(remainder: str, spec_name: str | None) -> str:
     target = spec_name or "recurso"
     extra = f"\nPedido do usuário: {remainder}" if remainder else ""
     return (
-        "Inicie ou continue /spec. Entreviste só o que faltar, feche requisitos e salve com save_spec. "
+        "Gere a spec AUTOMATICAMENTE (não entreviste item a item). "
+        "Use project_context para analisar o workspace e stack existente. "
+        "Inclua frontmatter JSON com title, status pending_approval, suggested_stack (frontend, backend, database, deploy) "
+        "e confirmed_stack vazio. A stack sugerida é recomendação — o usuário pode alterar antes de aprovar. "
+        "Salve com save_spec. Após salvar, diga que a spec está na tela aguardando aprovação do usuário. "
         f"Nome sugerido da spec: {target}.{extra}"
+    )
+
+
+def _change_spec_instruction(remainder: str, spec_name: str | None) -> str:
+    name = spec_name or ""
+    return (
+        "O usuário pediu alteração ou melhoria. "
+        "Leia a spec ativa com get_spec"
+        + (f" (name={name})" if name else "")
+        + ", ATUALIZE os requisitos e critérios de aceite, mantenha ou ajuste suggested_stack se necessário, "
+        "defina status pending_approval e salve com save_spec (mesmo nome). "
+        "Explique o que mudou na spec. Não implemente código até o usuário aprovar."
+        f"\nPedido: {remainder}"
     )
 
 

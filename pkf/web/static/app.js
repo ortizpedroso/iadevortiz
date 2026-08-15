@@ -156,6 +156,52 @@ function setBusy(next) {
   $("#conn-dot").dataset.state = next ? "busy" : socket?.readyState === 1 ? "on" : "off";
 }
 
+function renderSpecPanel(spec) {
+  const panel = $("#spec-panel");
+  if (!spec || !spec.body) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  $("#spec-title").textContent = spec.title || spec.name || "Spec";
+  $("#spec-body").textContent = spec.body;
+  const stackEl = $("#spec-stack");
+  const suggested = spec.suggested_stack || {};
+  const confirmed = spec.confirmed_stack || {};
+  const keys = [...new Set([...Object.keys(suggested), ...Object.keys(confirmed), "frontend", "backend", "database", "deploy"])];
+  stackEl.innerHTML = keys
+    .map((key) => {
+      const val = confirmed[key] || suggested[key] || "";
+      return `<label>${key}<input data-stack-key="${key}" value="${escapeHtml(val)}" placeholder="${escapeHtml(suggested[key] || "")}" /></label>`;
+    })
+    .join("");
+  $("#spec-approve").disabled = spec.status === "approved";
+  panel.dataset.specName = spec.name || "";
+}
+
+async function approveSpec() {
+  const panel = $("#spec-panel");
+  const name = panel.dataset.specName;
+  const confirmed_stack = {};
+  $("#spec-stack input").forEach((input) => {
+    confirmed_stack[input.dataset.stackKey] = input.value.trim();
+  });
+  const res = await fetch("/api/spec/approve", {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ name, confirmed_stack }),
+  });
+  if (!res.ok) return;
+  const data = await res.json();
+  applySession(data.session || {});
+  if (data.spec) renderSpecPanel(data.spec);
+  addMessage({
+    role: "assistant",
+    agent: "sistema",
+    content: "Spec aprovada. Agora você pode usar /build para implementar.",
+  });
+}
+
 function renderAgents(active) {
   const list = $("#agent-list");
   const names = session.agents || Object.keys(AGENT_LABELS);
@@ -184,8 +230,12 @@ function applySession(data) {
   $("#header-agent").textContent = data.last_agent
     ? AGENT_LABELS[data.last_agent] || data.last_agent
     : "Pronto";
+  if (data.spec_status) {
+    $("#meta-spec-status").textContent = data.spec_status;
+  }
+  renderSpecPanel(data.spec_preview);
   renderAgents(data.last_agent);
-  const preview = data.preview;
+  const preview = data.project_preview || data.preview;
   const link = $("#preview-link");
   if (preview?.available && preview.path) {
     link.hidden = false;
@@ -204,6 +254,11 @@ function applySession(data) {
 }
 
 function handleEvent(event) {
+  if (event.type === "spec_preview") {
+    renderSpecPanel(event.spec);
+    applySession({ spec_preview: event.spec, spec_status: event.spec?.status });
+    return;
+  }
   if (event.type === "session") {
     applySession(event);
     return;
@@ -323,5 +378,7 @@ $("#new-chat").addEventListener("click", async () => {
 $("#toggle-sidebar").addEventListener("click", () => {
   $("#sidebar").classList.toggle("open");
 });
+
+$("#spec-approve").addEventListener("click", approveSpec);
 
 bootstrap().then(connect).catch(() => connect());

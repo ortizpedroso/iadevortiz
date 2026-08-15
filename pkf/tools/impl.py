@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 
 from pkf.config import COMMAND_TIMEOUT, MAX_FILE_BYTES, MAX_SEARCH_MATCHES, pkf_dir
+from pkf.spec.document import parse_spec
+from pkf.spec.store import save_spec_document
 from pkf.workspace import Workspace, WorkspaceError
 
 ALLOWED_COMMANDS = (
@@ -157,10 +159,19 @@ def get_spec(workspace: Workspace, name: str = "") -> str:
 
 
 def save_spec(workspace: Workspace, name: str, content: str) -> str:
-    specs_dir = pkf_dir(workspace.root) / "specs"
-    target = specs_dir / f"{_slug(name)}.md"
-    target.write_text(content, encoding="utf-8", newline="\n")
-    return f"Spec salva em {workspace.rel(target)}"
+    if not content.strip():
+        return "Spec vazia: inclua requisitos e stack sugerida."
+    doc = parse_spec(content)
+    if doc.title == "Spec" and name:
+        doc.title = name.replace("-", " ").title()
+    slug = _slug(name or doc.title)
+    if doc.status not in {"pending_approval", "approved", "draft"}:
+        doc.status = "pending_approval"
+    path = save_spec_document(workspace.root, slug, doc)
+    return (
+        f"Spec salva em {workspace.rel(path)} (status: {doc.status}). "
+        "O usuário verá a spec na tela para revisar e aprovar antes do /build."
+    )
 
 
 def save_review(workspace: Workspace, name: str, content: str) -> str:

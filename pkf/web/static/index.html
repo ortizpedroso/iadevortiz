@@ -37,6 +37,7 @@
         <dl class="meta" id="cycle-meta">
           <div><dt>Fase</dt><dd id="meta-phase">IDLE</dd></div>
           <div><dt>Spec</dt><dd id="meta-spec">—</dd></div>
+          <div><dt>Status</dt><dd id="meta-spec-status">—</dd></div>
           <div><dt>Agente</dt><dd id="meta-agent">—</dd></div>
         </dl>
       </section>
@@ -67,6 +68,16 @@
         </div>
       </header>
       <div class="banner" id="provider-banner" hidden></div>
+
+      <aside class="spec-panel" id="spec-panel" hidden>
+        <header>
+          <h2 id="spec-title">Spec</h2>
+          <p>Revise a spec e a stack sugerida. Você pode alterar as tecnologias antes de aprovar.</p>
+        </header>
+        <section class="spec-stack" id="spec-stack"></section>
+        <pre class="spec-body" id="spec-body"></pre>
+        <button type="button" class="btn-approve" id="spec-approve">Aprovar spec e iniciar build</button>
+      </aside>
 
       <main class="thread" id="thread" tabindex="0">
         <div class="empty" id="empty-state">

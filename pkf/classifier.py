@@ -109,6 +109,8 @@ def classify_intent(user_input: str, last_agent: str | None = None) -> Intent:
         return Intent(agent="reviewer", kind=kind, source="keywords")
     if kind == "test_request":
         return Intent(agent="tester", kind=kind, source="keywords")
+    if kind == "change":
+        return Intent(agent="architect", kind=kind, source="keywords")
 
     for agent, keywords in KEYWORD_MAP.items():
         if any(keyword in text for keyword in keywords):

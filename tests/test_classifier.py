@@ -40,11 +40,12 @@ def test_cycle_feature_starts_spec():
     assert "save_spec" in payload
 
 
-def test_cycle_change_after_build_returns_to_spec():
+def test_cycle_change_updates_spec():
     cycle = DevCycle(phase="BUILD", active_spec="login")
     phase, payload = cycle.apply(None, "change", "adicione oauth")
     assert phase == "SPEC"
-    assert "spec será atualizada" in payload
+    assert cycle.spec_status == "pending_approval"
+    assert "ATUALIZE" in payload
 
 
 def test_parse_function_tool_call():
