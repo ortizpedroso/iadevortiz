@@ -196,6 +196,19 @@ textarea {
   font-family: var(--mono);
 }
 
+.preview-link {
+  display: inline-block;
+  margin-top: var(--space-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.preview-link:hover {
+  text-decoration: underline;
+}
+
 .main {
   flex: 1;
   min-width: 0;

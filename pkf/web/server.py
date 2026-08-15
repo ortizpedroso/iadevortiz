@@ -5,15 +5,16 @@ import os
 import webbrowser
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from pkf.errors import explain_provider_error
 from pkf.providers import ping_provider
 from pkf.router import Router
-from pkf.web.auth import AuthMiddleware, check_ws_auth
+from pkf.web.auth import AuthMiddleware, check_ws_auth, _extract_token
 from pkf.web.history import ChatHistory
+from pkf.web.preview import find_preview_entry, preview_info, redirect_preview_entry, serve_preview_file
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -35,11 +36,30 @@ def create_app(router: Router) -> FastAPI:
     async def health():
         return {"ok": True, "auth_required": bool(os.getenv("PKF_AUTH_TOKEN"))}
 
+    @app.get("/api/preview")
+    async def preview_api():
+        info = preview_info(router.workspace)
+        if info["entry"]:
+            info["path"] = f"/preview/{info['entry']}"
+        return info
+
+    @app.get("/preview")
+    async def preview_root(request: Request):
+        token = _extract_token(request)
+        return redirect_preview_entry(router.workspace, token)
+
+    @app.get("/preview/{rel_path:path}")
+    async def preview_file(rel_path: str):
+        return serve_preview_file(router.workspace, rel_path)
+
     @app.get("/api/session")
     async def session():
         healthy, detail = await ping_provider(router.client)
         snapshot = router.snapshot()
         snapshot["provider_ok"] = healthy
+        snapshot["preview"] = preview_info(router.workspace)
+        if snapshot["preview"].get("entry"):
+            snapshot["preview"]["path"] = f"/preview/{snapshot['preview']['entry']}"
         if not healthy:
             snapshot["provider_error"] = explain_provider_error(router.provider_name, Exception(detail))
         return {

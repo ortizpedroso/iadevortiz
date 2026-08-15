@@ -168,6 +168,12 @@ function renderAgents(active) {
     .join("");
 }
 
+function previewUrl(path) {
+  const token = getToken();
+  const qs = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${location.origin}${path}${qs}`;
+}
+
 function applySession(data) {
   session = { ...session, ...data };
   $("#meta-phase").textContent = data.phase || "IDLE";
@@ -179,6 +185,14 @@ function applySession(data) {
     ? AGENT_LABELS[data.last_agent] || data.last_agent
     : "Pronto";
   renderAgents(data.last_agent);
+  const preview = data.preview;
+  const link = $("#preview-link");
+  if (preview?.available && preview.path) {
+    link.hidden = false;
+    link.href = previewUrl(preview.path);
+  } else {
+    link.hidden = true;
+  }
   const banner = $("#provider-banner");
   if (data.provider_ok === false && data.provider_error) {
     banner.hidden = false;
