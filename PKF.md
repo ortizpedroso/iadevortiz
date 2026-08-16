@@ -52,9 +52,18 @@ Inclui PostgreSQL, PKF (`:8765`) e Nginx opcional (`:8080` — evita conflito co
 | Comando | Função |
 |---|---|
 | `/spec` | Gera spec automática |
-| `/build` | Pipeline compose completo |
+| `/build` | Pipeline compose completo (requer spec aprovada na UI) |
 | `/review` | Revisa código vs spec |
 | `/goal` | Meta de parada do build |
+
+## Interface (UI)
+
+A UI moderna (Vite/React) é servida quando `frontend/dist/` existe (build Docker ou `npm run build`).
+
+- **Visual:** tema escuro entre Claude e Cursor — rail lateral, chat centralizado, accent terracota
+- **Painéis:** projeto/tarefas, spec (aprovação manual), preview embutido
+- **Auth:** modal de token (`PKF_AUTH_TOKEN`); health público reduzido
+- **Acessibilidade:** skip link, `aria-live`, reduced motion
 
 Deploy: [DEPLOY.md](DEPLOY.md)
 

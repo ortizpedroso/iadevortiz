@@ -78,7 +78,6 @@ class Router:
             "routing",
             "tool",
             "thinking",
-            "spec_preview",
         }:
             return
         if event_type == "task_progress" and self.ui_mode:
@@ -113,7 +112,7 @@ class Router:
             "phase": self.cycle.phase,
             "active_spec": self.cycle.active_spec,
             "spec_status": self.cycle.spec_status,
-            "spec_preview": preview if not self.ui_mode else None,
+            "spec_preview": preview,
             "project_preview": project_preview,
             "project_graph": graph.to_dict() if not self.ui_mode else None,
             "last_agent": "pkf" if self.ui_mode else self.cycle.last_agent,
@@ -265,16 +264,19 @@ class Router:
 
         if command == "/build":
             self.cycle = DevCycle.load(self.workspace.root)
-            if self.cycle.active_spec and not self.ui_mode:
+            if self.cycle.active_spec:
                 preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
                 if preview and preview.get("status") != "approved":
                     await self.emit("spec_preview", spec=preview)
+                    if self.ui_mode:
+                        return (
+                            "A spec precisa ser aprovada antes do /build. "
+                            "Revise o painel de especificação e clique em Aprovar."
+                        )
                     return (
                         "A spec precisa ser aprovada antes do /build. "
                         "Revise o painel à direita, ajuste a stack se quiser e clique em Aprovar."
                     )
-            if self.cycle.active_spec and self.ui_mode:
-                await self._auto_approve_spec()
             return await self._run_parallel_build(remainder)
 
         intent = await self._classify(user_input)
@@ -301,10 +303,8 @@ class Router:
         preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
         if preview and preview.get("status") == "pending_approval":
             if self.ui_mode:
-                await self._emit_progress("Planejando a implementação…")
-                await self._auto_approve_spec()
-                build_reply = await self._run_parallel_build("")
-                return build_reply
+                await self.emit("spec_preview", spec=preview)
+                return self._user_reply(reply) if reply else reply
             await self.emit("spec_preview", spec=preview)
         return self._user_reply(reply) if self.ui_mode and reply else reply
 

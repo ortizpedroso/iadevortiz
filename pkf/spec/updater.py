@@ -47,47 +47,61 @@ def save_platform_spec(workspace_root, slug: str = "pkf-platform") -> str:
     """Atualiza spec da plataforma com capacidades atuais."""
     body = """# PKF — plataforma
 
+## Visão
+
+Assistente multiagente para especificar, implementar, revisar e testar software — com UI inspirada em Claude/Cursor (tema escuro, rail lateral, chat centralizado).
+
 ## Capacidades
 
-- Spec automática + pipeline compose (brainstorm → build → verify → review)
-- Pool híbrido: **9Router primário** (OpenCode Free, combos) + **router nativo fallback**
+- Pipeline **/spec → aprovação → /build → /review** com loop até aprovação
+- UI Vite + React 19 + Tailwind 4: rail de ícones, painel de projeto, painel de spec, preview embutido
+- Modal de autenticação (sem `prompt()`); token via `PKF_AUTH_TOKEN`
+- Pool híbrido: **9Router primário** (OpenCode Free, NVIDIA NIM, combos) + **router nativo fallback**
 - Pool de provedores nativo com **3 tiers** (subscription → cheap → free)
 - **Multi-chave** por provedor (GROQ_API_KEY, GROQ_API_KEY_2, GROQ_API_KEYS)
+- DeepSeek-R1 reasoning (architect, reviewer, logic)
 - Compactação RTK de tool results (head/hash/tail)
-- Web search nativo (Tavily ou Brave) via tool `web_search`
+- Web search nativo (Tavily ou 9Router `/v1/search`)
 - PostgreSQL para sessões, mensagens, specs e tarefas
-- Frontend Vite + React + Tailwind CSS
 - Memória persistente: MEMORY.md, checkpoint.md, progresso por tarefa
 - Busca de skills BM25 + skills frontend-design e python-toolchain
-- Compactação de contexto por modelo (budget por provider)
 - Árvore de tarefas T1/T2/T3 na UI
 - Comando /goal com juiz independente pós-build
 - Build paralelo com retry automático (até 2 tentativas)
 - Changelog automático na spec após build
-- Preview embutido e link externo
+- Headers de segurança (nosniff, frame-options, referrer-policy)
+- Health `/api/health` reduzido sem autenticação
+
+## UI / UX
+
+- Paleta escura quente (#191919, accent #d97757)
+- Tipografia: Inter (UI) + Source Serif 4 (títulos)
+- Composer fixo estilo Claude; mensagens do usuário à direita
+- Acessibilidade: skip link, `aria-live`, foco visível, `prefers-reduced-motion`
+- SEO: meta description, theme-color, `noindex` na UI privada
 
 ## Stack sugerida padrão
 
-- frontend: HTML/CSS/JS ou React leve
-- backend: Python FastAPI ou Node leve
-- database: SQLite ou JSON local
-- deploy: estático na VPS / Docker
+- frontend: React + Vite + Tailwind
+- backend: Python FastAPI + WebSocket
+- database: PostgreSQL
+- deploy: Docker Compose na VPS (:8765)
 """
     doc = SpecDocument(
         title="PKF Platform",
         body=body,
         status="approved",
         suggested_stack={
-            "frontend": "HTML/CSS/JS",
+            "frontend": "React + Vite + Tailwind",
             "backend": "FastAPI",
-            "database": "SQLite",
-            "deploy": "Docker",
+            "database": "PostgreSQL",
+            "deploy": "Docker Compose",
         },
         confirmed_stack={
-            "frontend": "HTML/CSS/JS",
+            "frontend": "React + Vite + Tailwind",
             "backend": "FastAPI",
-            "database": "SQLite",
-            "deploy": "Docker",
+            "database": "PostgreSQL",
+            "deploy": "Docker Compose",
         },
     )
     save_spec_document(workspace_root, slug, doc)

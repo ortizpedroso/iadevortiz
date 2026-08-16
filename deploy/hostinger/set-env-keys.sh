@@ -81,4 +81,8 @@ set_kv OPENAI_MODEL "${OPENAI_MODEL:-gpt-4.1-mini}"
 
 [ -n "${TAVILY_API_KEY:-}" ] && set_kv TAVILY_API_KEY "$TAVILY_API_KEY"
 
+[ -n "${NVIDIA_API_KEY:-}" ] && set_kv NVIDIA_API_KEY "$NVIDIA_API_KEY"
+set_kv NVIDIA_BASE_URL "${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}"
+set_kv NVIDIA_MODEL "${NVIDIA_MODEL:-meta/llama-3.3-70b-instruct}"
+
 echo "==> .env mesclado ($(wc -l < .env) linhas)"

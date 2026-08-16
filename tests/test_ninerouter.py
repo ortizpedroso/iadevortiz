@@ -15,6 +15,7 @@ def test_default_provider_prefers_ninerouter(monkeypatch):
 def test_provider_pool_puts_ninerouter_first(monkeypatch):
     monkeypatch.setenv("NINEROUTER_URL", "http://127.0.0.1:20128")
     monkeypatch.setenv("GROQ_API_KEY", "g")
+    monkeypatch.delenv("PKF_PROVIDER", raising=False)
     monkeypatch.delenv("PKF_PROVIDER_POOL", raising=False)
     names = provider_pool_names()
     assert names[0] == "ninerouter"

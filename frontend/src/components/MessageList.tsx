@@ -10,40 +10,62 @@ export function MessageList({
 }) {
   if (!messages.length && !thinking) {
     return (
-      <div className="mx-auto max-w-3xl px-4 pt-[10vh] text-center">
-        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">O que vamos construir?</h1>
-        <p className="mt-3 text-slate-400">Descreva seu app, site ou funcionalidade. A PKF cuida do resto.</p>
+      <div className="mx-auto max-w-2xl px-4 pt-[12vh] text-center">
+        <h1 className="font-serif text-4xl font-semibold tracking-tight text-[#ececec] md:text-5xl">
+          O que vamos construir?
+        </h1>
+        <p className="mt-4 text-[#9b9b9b]">
+          Descreva seu app ou funcionalidade. A PKF especifica, implementa e revisa por você.
+        </p>
+        <div className="mt-8 flex flex-wrap justify-center gap-2 text-xs text-[#666]">
+          <span className="rounded-full border border-[#2e2e2e] px-3 py-1">/spec</span>
+          <span className="rounded-full border border-[#2e2e2e] px-3 py-1">/build</span>
+          <span className="rounded-full border border-[#2e2e2e] px-3 py-1">/review</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-5 px-4 pb-8">
-      {messages.map((msg, i) => (
-        <article key={i} className="space-y-2" aria-label={msg.role === "user" ? "Sua mensagem" : "Resposta PKF"}>
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {msg.role === "user" ? "Você" : "PKF"}
-          </div>
-          <div
-            className={`rounded-xl border px-4 py-3 text-sm leading-relaxed ${
-              msg.role === "user"
-                ? "border-slate-700 bg-slate-800"
-                : msg.role === "error"
-                  ? "border-red-500/50 text-red-200"
-                  : "border-slate-700 bg-[#111827]"
-            }`}
-            {...(msg.role !== "user"
-              ? { dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) } }
-              : {})}
-          >
-            {msg.role === "user" ? <p>{msg.content}</p> : null}
-          </div>
-        </article>
-      ))}
+    <div className="mx-auto flex max-w-2xl flex-col gap-8 px-4 pb-10 pt-6">
+      {messages.map((msg, i) => {
+        const isUser = msg.role === "user";
+        const isError = msg.role === "error";
+        return (
+          <article key={i} className={isUser ? "flex justify-end" : ""} aria-label={isUser ? "Sua mensagem" : "Resposta PKF"}>
+            {!isUser ? (
+              <div className="mb-2 flex items-center gap-2">
+                <span className="grid h-6 w-6 place-items-center rounded-md bg-[#d97757]/15 text-xs font-bold text-[#d97757]">
+                  P
+                </span>
+                <span className="text-xs font-medium text-[#9b9b9b]">{msg.agent && msg.agent !== "pkf" ? msg.agent : "PKF"}</span>
+              </div>
+            ) : null}
+            <div
+              className={`text-[15px] leading-relaxed ${
+                isUser
+                  ? "max-w-[85%] rounded-2xl rounded-br-md bg-[#2e2e2e] px-4 py-3 text-[#ececec]"
+                  : isError
+                    ? "rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-red-200"
+                    : "pkf-markdown text-[#d4d4d4]"
+              }`}
+              {...(!isUser && !isError
+                ? { dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) } }
+                : {})}
+            >
+              {isUser || isError ? <p>{msg.content}</p> : null}
+            </div>
+          </article>
+        );
+      })}
       {thinking ? (
-        <div className="flex items-center gap-2 text-sm text-slate-400" aria-live="polite">
-          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-          PKF está trabalhando…
+        <div className="flex items-center gap-2 text-sm text-[#9b9b9b]" aria-live="polite">
+          <span className="inline-flex gap-1">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#d97757]" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#d97757] [animation-delay:150ms]" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#d97757] [animation-delay:300ms]" />
+          </span>
+          Trabalhando…
         </div>
       ) : null}
     </div>

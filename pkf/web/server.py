@@ -10,6 +10,7 @@ from fastapi import Body, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from pkf.config import auth_token
 from pkf.db.config import database_enabled
 from pkf.db.engine import close_db, init_db
 from pkf.errors import explain_provider_error
@@ -21,7 +22,7 @@ from pkf.spec.store import active_spec_preview, approve_spec, update_spec_stack
 from pkf.workflow.cycle import DevCycle
 from pkf.workflow.tasks import TaskTracker
 from pkf.workspace_index import build_file_tree, list_changes
-from pkf.web.auth import AuthMiddleware, check_ws_auth, _extract_token
+from pkf.web.auth import AuthMiddleware, SecurityHeadersMiddleware, check_ws_auth, _extract_token
 from pkf.web.history import ChatHistory
 from pkf.web.preview import preview_info, redirect_preview_entry, serve_preview_file
 
@@ -56,6 +57,7 @@ def create_app(router: Router) -> FastAPI:
             await close_db()
 
     app = FastAPI(title="PKF", docs_url=None, redoc_url=None, lifespan=lifespan)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(AuthMiddleware)
     app.state.router = router
     app.state.history = ChatHistory(router.workspace.root, router.workspace)
@@ -73,21 +75,24 @@ def create_app(router: Router) -> FastAPI:
         return FileResponse(static_root / "index.html")
 
     @app.get("/api/health")
-    async def health():
+    async def health(request: Request):
+        token = _extract_token(request)
+        authed = not auth_token() or token == auth_token()
         payload = {
             "ok": True,
-            "auth_required": bool(os.getenv("PKF_AUTH_TOKEN")),
+            "auth_required": bool(auth_token()),
             "database": database_enabled(),
             "ui": "vite" if use_vite else "legacy",
-            "web_search": web_search_configured(),
-            "ninerouter": ninerouter_enabled(),
-            "provider_router": app.state.router.pool.status(),
         }
-        if ninerouter_enabled():
-            ok, detail = ninerouter_health()
-            payload["ninerouter_ok"] = ok
-            if not ok:
-                payload["ninerouter_error"] = detail
+        if authed:
+            payload["web_search"] = web_search_configured()
+            payload["ninerouter"] = ninerouter_enabled()
+            payload["provider_router"] = app.state.router.pool.status()
+            if ninerouter_enabled():
+                ok, detail = ninerouter_health()
+                payload["ninerouter_ok"] = ok
+                if not ok:
+                    payload["ninerouter_error"] = detail
         return payload
 
     @app.get("/api/preview")

@@ -12,12 +12,12 @@ function TaskItem({ node }: { node: TaskNode }) {
     node.status === "done"
       ? "text-emerald-400"
       : node.status === "running"
-        ? "text-amber-400"
+        ? "text-[#d97757]"
         : node.status === "failed"
           ? "text-red-400"
-          : "text-slate-400";
+          : "text-[#666]";
   return (
-    <li className={`border-l-2 border-slate-700 pl-2 ${cls}`}>
+    <li className={`border-l-2 border-[#2e2e2e] pl-2 ${cls}`}>
       {icon(node.status)} {node.title}
       {node.children?.length ? (
         <ul className="mt-1 ml-3 space-y-1">
@@ -31,7 +31,7 @@ function TaskItem({ node }: { node: TaskNode }) {
 }
 
 export function TaskTree({ tasks }: { tasks: TaskNode[] }) {
-  if (!tasks.length) return <p className="text-sm text-slate-500">—</p>;
+  if (!tasks.length) return <p className="text-sm text-[#666]">—</p>;
   return (
     <ul className="space-y-1 text-sm">
       {tasks.map((t) => (

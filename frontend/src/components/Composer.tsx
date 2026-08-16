@@ -19,7 +19,7 @@ export function Composer({ busy, onSend }: Props) {
     const el = ta.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [text]);
 
   function submit(e?: FormEvent) {
@@ -31,8 +31,8 @@ export function Composer({ busy, onSend }: Props) {
   }
 
   return (
-    <footer className="border-t border-slate-800 bg-[#0f172a]/90 p-4 backdrop-blur">
-      <div className="mx-auto max-w-3xl">
+    <footer className="border-t border-[#2e2e2e] bg-[#191919]/95 px-4 py-4 backdrop-blur">
+      <div className="mx-auto max-w-2xl">
         {!busy ? (
           <div className="mb-3 flex flex-wrap gap-2">
             {SUGGESTIONS.map((s) => (
@@ -40,16 +40,16 @@ export function Composer({ busy, onSend }: Props) {
                 key={s}
                 type="button"
                 onClick={() => onSend(s)}
-                className="min-h-10 rounded-full border border-slate-700 bg-slate-900/60 px-3 text-xs transition hover:border-slate-500"
+                className="rounded-full border border-[#2e2e2e] bg-[#212121] px-3 py-1.5 text-xs text-[#9b9b9b] transition hover:border-[#d97757]/40 hover:text-[#ececec]"
               >
-                {s.split(" ")[0]}…
+                {s.split(" ").slice(0, 3).join(" ")}…
               </button>
             ))}
           </div>
         ) : null}
         <form
           onSubmit={submit}
-          className="flex items-end gap-2 rounded-2xl border border-slate-700 bg-[#111827] p-2 shadow-xl"
+          className="flex items-end gap-2 rounded-2xl border border-[#2e2e2e] bg-[#212121] p-2 shadow-lg focus-within:border-[#d97757]/50"
         >
           <label htmlFor="prompt" className="sr-only">
             Mensagem para a PKF
@@ -60,9 +60,9 @@ export function Composer({ busy, onSend }: Props) {
             rows={1}
             value={text}
             disabled={busy}
-            placeholder="Descreva o que você quer construir…"
+            placeholder="Descreva o que você quer construir… (/spec, /build, /review)"
             aria-busy={busy}
-            className="max-h-[180px] min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-500 focus-visible:ring-2 focus-visible:ring-emerald-500/50 rounded-lg"
+            className="max-h-[200px] min-h-11 flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-[#666]"
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -75,12 +75,12 @@ export function Composer({ busy, onSend }: Props) {
             type="submit"
             disabled={busy || !text.trim()}
             aria-label="Enviar"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-500 text-emerald-950 transition hover:brightness-110 disabled:opacity-40"
+            className="mb-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#d97757] text-[#191919] transition hover:brightness-110 disabled:opacity-30"
           >
-            →
+            ↑
           </button>
         </form>
-        <p className="mt-2 text-center text-xs text-slate-500">Enter envia · Shift+Enter quebra linha</p>
+        <p className="mt-2 text-center text-[11px] text-[#666]">Enter envia · Shift+Enter nova linha</p>
       </div>
     </footer>
   );

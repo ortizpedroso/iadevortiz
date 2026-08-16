@@ -241,6 +241,7 @@ def provider_pool_names() -> list[str]:
         candidates = [name for name in candidates if name != "ninerouter"]
 
     primary = os.getenv("PKF_PROVIDER", "").strip()
+    explicit_pool = os.getenv("PKF_PROVIDER_POOL", "").strip()
     if primary and primary not in candidates:
         candidates.insert(0, primary)
 
@@ -248,7 +249,9 @@ def provider_pool_names() -> list[str]:
     ordered: list[str] = []
     for name in candidates:
         cfg = available.get(name)
-        if not cfg or not cfg.api_key or name == "ollama":
+        if not cfg or name == "ollama":
+            continue
+        if not cfg.api_key and name != "ninerouter":
             continue
         url = cfg.base_url.rstrip("/").lower()
         if url in seen_urls:
@@ -256,7 +259,7 @@ def provider_pool_names() -> list[str]:
         seen_urls.add(url)
         ordered.append(name)
 
-    if primary and primary in ordered:
+    if primary and primary in ordered and not explicit_pool:
         ordered = [primary] + [n for n in ordered if n != primary]
     return ordered
 

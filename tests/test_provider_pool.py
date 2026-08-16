@@ -20,6 +20,7 @@ def test_provider_pool_dedupes_groq_openai(monkeypatch):
 
 def test_provider_pool_respects_explicit_order(monkeypatch):
     monkeypatch.delenv("NINEROUTER_URL", raising=False)
+    monkeypatch.delenv("PKF_PROVIDER", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "g")
     monkeypatch.setenv("GROQ_API_KEY", "q")
     monkeypatch.setenv("PKF_PROVIDER_POOL", "gemini,groq")

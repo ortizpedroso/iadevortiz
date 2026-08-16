@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Sidebar } from "./components/Sidebar";
+import { AuthModal } from "./components/AuthModal";
 import { Composer } from "./components/Composer";
+import { IconRail } from "./components/IconRail";
 import { MessageList } from "./components/MessageList";
+import { Sidebar } from "./components/Sidebar";
+import { SpecPanel } from "./components/SpecPanel";
 import { authHeaders, getToken, previewUrl, wsUrl } from "./lib/api";
-import type { Message, SessionSnapshot, TaskNode, WsEvent } from "./types";
+import type { Message, SessionSnapshot, SpecPreview, TaskNode, WsEvent } from "./types";
 
 export default function App() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [authRequired, setAuthRequired] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [panel, setPanel] = useState<"project" | "spec" | null>("project");
   const [messages, setMessages] = useState<Message[]>([]);
   const [session, setSession] = useState<SessionSnapshot>({});
+  const [specPreview, setSpecPreview] = useState<SpecPreview | null>(null);
   const [tasks, setTasks] = useState<TaskNode[]>([]);
   const [changes, setChanges] = useState<{ path: string; action: string }[]>([]);
   const [busy, setBusy] = useState(false);
@@ -31,16 +37,17 @@ export default function App() {
     }
   }, []);
 
-  const applySession = useCallback(
-    (data: SessionSnapshot) => {
-      setSession((s) => ({ ...s, ...data }));
-      if (data.tasks) setTasks(data.tasks);
-      if (data.project_preview?.available && data.project_preview.path) {
-        setPreviewSrc(previewUrl(data.project_preview.path));
-      }
-    },
-    [],
-  );
+  const applySession = useCallback((data: SessionSnapshot) => {
+    setSession((s) => ({ ...s, ...data }));
+    if (data.tasks) setTasks(data.tasks);
+    if (data.spec_preview) {
+      setSpecPreview(data.spec_preview);
+      if (data.spec_preview.status === "pending_approval") setPanel("spec");
+    }
+    if (data.project_preview?.available && data.project_preview.path) {
+      setPreviewSrc(previewUrl(data.project_preview.path));
+    }
+  }, []);
 
   const connect = useCallback(() => {
     if (socketRef.current?.readyState === WebSocket.OPEN) return;
@@ -55,6 +62,11 @@ export default function App() {
       const event: WsEvent = JSON.parse(ev.data);
       if (event.type === "session") {
         applySession(event as SessionSnapshot);
+        return;
+      }
+      if (event.type === "spec_preview" && event.spec) {
+        setSpecPreview(event.spec);
+        setPanel("spec");
         return;
       }
       if (event.type === "progress" || event.type === "task_progress") {
@@ -89,18 +101,21 @@ export default function App() {
 
   useEffect(() => {
     async function boot() {
-      if (!getToken() && (await fetch("/api/health")).ok) {
-        const info = await (await fetch("/api/health")).json();
-        if (info.auth_required) {
-          const token = prompt("Informe o token de acesso da PKF:");
-          if (token) {
-            sessionStorage.setItem("pkf_token", token);
-            location.reload();
-          }
+      const healthRes = await fetch("/api/health");
+      if (healthRes.ok) {
+        const info = await healthRes.json();
+        setAuthRequired(!!info.auth_required);
+        if (info.auth_required && !getToken()) {
+          setAuthOpen(true);
+          return;
         }
       }
       try {
         const res = await fetch("/api/session", { headers: authHeaders() });
+        if (res.status === 401) {
+          setAuthOpen(true);
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           applySession(data.session);
@@ -115,6 +130,12 @@ export default function App() {
     boot();
     return () => socketRef.current?.close();
   }, [applySession, connect, loadChanges]);
+
+  function handleAuth(token: string) {
+    sessionStorage.setItem("pkf_token", token);
+    setAuthOpen(false);
+    location.reload();
+  }
 
   function sendMessage(text: string) {
     const ws = socketRef.current;
@@ -134,6 +155,7 @@ export default function App() {
     await fetch("/api/reset", { method: "POST", headers: authHeaders() });
     setMessages([]);
     setPreviewOpen(false);
+    setSpecPreview(null);
     setSession({});
     setTasks([]);
     loadChanges();
@@ -144,55 +166,72 @@ export default function App() {
       ? session.project_name
       : "Nenhum ainda";
 
+  const showSpecPanel =
+    panel === "spec" && specPreview && specPreview.status !== "approved";
+
   return (
     <div className="flex h-full min-h-dvh">
+      <AuthModal open={authOpen && authRequired} onSubmit={handleAuth} />
+
       <a
         href="#main-chat"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded focus:bg-emerald-500 focus:px-3 focus:py-2 focus:text-black"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded focus:bg-[#d97757] focus:px-3 focus:py-2 focus:text-[#191919]"
       >
         Ir ao chat
       </a>
+
+      <IconRail
+        panel={panel}
+        onPanel={setPanel}
+        hasSpec={!!specPreview && specPreview.status !== "approved"}
+        previewAvailable={!!session.project_preview?.available}
+        onPreview={() => setPreviewOpen(true)}
+      />
+
       <Sidebar
-        open={sidebarOpen}
-        onToggle={() => setSidebarOpen(false)}
+        open={panel === "project"}
+        onClose={() => setPanel(null)}
         projectName={projectName}
         tasks={tasks}
         changes={changes}
         onNewProject={newProject}
         database={!!session.database}
+        phase={session.phase}
+        model={session.model}
       />
+
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-14 items-center gap-3 border-b border-slate-800 px-4">
+        <header className="flex min-h-12 items-center gap-3 border-b border-[#2e2e2e] px-4">
           <button
             type="button"
-            className="grid h-11 w-11 place-items-center rounded-lg md:hidden"
+            className="grid h-10 w-10 place-items-center rounded-lg md:hidden"
             aria-label="Abrir menu"
-            onClick={() => setSidebarOpen(true)}
+            onClick={() => setPanel(panel === "project" ? null : "project")}
           >
             ☰
           </button>
-          <div className="flex items-center gap-2 font-semibold" aria-live="polite">
+          <div className="flex items-center gap-2 text-sm" aria-live="polite">
             <span
               className={`h-2 w-2 rounded-full ${
-                busy ? "bg-amber-400" : status === "Pronto" ? "bg-emerald-400" : "bg-slate-500"
+                busy ? "bg-[#d97757]" : status === "Pronto" ? "bg-emerald-500" : "bg-[#666]"
               }`}
             />
-            {busy ? "Trabalhando…" : status}
+            <span className="text-[#9b9b9b]">{busy ? "Trabalhando…" : status}</span>
           </div>
           {session.project_preview?.available ? (
             <div className="ml-auto flex gap-2">
               <button
                 type="button"
-                className="min-h-11 rounded-lg border border-slate-600 px-3 text-sm font-medium hover:border-emerald-500"
-                onClick={() => setPreviewOpen(true)}
+                className="hidden min-h-9 rounded-lg border border-[#2e2e2e] px-3 text-xs font-medium hover:border-[#d97757]/50 sm:inline-flex sm:items-center"
+                onClick={() => setPreviewOpen((v) => !v)}
               >
-                Ver ao lado
+                {previewOpen ? "Ocultar preview" : "Preview"}
               </button>
               <a
                 href={previewSrc}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex min-h-11 items-center rounded-lg border border-slate-600 px-3 text-sm font-medium hover:border-emerald-500"
+                className="inline-flex min-h-9 items-center rounded-lg border border-[#2e2e2e] px-3 text-xs font-medium hover:border-[#d97757]/50"
               >
                 Abrir ↗
               </a>
@@ -201,29 +240,46 @@ export default function App() {
         </header>
 
         {session.provider_error ? (
-          <div className="mx-4 mt-3 rounded-lg border border-amber-600/50 bg-amber-950/30 p-3 text-sm text-amber-100">
+          <div className="mx-4 mt-3 rounded-xl border border-amber-600/40 bg-amber-950/20 p-3 text-sm text-amber-100">
             {session.provider_error}
           </div>
         ) : null}
         {progress ? (
-          <div className="mx-4 mt-3 rounded-lg bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100" aria-live="polite">
+          <div className="mx-4 mt-3 rounded-xl bg-[#d97757]/10 px-4 py-2 text-sm text-[#d97757]" aria-live="polite">
             {progress}
           </div>
         ) : null}
 
-        <div className={`flex min-h-0 flex-1 ${previewOpen ? "flex-col lg:flex-row" : ""}`}>
-          <main id="main-chat" className="min-h-0 flex-1 overflow-auto py-6" tabIndex={0}>
+        <div className={`flex min-h-0 flex-1 ${previewOpen || showSpecPanel ? "flex-col lg:flex-row" : ""}`}>
+          <main id="main-chat" className="min-h-0 flex-1 overflow-auto" tabIndex={0}>
             <MessageList messages={messages} thinking={thinking} />
           </main>
+
+          {showSpecPanel ? (
+            <SpecPanel
+              spec={specPreview}
+              specName={session.active_spec}
+              onApproved={() => {
+                setSpecPreview((s) => (s ? { ...s, status: "approved" } : s));
+                setPanel("project");
+              }}
+            />
+          ) : null}
+
           {previewOpen && previewSrc ? (
-            <aside className="flex min-h-[40vh] flex-1 flex-col border-t border-slate-800 lg:border-l lg:border-t-0">
-              <header className="flex items-center justify-between border-b border-slate-800 px-4 py-2 text-sm">
-                <strong>Preview do projeto</strong>
-                <button type="button" aria-label="Fechar preview" className="h-11 w-11" onClick={() => setPreviewOpen(false)}>
+            <aside className="flex min-h-[40vh] flex-1 flex-col border-t border-[#2e2e2e] lg:max-w-[50%] lg:border-l lg:border-t-0">
+              <header className="flex items-center justify-between border-b border-[#2e2e2e] px-4 py-2 text-sm">
+                <strong>Preview</strong>
+                <button type="button" aria-label="Fechar preview" className="h-10 w-10" onClick={() => setPreviewOpen(false)}>
                   ✕
                 </button>
               </header>
-              <iframe title="Preview do projeto" src={previewSrc} className="min-h-0 flex-1 bg-white" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
+              <iframe
+                title="Preview do projeto"
+                src={previewSrc}
+                className="min-h-0 flex-1 bg-white"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              />
             </aside>
           ) : null}
         </div>

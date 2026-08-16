@@ -11,17 +11,33 @@ export type TaskNode = {
   children?: TaskNode[];
 };
 
+export type SpecPreview = {
+  name?: string;
+  title?: string;
+  status?: string;
+  suggested_stack?: Record<string, string>;
+  confirmed_stack?: Record<string, string>;
+  effective_stack?: Record<string, string>;
+  body?: string;
+  markdown?: string;
+};
+
 export type SessionSnapshot = {
   provider?: string;
   model?: string;
   project?: string | null;
   project_name?: string;
   phase?: string;
+  active_spec?: string | null;
+  spec_status?: string | null;
+  spec_preview?: SpecPreview | null;
   provider_ok?: boolean;
   provider_error?: string;
+  provider_pool?: string[];
   project_preview?: { available?: boolean; path?: string; entry?: string };
   tasks?: TaskNode[];
   database?: boolean;
+  goal?: string;
 };
 
 export type WsEvent = {
@@ -31,6 +47,8 @@ export type WsEvent = {
   role?: string;
   agent?: string;
   tasks?: TaskNode[];
+  spec?: SpecPreview;
+  spec_preview?: SpecPreview | null;
   project_preview?: SessionSnapshot["project_preview"];
   [key: string]: unknown;
 };
