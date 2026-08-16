@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 
 from pkf.config import API_TIMEOUT
+from pkf.deepseek import format_search_results, web_search_format
 from pkf.ninerouter import ninerouter_enabled, ninerouter_web_search
 
 
@@ -85,6 +86,23 @@ def _brave_search(query: str, max_results: int) -> str:
 
 
 def _format_results(query: str, results: list, answer: str | None) -> str:
+    if web_search_format() == "deepseek":
+        normalized = []
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            normalized.append(
+                {
+                    "title": item.get("title"),
+                    "url": item.get("url"),
+                    "snippet": item.get("snippet") or item.get("content"),
+                }
+            )
+        if normalized or answer:
+            formatted = format_search_results(query, normalized)
+            if answer:
+                return f"{formatted}\n\nResumo rápido: {answer}"
+            return formatted
     if not results and not answer:
         return f"Nenhum resultado para: {query}"
     lines = [f"Resultados para: {query}"]

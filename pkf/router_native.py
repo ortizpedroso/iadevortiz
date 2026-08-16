@@ -10,6 +10,7 @@ _PROVIDER_KEY_ENV: dict[str, tuple[str, ...]] = {
     "kimi": ("MOONSHOT_API_KEY", "KIMI_API_KEY", "MOONSHOT_API_KEYS"),
     "mimo": ("MIMO_API_KEY", "MIMO_API_KEYS"),
     "openai": ("OPENAI_API_KEY", "OPENAI_API_KEYS"),
+    "deepseek": ("DEEPSEEK_API_KEY", "DEEPSEEK_API_KEYS"),
     "ollama": ("OLLAMA_API_KEY",),
 }
 
@@ -69,9 +70,9 @@ def _tier_provider_names(tier: str) -> list[str]:
         primary = os.getenv("PKF_PROVIDER", "").strip()
         if primary and primary in available:
             return [primary]
-        return [name for name in ("groq", "kimi", "openai") if name in available]
+        return [name for name in ("groq", "deepseek", "kimi", "openai") if name in available]
     if tier == "cheap":
-        return [name for name in ("gemini", "mimo") if name in available]
+        return [name for name in ("gemini", "deepseek", "mimo") if name in available]
     return [name for name in ("groq", "gemini") if name in available]
 
 

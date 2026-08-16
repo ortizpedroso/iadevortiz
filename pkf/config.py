@@ -105,6 +105,13 @@ def providers() -> dict[str, ProviderConfig]:
             api_key=os.getenv("MIMO_API_KEY", ""),
             model=os.getenv("MIMO_MODEL", "mimo-v2-flash"),
         ),
+        "deepseek": ProviderConfig(
+            name="deepseek",
+            base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+            api_key=os.getenv("DEEPSEEK_API_KEY", ""),
+            model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+            supports_tools=os.getenv("DEEPSEEK_TOOLS", "0") == "1",
+        ),
     }
     configs = {k: v for k, v in configs.items() if v.api_key or k in ("ollama",)}
     openai_key = os.getenv("OPENAI_API_KEY", "")
@@ -144,6 +151,8 @@ def default_provider() -> str:
             return "kimi"
         if os.getenv("OPENAI_API_KEY"):
             return "openai"
+        if os.getenv("DEEPSEEK_API_KEY"):
+            return "deepseek"
     return "ollama"
 
 
@@ -173,9 +182,19 @@ def ui_port() -> int:
 
 
 def model_for_task(task: str, default: str) -> str:
-    """Modelo por fase: PKF_BUILD_MODEL, PKF_SPEC_MODEL, etc."""
+    """Modelo por fase: PKF_BUILD_MODEL, PKF_ARCHITECT_MODEL, PKF_REASONING_MODEL, etc."""
     key = f"PKF_{task.upper()}_MODEL"
-    return os.getenv(key, "").strip() or default
+    explicit = os.getenv(key, "").strip()
+    if explicit:
+        return explicit
+    from pkf.deepseek import deepseek_enabled, reasoner_model
+    from pkf.reasoning import reasoning_agents
+
+    if task in reasoning_agents() and deepseek_enabled():
+        reasoning = os.getenv("PKF_REASONING_MODEL", "").strip() or reasoner_model()
+        if reasoning:
+            return reasoning
+    return default
 
 
 def tool_rounds_for_agent(agent_name: str) -> int:
@@ -214,9 +233,9 @@ def provider_pool_names() -> list[str]:
     if explicit := os.getenv("PKF_PROVIDER_POOL", "").strip():
         candidates = [p.strip() for p in explicit.split(",") if p.strip()]
     elif ninerouter_enabled():
-        candidates = ["ninerouter", "groq", "gemini", "mimo", "kimi", "openai"]
+        candidates = ["ninerouter", "groq", "gemini", "deepseek", "mimo", "kimi", "openai"]
     else:
-        candidates = ["groq", "gemini", "mimo", "kimi", "openai"]
+        candidates = ["groq", "gemini", "deepseek", "mimo", "kimi", "openai"]
 
     if not ninerouter_enabled():
         candidates = [name for name in candidates if name != "ninerouter"]
@@ -276,6 +295,8 @@ COMPACTION_BUDGETS: dict[str, dict[str, int]] = {
     "llama-3.3-70b": {"max_messages": 14, "tool_chars": 2800, "keep_recent": 7},
     "gemini-2.0-flash": {"max_messages": 20, "tool_chars": 4000, "keep_recent": 10},
     "mimo": {"max_messages": 18, "tool_chars": 3500, "keep_recent": 8},
+    "deepseek-reasoner": {"max_messages": 12, "tool_chars": 2500, "keep_recent": 6},
+    "deepseek-r1": {"max_messages": 12, "tool_chars": 2500, "keep_recent": 6},
 }
 
 

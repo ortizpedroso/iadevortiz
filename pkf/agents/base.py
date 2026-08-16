@@ -11,6 +11,13 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpe
 from pkf.agents.compact import compact_messages
 from pkf.config import NODE_LIMIT, fallback_model_on_rate_limit, tool_rounds_for_agent
 from pkf.provider_errors import should_rotate_provider
+from pkf.reasoning import (
+    agent_uses_reasoning,
+    completion_params_for_model,
+    is_reasoning_model,
+    parse_thinking,
+    prepare_messages_for_api,
+)
 from pkf.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
@@ -70,11 +77,17 @@ class Agent:
         return reply or ""
 
     async def _complete_with_tools(self) -> str:
-        native_tools = self.supports_tools
+        native_tools = self.supports_tools and not is_reasoning_model(self.model)
         for _ in range(self.max_tool_rounds):
+            messages = prepare_messages_for_api(
+                compact_messages(self.messages, self.model),
+                self.model,
+                self.name,
+            )
             api_args: dict = {
                 "model": self.model,
-                "messages": compact_messages(self.messages, self.model),
+                "messages": messages,
+                **completion_params_for_model(self.model),
             }
             if native_tools:
                 api_args["tools"] = self.tools.schemas()
@@ -109,7 +122,15 @@ class Agent:
 
             message = completion.choices[0].message
             tool_calls = list(_iter_native_tool_calls(message))
-            content = message.content or ""
+            raw_content = message.content or ""
+            reasoning_content = getattr(message, "reasoning_content", None)
+            thinking, content = parse_thinking(raw_content, reasoning_content)
+            if thinking:
+                await self.router.emit(
+                    "reasoning",
+                    agent=self.name,
+                    thinking=thinking[:2000],
+                )
             if not tool_calls:
                 tool_calls = parse_text_tool_calls(content)
 

@@ -9,7 +9,7 @@ Assistente multiagente para especificar, implementar, revisar e testar código.
 | Backend | Python 3.12, FastAPI, Uvicorn, WebSocket |
 | Frontend | Vite, React 19, TypeScript, Tailwind CSS 4 |
 | Banco | PostgreSQL 16 (SQLAlchemy async + Alembic) |
-| IA | OpenAI SDK — router nativo (tiers, multi-chave, Groq, Gemini, Kimi) |
+| IA | OpenAI SDK — router nativo (tiers, multi-chave, Groq, Gemini, Kimi, DeepSeek-R1) |
 | Deploy | Docker Compose, Nginx, volume workspace |
 
 ## Desenvolvimento local
@@ -95,3 +95,20 @@ TAVILY_API_KEY=...          # web_search (se sem 9Router)
 ```
 
 Fallback automático: tier → multi-chave → cooldown com `retry-after`.
+
+## DeepSeek-R1 (reasoning)
+
+Repositório oficial: [deepseek-ai/DeepSeek-R1](https://github.com/deepseek-ai/DeepSeek-R1) — documentação do modelo + pesos HF; **não** é agente CLI. A PKF integra via API (`deepseek-reasoner`).
+
+```env
+DEEPSEEK_API_KEY=sk-...
+PKF_PROVIDER=deepseek                    # ou híbrido com 9Router + fallback
+DEEPSEEK_REASONER_MODEL=deepseek-reasoner
+PKF_REASONING_AGENTS=architect,reviewer,logic
+PKF_REASONING_TEMPERATURE=0.6
+PKF_WEB_SEARCH_FORMAT=deepseek           # citações estilo chat.deepseek.com
+```
+
+Comportamento: system prompt fundido no user; temperatura 0.6; parse de ``; tools desligadas em modelos reasoning; architect/reviewer/logic usam R1 quando a chave DeepSeek existe.
+
+Skill: `pkf/skills/deepseek-r1-reasoning.md`.
