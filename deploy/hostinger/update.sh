@@ -23,19 +23,26 @@ fi
 echo "==> Git pull"
 git pull origin main
 
-echo "==> 9Router no .env"
+echo "==> Mesclar .env (preserva GROQ/GEMINI/NINEROUTER existentes)"
+bash deploy/hostinger/set-env-keys.sh
+
+echo "==> Porta 8765 exposta (acesso externo)"
+if grep -q '127.0.0.1:8765:8765' docker-compose.yml; then
+  sed -i 's/127.0.0.1:8765:8765/8765:8765/' docker-compose.yml
+fi
+
+echo "==> 9Router no .env (se ainda faltar URL)"
 grep -q '^NINEROUTER_URL=' .env || cat >> .env << 'EOF'
 
 # 9Router híbrido
 NINEROUTER_URL=http://ninerouter:20128
 PKF_PROVIDER=ninerouter
-NINEROUTER_KEY=local
 NINEROUTER_MODEL=oc/big-pickle
 EOF
 
 echo "==> Build e start (profile: $PROFILE)"
 docker compose --profile "$PROFILE" build pkf ninerouter
-docker compose --profile "$PROFILE" up -d postgres pkf ninerouter
+docker compose --profile "$PROFILE" up -d postgres pkf ninerouter --force-recreate
 docker compose stop nginx 2>/dev/null || true
 
 echo "==> Aguardando PKF ficar healthy..."
