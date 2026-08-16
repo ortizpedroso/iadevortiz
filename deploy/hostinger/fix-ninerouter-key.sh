@@ -11,10 +11,53 @@ if ! docker compose --profile router ps ninerouter --status running -q 2>/dev/nu
   sleep 3
 fi
 
-echo "==> Criando API key (loopback dentro do container ninerouter)"
-RESP=$(docker compose exec -T ninerouter curl -s -X POST http://127.0.0.1:20128/api/keys \
-  -H "Content-Type: application/json" \
-  -d '{"name":"pkf-vps"}')
+create_key_ninerouter_node() {
+  docker compose exec -T ninerouter node - <<'NODE'
+const http = require("http");
+const data = JSON.stringify({ name: "pkf-vps" });
+const req = http.request(
+  {
+    hostname: "127.0.0.1",
+    port: 20128,
+    path: "/api/keys",
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(data),
+    },
+  },
+  (res) => {
+    let body = "";
+    res.on("data", (chunk) => (body += chunk));
+    res.on("end", () => process.stdout.write(body));
+  }
+);
+req.on("error", (err) => {
+  console.error(err.message);
+  process.exit(1);
+});
+req.write(data);
+req.end();
+NODE
+}
+
+create_key_host_curl() {
+  curl -s -X POST http://127.0.0.1:20128/api/keys \
+    -H "Content-Type: application/json" \
+    -d '{"name":"pkf-vps"}'
+}
+
+echo "==> Criando API key no 9Router"
+RESP=""
+if RESP=$(create_key_ninerouter_node 2>/dev/null) && [ -n "$RESP" ]; then
+  echo "(via node no container ninerouter)"
+elif command -v curl >/dev/null 2>&1; then
+  RESP=$(create_key_host_curl)
+  echo "(via curl no host)"
+else
+  echo "Erro: nem node (ninerouter) nem curl (host) disponíveis."
+  exit 1
+fi
 
 KEY=$(python3 - <<'PY' "$RESP"
 import json, sys
@@ -47,7 +90,6 @@ else
   echo "NINEROUTER_KEY=${KEY}" >> .env
 fi
 
-# Remove linhas duplicadas ou 'local'
 sed -i '/^NINEROUTER_KEY=local$/d' .env
 
 echo "==> Recriando PKF (--force-recreate recarrega .env)"
