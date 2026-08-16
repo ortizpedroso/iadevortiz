@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Login no dashboard 9Router + cria API key + recarrega PKF.
+# Login local no 9Router (dentro do container) + API key + recarrega PKF.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/pkf}"
@@ -11,84 +11,144 @@ if ! docker compose --profile router ps ninerouter --status running -q 2>/dev/nu
   sleep 3
 fi
 
-if ! command -v curl >/dev/null 2>&1; then
-  echo "Erro: curl não encontrado no host. Instale: apt-get install -y curl"
-  exit 1
-fi
+DASH_PASS="${NINEROUTER_DASHBOARD_PASSWORD:-123456}"
+NEW_PASS="${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}"
 
-COOKIE_JAR=$(mktemp)
-trap 'rm -f "$COOKIE_JAR"' EXIT
+echo "==> Login local no 9Router (loopback dentro do container)"
+RESULT=$(docker compose exec -T \
+  -e DASH_PASS="$DASH_PASS" \
+  -e NEW_PASS="$NEW_PASS" \
+  ninerouter node - <<'NODE'
+const http = require("http");
 
-DASH_PASS="${NINEROUTER_DASHBOARD_PASSWORD:-}"
-if [ -z "$DASH_PASS" ]; then
-  DASH_PASS=$(docker compose exec -T ninerouter printenv INITIAL_PASSWORD 2>/dev/null | tr -d '\r' || true)
-fi
-DASH_PASS="${DASH_PASS:-123456}"
+const dashPass = process.env.DASH_PASS || "123456";
+const newPass = process.env.NEW_PASS || "pkf-admin-2026";
 
-echo "==> Login no dashboard 9Router (http://127.0.0.1:20128)"
-LOGIN=$(curl -s -c "$COOKIE_JAR" -X POST http://127.0.0.1:20128/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d "{\"password\":\"${DASH_PASS}\"}")
+function request(method, path, body, cookie) {
+  return new Promise((resolve, reject) => {
+    const payload = body ? JSON.stringify(body) : null;
+    const req = http.request(
+      {
+        hostname: "127.0.0.1",
+        port: 20128,
+        path,
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          ...(payload ? { "Content-Length": Buffer.byteLength(payload) } : {}),
+          ...(cookie ? { Cookie: cookie } : {}),
+        },
+      },
+      (res) => {
+        let text = "";
+        res.on("data", (chunk) => (text += chunk));
+        res.on("end", () => {
+          const setCookie = res.headers["set-cookie"] || [];
+          const cookieHeader = setCookie.map((part) => part.split(";")[0]).join("; ");
+          resolve({ status: res.statusCode, body: text, cookie: cookieHeader });
+        });
+      }
+    );
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
 
-if ! echo "$LOGIN" | grep -q '"success":true'; then
-  echo "Login falhou. Resposta:"
-  echo "$LOGIN"
-  echo ""
-  echo "Se você trocou a senha do dashboard, rode:"
-  echo "  NINEROUTER_DASHBOARD_PASSWORD='sua_senha' bash deploy/hostinger/fix-ninerouter-key.sh"
-  echo ""
-  echo "Ou acesse via túnel no PC:"
-  echo "  ssh -L 20128:127.0.0.1:20128 root@VPS"
-  echo "  http://localhost:20128/dashboard/endpoint"
-  exit 1
-fi
+function parseJson(text) {
+  try {
+    return JSON.parse(text || "{}");
+  } catch {
+    return {};
+  }
+}
 
-echo "==> Buscando chaves existentes"
-EXISTING=$(curl -s -b "$COOKIE_JAR" http://127.0.0.1:20128/api/keys || true)
-KEY=$(python3 - <<'PY' "$EXISTING"
+function extractKey(data) {
+  if (!data) return "";
+  if (typeof data === "string") return "";
+  if (data.key) return data.key;
+  if (data.apiKey) return data.apiKey;
+  if (data.api_key) return data.api_key;
+  const items = Array.isArray(data) ? data : data.keys || data.data || [];
+  for (const item of items) {
+    if (item && typeof item === "object") {
+      const value = item.key || item.apiKey || item.api_key;
+      if (value) return value;
+    }
+  }
+  return "";
+}
+
+(async () => {
+  let login = await request("POST", "/api/auth/login", { password: dashPass });
+  let loginData = parseJson(login.body);
+
+  if (!loginData.success) {
+    console.log(JSON.stringify({ error: "login_failed", detail: login.body }));
+    return;
+  }
+
+  let cookie = login.cookie;
+
+  if (loginData.mustChangePassword) {
+    const change = await request(
+      "PATCH",
+      "/api/settings",
+      { currentPassword: dashPass, newPassword: newPass },
+      cookie
+    );
+    const changeData = parseJson(change.body);
+    if (change.status >= 400 && !changeData.success) {
+      console.log(JSON.stringify({ error: "password_change_failed", detail: change.body }));
+      return;
+    }
+    login = await request("POST", "/api/auth/login", { password: newPass });
+    loginData = parseJson(login.body);
+    cookie = login.cookie;
+    if (!loginData.success) {
+      console.log(JSON.stringify({ error: "login_after_change_failed", detail: login.body }));
+      return;
+    }
+    console.error(`[info] Senha do dashboard alterada para: ${newPass}`);
+  }
+
+  let keys = await request("GET", "/api/keys", null, cookie);
+  let key = extractKey(parseJson(keys.body));
+
+  if (!key) {
+    const created = await request("POST", "/api/keys", { name: "pkf-vps" }, cookie);
+    key = extractKey(parseJson(created.body));
+    if (!key) {
+      console.log(JSON.stringify({ error: "key_create_failed", detail: created.body }));
+      return;
+    }
+  }
+
+  console.log(JSON.stringify({ key, dashboard_password: loginData.mustChangePassword ? newPass : dashPass }));
+})().catch((err) => {
+  console.log(JSON.stringify({ error: "exception", detail: String(err) }));
+});
+NODE
+)
+
+KEY=$(python3 - <<'PY' "$RESULT"
 import json, sys
-raw = (sys.argv[1] or "").strip()
-if not raw:
-    print("")
-    raise SystemExit
 try:
-    data = json.loads(raw)
+    data = json.loads(sys.argv[1])
 except json.JSONDecodeError:
     print("")
-    raise SystemExit
-items = data if isinstance(data, list) else data.get("keys") or data.get("data") or []
-for item in items:
-    if not isinstance(item, dict):
-        continue
-    value = item.get("key") or item.get("apiKey") or item.get("api_key")
-    if value:
-        print(value)
-        break
+    sys.exit(0)
+print(data.get("key") or "")
 PY
 )
 
 if [ -z "$KEY" ]; then
-  echo "==> Criando nova API key"
-  RESP=$(curl -s -b "$COOKIE_JAR" -X POST http://127.0.0.1:20128/api/keys \
-    -H "Content-Type: application/json" \
-    -d '{"name":"pkf-vps"}')
-  KEY=$(python3 - <<'PY' "$RESP"
-import json, sys
-raw = sys.argv[1]
-try:
-    data = json.loads(raw)
-except json.JSONDecodeError:
-    print("")
-    sys.exit(0)
-print(data.get("key") or data.get("apiKey") or data.get("api_key") or "")
-PY
-  )
-fi
-
-if [ -z "$KEY" ]; then
-  echo "Falha ao obter/criar chave."
-  echo "Keys GET: $EXISTING"
-  echo "Keys POST: ${RESP:-}"
+  echo "Falha:"
+  echo "$RESULT"
+  echo ""
+  echo "Alternativa manual (PC com túnel SSH):"
+  echo "  ssh -i ~/.ssh/pkf_hostinger -L 20128:127.0.0.1:20128 root@187.77.240.125"
+  echo "  http://localhost:20128/dashboard/endpoint"
   exit 1
 fi
 
@@ -105,11 +165,8 @@ sed -i '/^NINEROUTER_KEY=local$/d' .env
 echo "==> Recriando PKF"
 docker compose --profile router up -d pkf --force-recreate
 
-echo "==> Aguardando health..."
 for _ in $(seq 1 20); do
-  if curl -sf http://127.0.0.1:8765/api/health >/dev/null 2>&1; then
-    break
-  fi
+  curl -sf http://127.0.0.1:8765/api/health >/dev/null 2>&1 && break
   sleep 2
 done
 
@@ -124,8 +181,3 @@ try:
 except Exception as exc:
     print("health check falhou:", exc)
 PY
-
-echo ""
-echo "Dashboard (Providers → OpenCode Free):"
-echo "  ssh -L 20128:127.0.0.1:20128 root@VPS  →  http://localhost:20128/dashboard"
-echo "Troque a senha padrão 123456 se ainda não trocou."
