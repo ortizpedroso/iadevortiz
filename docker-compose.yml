@@ -124,6 +124,12 @@ services:
 
     restart: unless-stopped
 
+    environment:
+
+      REQUIRE_API_KEY: "false"
+
+      HOSTNAME: "0.0.0.0"
+
     ports:
 
       - "127.0.0.1:20128:20128"
