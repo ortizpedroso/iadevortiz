@@ -5,21 +5,28 @@ from dataclasses import dataclass
 from pkf.tools.impl import dispatch, parse_arguments
 from pkf.workspace import Workspace
 
-_SHARED_DEV = [
+_SHARED_CORE = [
     "project_context",
     "list_dir",
     "read_file",
     "write_file",
     "edit_file",
-    "search_code",
-    "code_index",
-    "run_command",
     "get_spec",
-    "save_spec",
-    "graph_view",
     "graph_assign_file",
     "verify_build",
 ]
+
+_SHARED_OPTIONAL = [
+    "search_code",
+    "code_index",
+    "run_command",
+    "graph_view",
+    "graph_add_node",
+    "save_spec",
+    "skill_search",
+]
+
+_SHARED_DEV = _SHARED_CORE + _SHARED_OPTIONAL
 
 TOOL_DEFINITIONS: dict[str, dict] = {
     "list_dir": {
@@ -151,6 +158,14 @@ TOOL_DEFINITIONS: dict[str, dict] = {
         "description": "Verifica se arquivos foram gerados no workspace após build.",
         "parameters": {"type": "object", "properties": {}},
     },
+    "skill_search": {
+        "description": "Busca skills Markdown por relevância BM25 e auto-carrega a melhor.",
+        "parameters": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+    },
 }
 
 AGENT_TOOLS = {
@@ -165,9 +180,9 @@ AGENT_TOOLS = {
         "graph_view",
         "graph_add_node",
     ],
-    "frontend": _SHARED_DEV,
-    "backend": _SHARED_DEV,
-    "logic": _SHARED_DEV,
+    "frontend": _SHARED_CORE,
+    "backend": _SHARED_CORE,
+    "logic": _SHARED_CORE,
     "reviewer": [
         "project_context",
         "list_dir",
@@ -202,14 +217,25 @@ class ToolCall:
 
 
 class ToolRegistry:
-    def __init__(self, workspace: Workspace, tool_names: list[str]):
+    def __init__(self, workspace: Workspace, tool_names: list[str], optional: list[str] | None = None):
         self.workspace = workspace
         self.tool_names = [name for name in tool_names if name in TOOL_DEFINITIONS]
+        agent_optional = optional if optional is not None else _SHARED_OPTIONAL
+        self._optional = [n for n in agent_optional if n in TOOL_DEFINITIONS]
+
+    def maybe_expand(self, name: str) -> None:
+        if name in self.tool_names:
+            return
+        if name in self._optional and name not in self.tool_names:
+            self.tool_names.append(name)
 
     def schemas(self) -> list[dict]:
-        return openai_tool_schemas(self.tool_names)
+        names = list(dict.fromkeys(self.tool_names + self._optional))
+        return openai_tool_schemas(names)
 
     def execute(self, name: str, arguments) -> str:
+        if name not in self.tool_names and name in self._optional:
+            self.tool_names.append(name)
         if name not in self.tool_names:
             return f"Ferramenta '{name}' não disponível para este agente."
         return dispatch(self.workspace, name, parse_arguments(arguments))
@@ -232,7 +258,10 @@ def openai_tool_schemas(tool_names: list[str]) -> list[dict]:
     return schemas
 
 
-def tools_for_agent(agent_name: str) -> list[str]:
+def tools_for_agent(agent_name: str) -> tuple[list[str], list[str]]:
     if agent_name.startswith("memoria_"):
-        return []
-    return AGENT_TOOLS.get(agent_name, AGENT_TOOLS["generalista"])
+        return [], []
+    names = AGENT_TOOLS.get(agent_name, AGENT_TOOLS["generalista"])
+    core = [n for n in names if n in _SHARED_CORE or n not in _SHARED_OPTIONAL]
+    optional = [n for n in _SHARED_OPTIONAL if n not in core]
+    return core, optional

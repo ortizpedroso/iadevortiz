@@ -11,6 +11,7 @@ from pkf.graph.project import ProjectGraph
 from pkf.spec.store import save_spec_document
 from pkf.workspace import Workspace, WorkspaceError
 from pkf.workspace_index import build_code_index, query_code_index, record_change, verify_workspace_files
+from pkf.skills.search import skill_search_tool_output
 
 ALLOWED_COMMANDS = (
     "python",
@@ -296,6 +297,8 @@ def dispatch(workspace: Workspace, name: str, arguments: dict) -> str:
             return verify_build(workspace)
         if name == "code_index":
             return code_index(workspace, arguments.get("query", ""))
+        if name == "skill_search":
+            return skill_search_tool_output(arguments.get("query", ""))
         return f"Ferramenta desconhecida: {name}"
     except (KeyError, TypeError) as exc:
         return f"Argumentos inválidos para {name}: {exc}"

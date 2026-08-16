@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pkf.config import pkf_dir
 
-COMMANDS = ("/spec", "/build", "/review", "/status", "/agents", "/graph", "/help", "/workspace")
+COMMANDS = ("/spec", "/build", "/review", "/status", "/agents", "/graph", "/help", "/workspace", "/goal")
 
 
 def parse_command(user_input: str) -> tuple[str | None, str]:
@@ -25,6 +25,7 @@ class DevCycle:
     active_spec: str | None = None
     spec_status: str | None = None
     last_agent: str | None = None
+    goal: str | None = None
 
     @classmethod
     def load(cls, workspace_root: Path) -> "DevCycle":
@@ -38,6 +39,7 @@ class DevCycle:
                 active_spec=data.get("active_spec"),
                 spec_status=data.get("spec_status"),
                 last_agent=data.get("last_agent"),
+                goal=data.get("goal"),
             )
         except json.JSONDecodeError:
             return cls()
@@ -66,6 +68,9 @@ class DevCycle:
         if command == "/review":
             self.phase = "REVIEW"
             return self.phase, _review_instruction(self.active_spec)
+        if command == "/goal":
+            self.goal = remainder.strip() or self.goal
+            return self.phase, f"Meta registrada: {self.goal or '(vazia)'}"
 
         if kind == "feature" and self.phase == "IDLE":
             self.phase = "SPEC"
@@ -90,7 +95,8 @@ class DevCycle:
         spec = self.active_spec or "(nenhuma)"
         agent = self.last_agent or "(nenhum)"
         status = self.spec_status or "(não definido)"
-        return f"Fase: {self.phase}\nSpec ativa: {spec}\nStatus da spec: {status}\nÚltimo agente: {agent}"
+        goal = self.goal or "(nenhuma)"
+        return f"Fase: {self.phase}\nSpec ativa: {spec}\nStatus da spec: {status}\nMeta (/goal): {goal}\nÚltimo agente: {agent}"
 
 
 def slugify(name: str) -> str:

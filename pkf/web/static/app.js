@@ -171,6 +171,57 @@ function showProgress(message) {
   el.textContent = message;
 }
 
+function renderTaskNode(node) {
+  const status = node.status || "pending";
+  const icon = status === "done" ? "✓" : status === "running" ? "…" : status === "failed" ? "✗" : "○";
+  let html = `<li class="${status}">${icon} ${escapeHtml(node.title || node.id)}`;
+  if (node.children?.length) {
+    html += "<ul>" + node.children.map(renderTaskNode).join("") + "</ul>";
+  }
+  html += "</li>";
+  return html;
+}
+
+function renderTaskTree(tasks) {
+  const el = $("#task-tree");
+  if (!el) return;
+  if (!tasks?.length) {
+    el.innerHTML = "<li>—</li>";
+    return;
+  }
+  el.innerHTML = tasks.map(renderTaskNode).join("");
+}
+
+async function loadTasks() {
+  try {
+    const res = await fetch("/api/tasks", { headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    renderTaskTree(data.tasks);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function loadChanges() {
+  try {
+    const res = await fetch("/api/changes", { headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    const el = $("#changes-list");
+    if (!el) return;
+    const items = data.changes || [];
+    el.innerHTML =
+      items
+        .slice()
+        .reverse()
+        .map((c) => `<li>${escapeHtml(c.path)} <small>(${escapeHtml(c.action)})</small></li>`)
+        .join("") || "<li>(nenhuma ainda)</li>";
+  } catch {
+    /* ignore */
+  }
+}
+
 function applySession(data) {
   session = { ...session, ...data };
   const project = data.project_name || data.project;
@@ -187,9 +238,13 @@ function applySession(data) {
 }
 
 function handleEvent(event) {
-  if (event.type === "progress") {
+  if (event.type === "progress" || event.type === "task_progress") {
     showProgress(event.message);
     addThinking();
+    return;
+  }
+  if (event.type === "task_tree") {
+    renderTaskTree(event.tasks);
     return;
   }
   if (event.type === "session") {
@@ -208,6 +263,8 @@ function handleEvent(event) {
     applySession(event);
     setBusy(false);
     showProgress("");
+    loadChanges();
+    loadTasks();
     if (event.project_preview?.available) {
       updatePreviewControls(event.project_preview);
     }
@@ -263,9 +320,12 @@ async function bootstrap() {
       return;
     }
     const data = await res.json();
-    applySession(data.session || {});
-    (data.messages || []).forEach((msg) => addMessage(msg));
-  } catch {
+  applySession(data.session || {});
+  renderTaskTree((data.session || {}).tasks);
+  (data.messages || []).forEach((msg) => addMessage(msg));
+  loadChanges();
+  loadTasks();
+} catch {
     addError("Não foi possível carregar a sessão. Você ainda pode enviar mensagens.");
   }
 }

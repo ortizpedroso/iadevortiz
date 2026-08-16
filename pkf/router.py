@@ -10,16 +10,22 @@ from pkf.agents.prompts import AGENT_PROMPTS, DEVELOPER_AGENTS
 from pkf.classifier import Intent, classify_intent, classify_intent_llm
 from pkf.config import RELEVANCE_THRESHOLD, model_for_task, rate_limit_cooldown_seconds
 from pkf.graph.project import ProjectGraph
+from pkf.judge import evaluate_build_goal
+from pkf.memory.persistent import append_memory_note, read_memory_context, write_checkpoint
 from pkf.memory.store import MemoryStore, export_graph
 from pkf.provider_errors import is_rotatable_error
 from pkf.provider_pool import ProviderPool
-from pkf.spec.store import active_spec_preview, approve_spec, update_spec_stack
+from pkf.spec.store import active_spec_preview, approve_spec, load_spec, update_spec_stack
+from pkf.skills.loader import load_skills_for_project
+from pkf.spec.updater import append_build_changelog, save_platform_spec
 from pkf.tools.impl import verify_build as verify_build_tool
 from pkf.workspace_index import begin_build_session
 from pkf.tools.registry import ToolRegistry, tools_for_agent
+from pkf.workflow.compose import MAX_BUILD_RETRIES, run_brainstorm, verify_ok
 from pkf.workflow.cycle import DevCycle, parse_command
 from pkf.workflow.orchestrator import run_build_tasks
 from pkf.workflow.planner import plan_build
+from pkf.workflow.tasks import TaskTracker
 from pkf.projects.manager import slug_from_request
 from pkf.web.preview import preview_info
 from pkf.workspace import Workspace
@@ -53,8 +59,10 @@ class Router:
         self.cycle = DevCycle.load(workspace.root)
         self.agents: dict[str, Agent] = {}
         self._event_handler = None
+        self._last_user_query = ""
         self._register_core_agents()
         self._restore_memory_agents()
+        save_platform_spec(workspace.root)
 
     def set_event_handler(self, handler) -> None:
         self._event_handler = handler
@@ -71,8 +79,9 @@ class Router:
             "thinking",
             "spec_preview",
         }:
-            if event_type in {"parallel_start", "plan"}:
-                await self._emit_progress("Estou implementando seu projeto…")
+            return
+        if event_type == "task_progress" and self.ui_mode:
+            await self._emit_progress(payload.get("message", "Trabalhando…"))
             return
         if self._event_handler:
             await self._event_handler({"type": event_type, **payload})
@@ -80,6 +89,10 @@ class Router:
     async def _emit_progress(self, message: str) -> None:
         if self._event_handler:
             await self._event_handler({"type": "progress", "message": message})
+
+    async def emit_task_tree(self, tracker: TaskTracker) -> None:
+        if self._event_handler:
+            await self._event_handler({"type": "task_tree", "tasks": tracker.to_list()})
 
     def snapshot(self) -> dict:
         preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
@@ -102,6 +115,8 @@ class Router:
             "project_graph": graph.to_dict() if not self.ui_mode else None,
             "last_agent": "pkf" if self.ui_mode else self.cycle.last_agent,
             "agents": list(AGENT_PROMPTS),
+            "goal": self.cycle.goal,
+            "tasks": TaskTracker(self.workspace.root).to_list(),
         }
 
     def _ensure_project(self, text: str) -> None:
@@ -147,9 +162,17 @@ class Router:
 
     def _register_core_agents(self) -> None:
         context = self.workspace.scan_summary()
+        memory_ctx = read_memory_context(self.workspace.root)
+        query = self._last_user_query or self.workspace.project or ""
+        skills = load_skills_for_project(self.workspace.project, query)
         for name, prompt in AGENT_PROMPTS.items():
             system_prompt = f"{prompt}\n\nContexto do projeto:\n{context}"
-            tools = ToolRegistry(self.workspace, tools_for_agent(name))
+            if memory_ctx:
+                system_prompt += f"\n\n{memory_ctx}"
+            if skills:
+                system_prompt += f"\n\nSkills e templates relevantes:\n{skills}"
+            core, optional = tools_for_agent(name)
+            tools = ToolRegistry(self.workspace, core, optional)
             cls = DeveloperAgent if name in DEVELOPER_AGENTS else Agent
             agent_model = model_for_task(name, self.model_to_use)
             self.agents[name] = cls(
@@ -198,6 +221,7 @@ class Router:
         return intent
 
     async def handle(self, user_input: str) -> str | None:
+        self._last_user_query = user_input
         command, remainder = parse_command(user_input)
         if command == "/help":
             await self.emit("routing", agent="sistema", kind="command", source="command")
@@ -218,6 +242,13 @@ class Router:
             if not agent:
                 return "Nenhum agente ativo para exportar o grafo."
             return export_graph(agent.graph, dest)
+        if command == "/goal":
+            self.cycle.goal = remainder.strip() or self.cycle.goal
+            self.cycle.persist(self.workspace.root)
+            await self.emit("routing", agent="sistema", kind="command", source="command")
+            if not self.cycle.goal:
+                return "Informe a meta: /goal o preview deve mostrar index.html funcional"
+            return f"Meta registrada: {self.cycle.goal}"
 
         memory_agent = None if command else self._find_memory_agent(user_input)
         if memory_agent and not command:
@@ -289,20 +320,59 @@ class Router:
         if remainder:
             self.cycle.set_spec(remainder)
         self.cycle.persist(self.workspace.root)
+        write_checkpoint(
+            self.workspace.root,
+            "BUILD",
+            self.cycle.active_spec,
+            "Iniciando pipeline compose",
+        )
+
+        if self.ui_mode:
+            await self._emit_progress("Analisando contexto do projeto…")
+        brainstorm = await run_brainstorm(self, self.cycle.active_spec)
+        if brainstorm:
+            write_checkpoint(
+                self.workspace.root,
+                "BUILD",
+                self.cycle.active_spec,
+                brainstorm[:2000],
+            )
 
         tasks = plan_build(self.workspace.root, self.cycle.active_spec)
+        tracker = TaskTracker(self.workspace.root)
+        tracker.reset_for_build(self.cycle.active_spec, [t.agent for t in tasks])
+        await self.emit_task_tree(tracker)
         await self.emit(
             "plan",
             tasks=[{"agent": t.agent, "node": t.node_id} for t in tasks],
         )
 
         begin_build_session(self.workspace)
-        results = await run_build_tasks(self, tasks)
-        errors = [reply for _, reply in results if reply.startswith("Erro:")]
-        verify = verify_build_tool(self.workspace)
-        await self.emit("build_verify", result=verify)
+        if self.ui_mode:
+            await self._emit_progress("Estou implementando seu projeto…")
 
-        if errors:
+        results: list[tuple[str, str]] = []
+        verify = ""
+        attempt = 0
+        while attempt < MAX_BUILD_RETRIES:
+            attempt += 1
+            if attempt > 1:
+                tracker.set_phase_status("T2", "running")
+                await self._emit_progress(f"Tentativa {attempt}/{MAX_BUILD_RETRIES}…")
+            results = await run_build_tasks(self, tasks, tracker)
+            errors = [reply for _, reply in results if reply.startswith("Erro:")]
+            verify = verify_build_tool(self.workspace)
+            await self.emit("build_verify", result=verify)
+            ok = verify_ok(verify) and not errors
+            tracker.set_phase_status("T3", "done" if ok else "failed")
+            if ok:
+                tracker.set_phase_status("T2", "done")
+            await self.emit_task_tree(tracker)
+            if ok:
+                break
+
+        errors = [reply for _, reply in results if reply.startswith("Erro:")]
+        if errors or not verify_ok(verify):
             if self.ui_mode:
                 return (
                     "Encontrei dificuldades ao implementar parte do projeto. "
@@ -316,15 +386,50 @@ class Router:
             lines.append("Review automático omitido devido a erros nos agentes.")
             return "\n".join(lines)
 
+        append_build_changelog(self.workspace.root, self.cycle.active_spec)
+
+        spec_body = ""
+        if self.cycle.active_spec:
+            doc = load_spec(self.workspace.root, self.cycle.active_spec)
+            if doc:
+                spec_body = doc.body
+
+        approved, judge_note = await evaluate_build_goal(
+            self.provider_name,
+            spec_body,
+            verify,
+            self.cycle.goal,
+        )
+        tracker.set_phase_status("T4", "running")
+        review_reply = await self._auto_review()
+        tracker.set_phase_status("T4", "done")
+        await self.emit_task_tree(tracker)
+        write_checkpoint(
+            self.workspace.root,
+            "REVIEW",
+            self.cycle.active_spec,
+            judge_note,
+        )
+        append_memory_note(
+            self.workspace.root,
+            "Build",
+            f"Spec: {self.cycle.active_spec}\nVerificação: {verify[:400]}\nJuiz: {judge_note}",
+        )
+
         if self.ui_mode:
             info = preview_info(self.workspace)
+            if not approved:
+                return (
+                    "Implementei parte do projeto, mas a meta ainda não foi totalmente atingida.\n\n"
+                    f"{judge_note}\n\nUse **Ver projeto** e diga o que ajustar."
+                )
             if info.get("available"):
                 return (
-                    "Pronto! Seu projeto foi implementado.\n\n"
+                    "Pronto! Seu projeto foi implementado, verificado e revisado.\n\n"
                     "Use **Ver projeto** no topo para abrir o preview ao lado ou no navegador."
                 )
             return (
-                "Implementação concluída. Assim que houver uma página (index.html), "
+                "Implementação concluída e revisada. Assim que houver uma página (index.html), "
                 "o link **Ver projeto** aparecerá no topo."
             )
 
@@ -334,20 +439,19 @@ class Router:
             lines.append(reply[:1500])
             lines.append("")
 
+        lines.append("## Juiz (/goal)")
+        lines.append(judge_note)
+        lines.append("## Review automático")
+        lines.append(review_reply or "")
+        return "\n".join(lines)
+
+    async def _auto_review(self) -> str:
         self.cycle.phase = "REVIEW"
         self.cycle.last_agent = "reviewer"
         self.cycle.persist(self.workspace.root)
         await self.emit("routing", agent="reviewer", kind="command", source="auto")
         _, review_payload = self.cycle.apply("/review", "command", "")
-        review_reply = await self.agents["reviewer"].process(review_payload)
-        if self.ui_mode:
-            return self._user_reply(
-                "Pronto! Seu projeto foi implementado.\n\n"
-                "Use **Ver projeto** no topo para abrir o preview ao lado ou no navegador."
-            )
-        lines.append("## Review automático")
-        lines.append(review_reply or "")
-        return "\n".join(lines)
+        return await self.agents["reviewer"].process(review_payload) or ""
 
     async def start_session(self) -> None:
         try:
@@ -403,6 +507,7 @@ Comandos:
   /spec [nome]     Abre ou continua a especificação
   /build [nome]    Implementa a spec (agentes em paralelo + review auto)
   /review          Revisa o código contra a spec
+  /goal [meta]     Define condição de parada para o build
   /status          Mostra fase, spec e agente
   /agents          Lista agentes carregados
   /workspace       Resumo do projeto

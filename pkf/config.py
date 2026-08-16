@@ -92,6 +92,12 @@ def providers() -> dict[str, ProviderConfig]:
             api_key=os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", "")),
             model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
         ),
+        "mimo": ProviderConfig(
+            name="mimo",
+            base_url=os.getenv("MIMO_BASE_URL", "https://api.xiaomimimo.com/v1"),
+            api_key=os.getenv("MIMO_API_KEY", ""),
+            model=os.getenv("MIMO_MODEL", "mimo-v2-flash"),
+        ),
     }
     configs = {k: v for k, v in configs.items() if v.api_key or k in ("ollama",)}
     openai_key = os.getenv("OPENAI_API_KEY", "")
@@ -186,7 +192,7 @@ def provider_pool_names() -> list[str]:
     if explicit := os.getenv("PKF_PROVIDER_POOL", "").strip():
         candidates = [p.strip() for p in explicit.split(",") if p.strip()]
     else:
-        candidates = ["groq", "gemini", "kimi", "openai"]
+        candidates = ["groq", "gemini", "mimo", "kimi", "openai"]
 
     primary = os.getenv("PKF_PROVIDER", "").strip()
     if primary and primary not in candidates:
@@ -224,4 +230,31 @@ def pkf_dir(workspace: Path) -> Path:
     (path / "specs").mkdir(exist_ok=True)
     (path / "reviews").mkdir(exist_ok=True)
     (path / "memory").mkdir(exist_ok=True)
+    (path / "tasks").mkdir(exist_ok=True)
     return path
+
+
+COMPACTION_BUDGETS: dict[str, dict[str, int]] = {
+    "default": {"max_messages": 16, "tool_chars": 3000, "keep_recent": 8},
+    "llama-3.1-8b-instant": {"max_messages": 12, "tool_chars": 2500, "keep_recent": 6},
+    "llama-3.3-70b": {"max_messages": 14, "tool_chars": 2800, "keep_recent": 7},
+    "gemini-2.0-flash": {"max_messages": 20, "tool_chars": 4000, "keep_recent": 10},
+    "mimo": {"max_messages": 18, "tool_chars": 3500, "keep_recent": 8},
+}
+
+
+def compaction_budget(model: str) -> dict[str, int]:
+    model_l = (model or "").lower()
+    for key, budget in COMPACTION_BUDGETS.items():
+        if key != "default" and key in model_l:
+            return budget
+    return COMPACTION_BUDGETS["default"]
+
+
+def judge_model_for(provider_model: str) -> str:
+    explicit = os.getenv("PKF_JUDGE_MODEL", "").strip()
+    if explicit:
+        return explicit
+    if "8b" in provider_model.lower() or "instant" in provider_model.lower():
+        return provider_model
+    return os.getenv("PKF_GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant")

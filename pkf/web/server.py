@@ -112,6 +112,12 @@ def create_app(router: Router) -> FastAPI:
     async def recent_changes():
         return {"changes": list_changes(router.workspace)}
 
+    @app.get("/api/tasks")
+    async def task_tree():
+        from pkf.workflow.tasks import TaskTracker
+
+        return {"tasks": TaskTracker(router.workspace.root).to_list()}
+
     @app.post("/api/spec/stack")
     async def spec_stack(payload: dict = Body(default_factory=dict)):
         name = payload.get("name") or router.cycle.active_spec

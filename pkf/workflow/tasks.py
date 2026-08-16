@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+import json
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+
+from pkf.config import pkf_dir
+from pkf.memory.persistent import task_progress_path
+
+
+@dataclass
+class TaskNode:
+    id: str
+    title: str
+    status: str = "pending"
+    children: list[TaskNode] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "status": self.status,
+            "children": [c.to_dict() for c in self.children],
+        }
+
+
+class TaskTracker:
+    def __init__(self, workspace_root: Path):
+        self.root = workspace_root
+        self.path = pkf_dir(workspace_root) / "tasks.json"
+        self.tree: TaskNode | None = None
+        self._load()
+
+    def _load(self) -> None:
+        if not self.path.exists():
+            self.tree = None
+            return
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            self.tree = _node_from_dict(data)
+        except (json.JSONDecodeError, KeyError):
+            self.tree = None
+
+    def persist(self) -> None:
+        if not self.tree:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(
+            json.dumps(self.tree.to_dict(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def reset_for_build(self, spec_name: str | None, agents: list[str]) -> None:
+        spec_label = spec_name or "projeto"
+        children = [
+            TaskNode(id=f"T2.{i + 1}", title=_agent_label(agent), status="pending")
+            for i, agent in enumerate(agents)
+        ]
+        self.tree = TaskNode(
+            id="T1",
+            title="Build",
+            status="running",
+            children=[
+                TaskNode(id="T1.1", title=f"Spec: {spec_label}", status="done"),
+                TaskNode(id="T2", title="Implementação paralela", status="running", children=children),
+                TaskNode(id="T3", title="Verificação", status="pending"),
+                TaskNode(id="T4", title="Review", status="pending"),
+            ],
+        )
+        self.persist()
+
+    def set_child_status(self, agent: str, status: str) -> None:
+        if not self.tree:
+            return
+        for child in self._walk(self.tree):
+            if child.title.lower().startswith(_agent_label(agent).lower()[:8]):
+                child.status = status
+                self._write_progress(child)
+        self.persist()
+
+    def set_phase_status(self, phase_id: str, status: str) -> None:
+        if not self.tree:
+            return
+        for node in self._walk(self.tree):
+            if node.id == phase_id:
+                node.status = status
+                self._write_progress(node)
+        self.persist()
+
+    def to_list(self) -> list[dict]:
+        if not self.tree:
+            return []
+        return [self.tree.to_dict()]
+
+    def _write_progress(self, node: TaskNode) -> None:
+        stamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        path = task_progress_path(self.root, node.id)
+        path.write_text(
+            f"# {node.title}\n\n- Status: {node.status}\n- Atualizado: {stamp}\n",
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _walk(node: TaskNode) -> list[TaskNode]:
+        out = [node]
+        for child in node.children:
+            out.extend(TaskTracker._walk(child))
+        return out
+
+
+def _agent_label(agent: str) -> str:
+    labels = {
+        "frontend": "Frontend",
+        "backend": "Backend",
+        "logic": "Lógica",
+        "tester": "Testes",
+    }
+    return labels.get(agent, agent.capitalize())
+
+
+def _node_from_dict(data: dict) -> TaskNode:
+    return TaskNode(
+        id=data["id"],
+        title=data["title"],
+        status=data.get("status", "pending"),
+        children=[_node_from_dict(c) for c in data.get("children", [])],
+    )

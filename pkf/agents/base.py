@@ -6,8 +6,9 @@ import uuid
 from typing import TYPE_CHECKING
 
 import networkx as nx
-from openai import APIStatusError, AsyncOpenAI
+from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
+from pkf.agents.compact import compact_messages
 from pkf.config import NODE_LIMIT, fallback_model_on_rate_limit, tool_rounds_for_agent
 from pkf.provider_errors import is_rotatable_error
 from pkf.tools.registry import ToolRegistry
@@ -71,7 +72,10 @@ class Agent:
     async def _complete_with_tools(self) -> str:
         native_tools = self.supports_tools
         for _ in range(self.max_tool_rounds):
-            api_args: dict = {"model": self.model, "messages": self.messages}
+            api_args: dict = {
+                "model": self.model,
+                "messages": compact_messages(self.messages, self.model),
+            }
             if native_tools:
                 api_args["tools"] = self.tools.schemas()
             try:
@@ -122,6 +126,8 @@ class Agent:
                     status="running",
                 )
                 result = self.tools.execute(call["name"], call["arguments"]) if self.tools else "Sem ferramentas."
+                if self.tools:
+                    self.tools.maybe_expand(call["name"])
                 await self.router.emit(
                     "tool",
                     agent=self.name,
@@ -134,14 +140,14 @@ class Agent:
                     {
                         "role": "tool",
                         "tool_call_id": call["id"],
-                        "content": result[:8000],
+                        "content": result[:4000],
                     }
                 )
                 if not native_tools:
                     self.messages.append(
                         {
                             "role": "user",
-                            "content": f"Resultado de {call['name']}:\n{result[:8000]}",
+                            "content": f"Resultado de {call['name']}:\n{result[:4000]}",
                         }
                     )
         return await self._summarize_partial_progress()

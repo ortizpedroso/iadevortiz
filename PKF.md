@@ -4,11 +4,14 @@ Assistente multiagente para especificar, implementar, revisar e testar código n
 
 ## O que ela faz
 
-- Roteia o pedido para um especialista: `architect`, `frontend`, `backend`, `logic`, `reviewer`, `tester` ou `generalista`
-- Segue o ciclo `/spec` → `/build` → `/review`
-- Lê e escreve arquivos, busca código e roda comandos permitidos
-- Compacta conversas longas em agentes de memória
-- Fala com Ollama (local), Kimi/Moonshot ou OpenAI
+- Pipeline **compose**: brainstorm → build paralelo → verify → juiz → review
+- **Memória persistente** (`MEMORY.md`, `checkpoint.md`) entre sessões
+- **Skills BM25** — carrega automaticamente frontend-design, python-toolchain, cardápio, etc.
+- **Árvore de tarefas** na sidebar (T1 spec → T2 build → T3 verify → T4 review)
+- **`/goal`** — define meta; juiz independente valida se foi atingida
+- Pool de provedores com rotação (Groq, Gemini, **MiMo**, Kimi)
+- Compactação de contexto **por modelo**
+- UI web com preview embutido
 
 ## Como usar
 
@@ -17,62 +20,32 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
-```
-
-Interface web (estilo Cursor/Claude):
-
-```bash
 python -m pkf --ui
 ```
 
-Abre `http://127.0.0.1:8765`. O terminal continua disponível sem `--ui`.
+Provedores (`.env`):
 
-Ollama local (padrão):
-
-```bash
-python -m pkf
+```env
+PKF_PROVIDER_POOL=groq,gemini,mimo
+GROQ_API_KEY=...
+GEMINI_API_KEY=...
+MIMO_API_KEY=...
+MIMO_BASE_URL=https://api.xiaomimimo.com/v1
+PKF_JUDGE_MODEL=llama-3.1-8b-instant
 ```
-
-Kimi, com fallback para Ollama se a cota acabar:
-
-```bash
-python -m pkf kimi
-```
-
-Workspace específico:
-
-```bash
-python -m pkf ollama --workspace C:\projetos\meu-app
-```
-
-O script antigo `python test_vps_ai.py` continua funcionando e só abre o mesmo CLI.
-
-## Deploy na VPS (Hostinger)
-
-Para não rodar o modelo pesado no seu PC, suba na VPS com Docker + API Kimi/OpenAI:
-
-```bash
-# Na VPS
-cd /opt/pkf
-cp .env.production.example .env   # preencha MOONSHOT_API_KEY e PKF_AUTH_TOKEN
-bash deploy/hostinger/setup.sh
-```
-
-Guia completo: [DEPLOY.md](DEPLOY.md)
 
 ## Comandos
 
 | Comando | Função |
 |---|---|
-| `/spec [nome]` | Entrevista e grava a spec em `.pkf/specs` |
-| `/build [nome]` | Implementa a spec ativa |
+| `/spec [nome]` | Gera spec automática |
+| `/build [nome]` | Pipeline compose completo |
 | `/review` | Compara código e spec |
-| `/status` | Fase, spec e último agente |
-| `/agents` | Agentes carregados |
-| `/workspace` | Resumo do projeto |
-| `/graph` | Exporta o grafo da conversa |
-| `sair` | Encerra |
+| `/goal [meta]` | Condição de parada do build |
+| `/status` | Fase, spec, meta e agente |
+
+Deploy VPS: [DEPLOY.md](DEPLOY.md)
 
 ## Segurança
 
-As ferramentas ficam presas ao workspace. Arquivos de segredo (`.env`, chaves) não são lidos nem escritos. O terminal só aceita uma allowlist (`python`, `pytest`, `npm`, `git status/diff/log`, etc.).
+Ferramentas presas ao workspace. `.env` e chaves bloqueados. Terminal com allowlist.
