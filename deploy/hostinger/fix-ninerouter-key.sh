@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cria API key no 9Router e recarrega PKF (sem túnel SSH / dashboard).
+# Login no dashboard 9Router + cria API key + recarrega PKF.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/pkf}"
@@ -11,55 +11,68 @@ if ! docker compose --profile router ps ninerouter --status running -q 2>/dev/nu
   sleep 3
 fi
 
-create_key_ninerouter_node() {
-  docker compose exec -T ninerouter node - <<'NODE'
-const http = require("http");
-const data = JSON.stringify({ name: "pkf-vps" });
-const req = http.request(
-  {
-    hostname: "127.0.0.1",
-    port: 20128,
-    path: "/api/keys",
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Content-Length": Buffer.byteLength(data),
-    },
-  },
-  (res) => {
-    let body = "";
-    res.on("data", (chunk) => (body += chunk));
-    res.on("end", () => process.stdout.write(body));
-  }
-);
-req.on("error", (err) => {
-  console.error(err.message);
-  process.exit(1);
-});
-req.write(data);
-req.end();
-NODE
-}
-
-create_key_host_curl() {
-  curl -s -X POST http://127.0.0.1:20128/api/keys \
-    -H "Content-Type: application/json" \
-    -d '{"name":"pkf-vps"}'
-}
-
-echo "==> Criando API key no 9Router"
-RESP=""
-if RESP=$(create_key_ninerouter_node 2>/dev/null) && [ -n "$RESP" ]; then
-  echo "(via node no container ninerouter)"
-elif command -v curl >/dev/null 2>&1; then
-  RESP=$(create_key_host_curl)
-  echo "(via curl no host)"
-else
-  echo "Erro: nem node (ninerouter) nem curl (host) disponíveis."
+if ! command -v curl >/dev/null 2>&1; then
+  echo "Erro: curl não encontrado no host. Instale: apt-get install -y curl"
   exit 1
 fi
 
-KEY=$(python3 - <<'PY' "$RESP"
+COOKIE_JAR=$(mktemp)
+trap 'rm -f "$COOKIE_JAR"' EXIT
+
+DASH_PASS="${NINEROUTER_DASHBOARD_PASSWORD:-}"
+if [ -z "$DASH_PASS" ]; then
+  DASH_PASS=$(docker compose exec -T ninerouter printenv INITIAL_PASSWORD 2>/dev/null | tr -d '\r' || true)
+fi
+DASH_PASS="${DASH_PASS:-123456}"
+
+echo "==> Login no dashboard 9Router (http://127.0.0.1:20128)"
+LOGIN=$(curl -s -c "$COOKIE_JAR" -X POST http://127.0.0.1:20128/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"password\":\"${DASH_PASS}\"}")
+
+if ! echo "$LOGIN" | grep -q '"success":true'; then
+  echo "Login falhou. Resposta:"
+  echo "$LOGIN"
+  echo ""
+  echo "Se você trocou a senha do dashboard, rode:"
+  echo "  NINEROUTER_DASHBOARD_PASSWORD='sua_senha' bash deploy/hostinger/fix-ninerouter-key.sh"
+  echo ""
+  echo "Ou acesse via túnel no PC:"
+  echo "  ssh -L 20128:127.0.0.1:20128 root@VPS"
+  echo "  http://localhost:20128/dashboard/endpoint"
+  exit 1
+fi
+
+echo "==> Buscando chaves existentes"
+EXISTING=$(curl -s -b "$COOKIE_JAR" http://127.0.0.1:20128/api/keys || true)
+KEY=$(python3 - <<'PY' "$EXISTING"
+import json, sys
+raw = (sys.argv[1] or "").strip()
+if not raw:
+    print("")
+    raise SystemExit
+try:
+    data = json.loads(raw)
+except json.JSONDecodeError:
+    print("")
+    raise SystemExit
+items = data if isinstance(data, list) else data.get("keys") or data.get("data") or []
+for item in items:
+    if not isinstance(item, dict):
+        continue
+    value = item.get("key") or item.get("apiKey") or item.get("api_key")
+    if value:
+        print(value)
+        break
+PY
+)
+
+if [ -z "$KEY" ]; then
+  echo "==> Criando nova API key"
+  RESP=$(curl -s -b "$COOKIE_JAR" -X POST http://127.0.0.1:20128/api/keys \
+    -H "Content-Type: application/json" \
+    -d '{"name":"pkf-vps"}')
+  KEY=$(python3 - <<'PY' "$RESP"
 import json, sys
 raw = sys.argv[1]
 try:
@@ -69,19 +82,17 @@ except json.JSONDecodeError:
     sys.exit(0)
 print(data.get("key") or data.get("apiKey") or data.get("api_key") or "")
 PY
-)
+  )
+fi
 
 if [ -z "$KEY" ]; then
-  echo "Falha ao criar chave. Resposta do 9Router:"
-  echo "$RESP"
-  echo ""
-  echo "Alternativa: dashboard via túnel no PC:"
-  echo "  ssh -L 20128:127.0.0.1:20128 root@$(hostname -I | awk '{print $1}')"
-  echo "  http://localhost:20128/"
+  echo "Falha ao obter/criar chave."
+  echo "Keys GET: $EXISTING"
+  echo "Keys POST: ${RESP:-}"
   exit 1
 fi
 
-echo "==> Nova chave: ${KEY:0:15}..."
+echo "==> API key: ${KEY:0:15}..."
 
 grep -q '^NINEROUTER_URL=' .env || echo 'NINEROUTER_URL=http://ninerouter:20128' >> .env
 if grep -q '^NINEROUTER_KEY=' .env; then
@@ -89,10 +100,9 @@ if grep -q '^NINEROUTER_KEY=' .env; then
 else
   echo "NINEROUTER_KEY=${KEY}" >> .env
 fi
-
 sed -i '/^NINEROUTER_KEY=local$/d' .env
 
-echo "==> Recriando PKF (--force-recreate recarrega .env)"
+echo "==> Recriando PKF"
 docker compose --profile router up -d pkf --force-recreate
 
 echo "==> Aguardando health..."
@@ -116,5 +126,6 @@ except Exception as exc:
 PY
 
 echo ""
-echo "Próximo: no dashboard 9Router conecte OpenCode Free (Providers)."
-echo "  ssh -L 20128:127.0.0.1:20128 root@VPS  →  http://localhost:20128/"
+echo "Dashboard (Providers → OpenCode Free):"
+echo "  ssh -L 20128:127.0.0.1:20128 root@VPS  →  http://localhost:20128/dashboard"
+echo "Troque a senha padrão 123456 se ainda não trocou."
