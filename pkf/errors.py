@@ -41,8 +41,14 @@ def explain_provider_error(provider: str, exc: Exception) -> str:
         )
     if provider == "ninerouter" and ("401" in lowered or "key" in lowered or "unauthorized" in lowered):
         return (
-            "Falha no 9Router. Confira NINEROUTER_URL e NINEROUTER_KEY no .env "
-            "(Dashboard → Keys no 9Router)."
+            "9Router rejeitou a API key.\n\n"
+            "1. Túnel: ssh -L 20128:127.0.0.1:20128 root@VPS\n"
+            "2. Abra http://localhost:20128/dashboard → Endpoint & Key → crie/copie sk-...\n"
+            "3. No .env da VPS: NINEROUTER_KEY=sk-... (sem aspas)\n"
+            "4. docker compose restart pkf\n"
+            "5. Providers → conecte OpenCode Free\n\n"
+            "Enquanto isso a PKF deve alternar para Gemini/Groq se configurados.\n\n"
+            f"Detalhe: {text[:240]}"
         )
     if provider == "ninerouter" and ("503" in lowered or "unavailable" in lowered):
         wait = _extract_retry_minutes(text)

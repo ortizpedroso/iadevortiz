@@ -13,7 +13,7 @@ from pkf.graph.project import ProjectGraph
 from pkf.judge import evaluate_build_goal
 from pkf.memory.persistent import append_memory_note, read_memory_context, write_checkpoint
 from pkf.memory.store import MemoryStore, export_graph
-from pkf.provider_errors import is_rotatable_error
+from pkf.provider_errors import should_rotate_provider
 from pkf.provider_pool import ProviderPool
 from pkf.spec.store import active_spec_preview, approve_spec, load_spec, update_spec_stack
 from pkf.skills.loader import load_skills_for_project
@@ -140,9 +140,11 @@ class Router:
         return message
 
     async def try_rotate_provider(self, exc: Exception) -> bool:
-        if not is_rotatable_error(exc):
+        if not should_rotate_provider(self.pool.current_name, exc):
             return False
         cooldown = rate_limit_cooldown_seconds(exc)
+        if isinstance(exc, APIStatusError) and exc.status_code in {401, 403}:
+            cooldown = max(cooldown, 120)
         if not self.pool.rotate(str(exc), cooldown_seconds=cooldown):
             return False
         client, config = self.pool.get_client()
