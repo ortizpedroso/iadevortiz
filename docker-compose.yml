@@ -50,6 +50,8 @@ services:
 
       PKF_NO_BROWSER: "1"
 
+      PKF_APP_ROOT: /app
+
       PKF_PROVIDER: ${PKF_PROVIDER:-groq}
 
       DATABASE_URL: postgresql+asyncpg://pkf:pkf@postgres:5432/pkf

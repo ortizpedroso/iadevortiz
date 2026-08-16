@@ -14,7 +14,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PKF_ENV=production \
     PKF_HOST=0.0.0.0 \
     PKF_PORT=8765 \
-    PKF_NO_BROWSER=1
+    PKF_NO_BROWSER=1 \
+    PKF_APP_ROOT=/app
 
 WORKDIR /app
 

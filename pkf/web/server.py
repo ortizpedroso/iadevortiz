@@ -28,18 +28,35 @@ from pkf.web.preview import preview_info, redirect_preview_entry, serve_preview_
 
 PKG_DIR = Path(__file__).resolve().parent
 LEGACY_STATIC = PKG_DIR / "static"
-FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+
+def _frontend_dist_candidates() -> list[Path]:
+    roots = []
+    if app_root := os.getenv("PKF_APP_ROOT", "").strip():
+        roots.append(Path(app_root))
+    roots.append(Path(__file__).resolve().parents[2])
+    roots.append(Path("/app"))
+    seen: set[str] = set()
+    candidates: list[Path] = []
+    for root in roots:
+        key = str(root)
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append(root / "frontend" / "dist")
+    return candidates
 
 
 def _static_root() -> Path:
-    if FRONTEND_DIST.is_dir() and (FRONTEND_DIST / "index.html").exists():
-        return FRONTEND_DIST
+    for dist in _frontend_dist_candidates():
+        if dist.is_dir() and (dist / "index.html").exists():
+            return dist
     return LEGACY_STATIC
 
 
 def create_app(router: Router) -> FastAPI:
     static_root = _static_root()
-    use_vite = static_root == FRONTEND_DIST
+    use_vite = static_root != LEGACY_STATIC
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -260,7 +277,7 @@ def run_ui(router: Router, host: str = "127.0.0.1", port: int = 8765) -> None:
 
     app = create_app(router)
     url = f"http://{host}:{port}" if host != "0.0.0.0" else f"http://127.0.0.1:{port}"
-    ui_mode = "Vite" if _static_root() == FRONTEND_DIST else "legacy"
+    ui_mode = "Vite" if _static_root() != LEGACY_STATIC else "legacy"
     print(f"PKF UI ({ui_mode}) em {url}")
     if database_enabled():
         print("PostgreSQL: ativo")
