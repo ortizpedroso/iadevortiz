@@ -1,12 +1,25 @@
+import asyncio
 from pathlib import Path
 
+import pytest
+
 from pkf.web.history import ChatHistory
+from pkf.workspace import Workspace
 
 
-def test_chat_history_roundtrip(tmp_path: Path):
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.mark.asyncio
+async def test_chat_history_file_fallback(tmp_path: Path):
     log = ChatHistory(tmp_path)
-    log.append({"role": "user", "content": "olá"})
+    await log.append({"role": "user", "content": "olá"})
     again = ChatHistory(tmp_path)
+    await again.load()
     assert again.messages[0]["content"] == "olá"
-    again.clear()
-    assert ChatHistory(tmp_path).messages == []
+    await again.clear()
+    fresh = ChatHistory(tmp_path)
+    await fresh.load()
+    assert fresh.messages == []

@@ -14,8 +14,8 @@ def explain_provider_error(provider: str, exc: Exception) -> str:
         return (
             "Todos os provedores gratuitos atingiram o limite momentâneo."
             f"{wait_hint}\n\n"
-            "A PKF tenta alternar automaticamente entre Groq, Gemini e Kimi. "
-            "Configure mais chaves no .env (PKF_PROVIDER_POOL=groq,gemini,kimi) ou aguarde o reset."
+            "A PKF tenta 9Router → tier → multi-chave → provedor direto (Groq, Gemini, Kimi). "
+            "Configure NINEROUTER_URL + combo free no dashboard ou chaves extras (GROQ_API_KEY_2)."
         )
 
     if provider == "ollama" and connection:
@@ -39,6 +39,15 @@ def explain_provider_error(provider: str, exc: Exception) -> str:
             "Falha no Gemini. Crie uma chave grátis em https://aistudio.google.com/apikey "
             "e configure GEMINI_API_KEY no .env."
         )
+    if provider == "ninerouter" and ("401" in lowered or "key" in lowered or "unauthorized" in lowered):
+        return (
+            "Falha no 9Router. Confira NINEROUTER_URL e NINEROUTER_KEY no .env "
+            "(Dashboard → Keys no 9Router)."
+        )
+    if provider == "ninerouter" and ("503" in lowered or "unavailable" in lowered):
+        wait = _extract_retry_minutes(text)
+        wait_hint = f" Tente em ~{wait} min." if wait else ""
+        return f"9Router: todos os provedores indisponíveis.{wait_hint} Verifique o dashboard do 9Router."
     if connection:
         return f"Não foi possível conectar ao provedor '{provider}'. {text}"
     return f"Erro no provedor '{provider}': {text}"

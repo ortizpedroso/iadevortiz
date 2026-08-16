@@ -50,7 +50,13 @@ def save_platform_spec(workspace_root, slug: str = "pkf-platform") -> str:
 ## Capacidades
 
 - Spec automática + pipeline compose (brainstorm → build → verify → review)
-- Pool de provedores grátis com rotação (Groq, Gemini, MiMo, Kimi)
+- Pool híbrido: **9Router primário** (OpenCode Free, combos) + **router nativo fallback**
+- Pool de provedores nativo com **3 tiers** (subscription → cheap → free)
+- **Multi-chave** por provedor (GROQ_API_KEY, GROQ_API_KEY_2, GROQ_API_KEYS)
+- Compactação RTK de tool results (head/hash/tail)
+- Web search nativo (Tavily ou Brave) via tool `web_search`
+- PostgreSQL para sessões, mensagens, specs e tarefas
+- Frontend Vite + React + Tailwind CSS
 - Memória persistente: MEMORY.md, checkpoint.md, progresso por tarefa
 - Busca de skills BM25 + skills frontend-design e python-toolchain
 - Compactação de contexto por modelo (budget por provider)

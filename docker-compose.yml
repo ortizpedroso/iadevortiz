@@ -1,35 +1,144 @@
 services:
-  pkf:
-    build: .
+
+  postgres:
+
+    image: postgres:16-alpine
+
     restart: unless-stopped
-    env_file:
-      - .env
+
     environment:
-      PKF_ENV: production
-      PKF_HOST: 0.0.0.0
-      PKF_PORT: 8765
-      PKF_NO_BROWSER: "1"
-      PKF_PROVIDER: ${PKF_PROVIDER:-kimi}
+
+      POSTGRES_USER: pkf
+
+      POSTGRES_PASSWORD: pkf
+
+      POSTGRES_DB: pkf
+
     volumes:
-      - pkf-workspace:/data/workspace
-    ports:
-      - "127.0.0.1:8765:8765"
+
+      - pkf-postgres:/var/lib/postgresql/data
+
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health')"]
-      interval: 30s
+
+      test: ["CMD-SHELL", "pg_isready -U pkf -d pkf"]
+
+      interval: 10s
+
       timeout: 5s
+
+      retries: 5
+
+
+
+  pkf:
+
+    build: .
+
+    restart: unless-stopped
+
+    env_file:
+
+      - .env
+
+    environment:
+
+      PKF_ENV: production
+
+      PKF_HOST: 0.0.0.0
+
+      PKF_PORT: 8765
+
+      PKF_NO_BROWSER: "1"
+
+      PKF_PROVIDER: ${PKF_PROVIDER:-groq}
+
+      DATABASE_URL: postgresql+asyncpg://pkf:pkf@postgres:5432/pkf
+
+      NINEROUTER_URL: ${NINEROUTER_URL:-}
+
+      NINEROUTER_KEY: ${NINEROUTER_KEY:-local}
+
+      NINEROUTER_MODEL: ${NINEROUTER_MODEL:-oc/big-pickle}
+
+    volumes:
+
+      - pkf-workspace:/data/workspace
+
+    ports:
+
+      - "127.0.0.1:8765:8765"
+
+    depends_on:
+
+      postgres:
+
+        condition: service_healthy
+
+      ninerouter:
+
+        condition: service_started
+
+        required: false
+
+    healthcheck:
+
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health')"]
+
+      interval: 30s
+
+      timeout: 5s
+
+      start_period: 40s
+
       retries: 3
 
+
+
   nginx:
+
     image: nginx:1.27-alpine
+
     restart: unless-stopped
+
     depends_on:
+
       pkf:
+
         condition: service_healthy
+
     ports:
-      - "80:80"
+
+      - "8080:80"
+
     volumes:
+
       - ./deploy/nginx/pkf.conf:/etc/nginx/conf.d/default.conf:ro
 
+
+
+  ninerouter:
+
+    image: decolua/9router:latest
+
+    profiles: ["router"]
+
+    restart: unless-stopped
+
+    ports:
+
+      - "127.0.0.1:20128:20128"
+
+    volumes:
+
+      - ninerouter-data:/root/.9router
+
+
+
 volumes:
+
   pkf-workspace:
+
+  pkf-postgres:
+
+  ninerouter-data:
+

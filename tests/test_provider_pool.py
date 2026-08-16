@@ -6,6 +6,7 @@ from pkf.config import provider_pool_names
 
 
 def test_provider_pool_dedupes_groq_openai(monkeypatch):
+    monkeypatch.delenv("NINEROUTER_URL", raising=False)
     monkeypatch.setenv("GROQ_API_KEY", "g1")
     monkeypatch.setenv("GROQ_MODEL", "llama-3.1-8b-instant")
     monkeypatch.setenv("OPENAI_API_KEY", "g2")
@@ -18,6 +19,7 @@ def test_provider_pool_dedupes_groq_openai(monkeypatch):
 
 
 def test_provider_pool_respects_explicit_order(monkeypatch):
+    monkeypatch.delenv("NINEROUTER_URL", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "g")
     monkeypatch.setenv("GROQ_API_KEY", "q")
     monkeypatch.setenv("PKF_PROVIDER_POOL", "gemini,groq")

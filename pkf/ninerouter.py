@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+import json
+import os
+import urllib.error
+import urllib.request
+
+from pkf.config import API_TIMEOUT
+
+
+def ninerouter_enabled() -> bool:
+    return bool(os.getenv("NINEROUTER_URL", "").strip())
+
+
+def ninerouter_origin() -> str:
+    return os.getenv("NINEROUTER_URL", "http://127.0.0.1:20128").strip().rstrip("/")
+
+
+def ninerouter_api_key() -> str:
+    return (
+        os.getenv("NINEROUTER_KEY", "").strip()
+        or os.getenv("NINEROUTER_API_KEY", "").strip()
+        or "local"
+    )
+
+
+def ninerouter_chat_base_url() -> str:
+    return f"{ninerouter_origin()}/v1"
+
+
+def ninerouter_chat_model() -> str:
+    return (
+        os.getenv("NINEROUTER_MODEL", "").strip()
+        or os.getenv("PKF_NINEROUTER_MODEL", "").strip()
+        or "oc/big-pickle"
+    )
+
+
+def ninerouter_search_model() -> str:
+    return os.getenv("NINEROUTER_SEARCH_MODEL", "tavily").strip() or "tavily"
+
+
+def ninerouter_health() -> tuple[bool, str]:
+    if not ninerouter_enabled():
+        return False, "NINEROUTER_URL não configurado"
+    url = f"{ninerouter_origin()}/v1/models"
+    headers = {"Accept": "application/json"}
+    key = ninerouter_api_key()
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    try:
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=8.0) as resp:
+            if resp.status != 200:
+                return False, f"HTTP {resp.status}"
+            return True, "ok"
+    except urllib.error.HTTPError as exc:
+        return False, f"HTTP {exc.code}: {exc.reason}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def ninerouter_web_search(query: str, max_results: int = 5) -> str:
+    text = (query or "").strip()
+    if not text:
+        return "Informe uma query de busca."
+    if not ninerouter_enabled():
+        return "9Router não configurado (NINEROUTER_URL)."
+    payload = {
+        "model": ninerouter_search_model(),
+        "query": text,
+        "max_results": max(1, min(int(max_results or 5), 10)),
+    }
+    url = f"{ninerouter_origin()}/v1/search"
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": f"Bearer {ninerouter_api_key()}",
+    }
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=30.0) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        return f"9Router search falhou (HTTP {exc.code}): {raw[:300]}"
+    except Exception as exc:
+        return f"9Router search indisponível: {exc}"
+
+    if not isinstance(body, dict):
+        return f"Resposta inválida do 9Router para: {text}"
+    results = body.get("results") or []
+    answer = body.get("answer")
+    lines = [f"Resultados (9Router/{body.get('provider', payload['model'])}) para: {text}"]
+    if answer:
+        lines.append(f"\nResumo: {answer}")
+    if not results and not answer:
+        errors = body.get("errors") or []
+        if errors:
+            return f"9Router search sem resultados: {errors[0]}"
+        return f"Nenhum resultado para: {text}"
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        title = item.get("title") or "(sem título)"
+        url_item = item.get("url") or ""
+        snippet = (item.get("snippet") or item.get("content") or "").strip()
+        lines.append(f"\n- **{title}**")
+        if url_item:
+            lines.append(f"  {url_item}")
+        if snippet:
+            lines.append(f"  {snippet[:400]}")
+    return "\n".join(lines)

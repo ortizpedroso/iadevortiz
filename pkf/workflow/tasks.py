@@ -6,7 +6,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from pkf.config import pkf_dir
-from pkf.memory.persistent import task_progress_path
+from pkf.db.config import database_enabled
+
+_TASK_LABELS = {
+    "frontend": "Frontend",
+    "backend": "Backend",
+    "logic": "Lógica",
+    "tester": "Testes",
+}
 
 
 @dataclass
@@ -26,9 +33,10 @@ class TaskNode:
 
 
 class TaskTracker:
-    def __init__(self, workspace_root: Path):
+    def __init__(self, workspace_root: Path, db_context=None):
         self.root = workspace_root
         self.path = pkf_dir(workspace_root) / "tasks.json"
+        self.db = db_context
         self.tree: TaskNode | None = None
         self._load()
 
@@ -50,6 +58,20 @@ class TaskTracker:
             json.dumps(self.tree.to_dict(), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        if database_enabled() and self.db:
+            import asyncio
+
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self.db.save_tasks([self.tree.to_dict()]))
+            except RuntimeError:
+                pass
+
+    async def persist_async(self) -> None:
+        self.persist()
+        if database_enabled() and self.db and self.tree:
+            await self.db.setup()
+            await self.db.save_tasks([self.tree.to_dict()])
 
     def reset_for_build(self, spec_name: str | None, agents: list[str]) -> None:
         spec_label = spec_name or "projeto"
@@ -95,6 +117,8 @@ class TaskTracker:
 
     def _write_progress(self, node: TaskNode) -> None:
         stamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        from pkf.memory.persistent import task_progress_path
+
         path = task_progress_path(self.root, node.id)
         path.write_text(
             f"# {node.title}\n\n- Status: {node.status}\n- Atualizado: {stamp}\n",
@@ -110,13 +134,7 @@ class TaskTracker:
 
 
 def _agent_label(agent: str) -> str:
-    labels = {
-        "frontend": "Frontend",
-        "backend": "Backend",
-        "logic": "Lógica",
-        "tester": "Testes",
-    }
-    return labels.get(agent, agent.capitalize())
+    return _TASK_LABELS.get(agent, agent.capitalize())
 
 
 def _node_from_dict(data: dict) -> TaskNode:

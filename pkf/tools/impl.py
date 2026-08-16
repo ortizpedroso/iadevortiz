@@ -12,6 +12,7 @@ from pkf.spec.store import save_spec_document
 from pkf.workspace import Workspace, WorkspaceError
 from pkf.workspace_index import build_code_index, query_code_index, record_change, verify_workspace_files
 from pkf.skills.search import skill_search_tool_output
+from pkf.web_search import web_search
 
 ALLOWED_COMMANDS = (
     "python",
@@ -299,6 +300,13 @@ def dispatch(workspace: Workspace, name: str, arguments: dict) -> str:
             return code_index(workspace, arguments.get("query", ""))
         if name == "skill_search":
             return skill_search_tool_output(arguments.get("query", ""))
+        if name == "web_search":
+            raw_max = arguments.get("max_results", 5) or 5
+            try:
+                max_results = int(raw_max)
+            except (TypeError, ValueError):
+                max_results = 5
+            return web_search(arguments.get("query", ""), max_results)
         return f"Ferramenta desconhecida: {name}"
     except (KeyError, TypeError) as exc:
         return f"Argumentos inválidos para {name}: {exc}"

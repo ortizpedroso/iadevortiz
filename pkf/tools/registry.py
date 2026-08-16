@@ -24,6 +24,7 @@ _SHARED_OPTIONAL = [
     "graph_add_node",
     "save_spec",
     "skill_search",
+    "web_search",
 ]
 
 _SHARED_DEV = _SHARED_CORE + _SHARED_OPTIONAL
@@ -166,6 +167,17 @@ TOOL_DEFINITIONS: dict[str, dict] = {
             "required": ["query"],
         },
     },
+    "web_search": {
+        "description": "Busca na web (Tavily ou Brave). Requer TAVILY_API_KEY ou BRAVE_SEARCH_API_KEY no .env.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "max_results": {"type": "integer", "description": "1–10, padrão 5"},
+            },
+            "required": ["query"],
+        },
+    },
 }
 
 AGENT_TOOLS = {
@@ -175,6 +187,7 @@ AGENT_TOOLS = {
         "read_file",
         "search_code",
         "code_index",
+        "web_search",
         "get_spec",
         "save_spec",
         "graph_view",
@@ -205,7 +218,7 @@ AGENT_TOOLS = {
         "get_spec",
         "verify_build",
     ],
-    "generalista": ["project_context", "list_dir", "read_file", "search_code", "graph_view"],
+    "generalista": ["project_context", "list_dir", "read_file", "search_code", "web_search", "graph_view"],
 }
 
 

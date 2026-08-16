@@ -60,6 +60,7 @@ class Router:
         self.agents: dict[str, Agent] = {}
         self._event_handler = None
         self._last_user_query = ""
+        self.db = None
         self._register_core_agents()
         self._restore_memory_agents()
         save_platform_spec(workspace.root)
@@ -100,9 +101,11 @@ class Router:
         project_preview = preview_info(self.workspace)
         if project_preview.get("entry"):
             project_preview["path"] = f"/preview/{project_preview['entry']}"
+        tasks = TaskTracker(self.workspace.root, db_context=self.db).to_list()
         return {
             "provider": self.provider_name,
             "provider_pool": self.pool.names,
+            "provider_router": self.pool.status(),
             "model": self.model_to_use,
             "workspace": str(self.workspace.root),
             "project": self.workspace.project,
@@ -116,7 +119,8 @@ class Router:
             "last_agent": "pkf" if self.ui_mode else self.cycle.last_agent,
             "agents": list(AGENT_PROMPTS),
             "goal": self.cycle.goal,
-            "tasks": TaskTracker(self.workspace.root).to_list(),
+            "tasks": tasks,
+            "database": bool(self.db and self.db.enabled),
         }
 
     def _ensure_project(self, text: str) -> None:
@@ -339,7 +343,7 @@ class Router:
             )
 
         tasks = plan_build(self.workspace.root, self.cycle.active_spec)
-        tracker = TaskTracker(self.workspace.root)
+        tracker = TaskTracker(self.workspace.root, db_context=self.db)
         tracker.reset_for_build(self.cycle.active_spec, [t.agent for t in tasks])
         await self.emit_task_tree(tracker)
         await self.emit(

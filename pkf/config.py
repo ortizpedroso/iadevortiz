@@ -63,6 +63,13 @@ class ProviderConfig:
 
 
 def providers() -> dict[str, ProviderConfig]:
+    from pkf.ninerouter import (
+        ninerouter_api_key,
+        ninerouter_chat_base_url,
+        ninerouter_chat_model,
+        ninerouter_enabled,
+    )
+
     configs = {
         "ollama": ProviderConfig(
             name="ollama",
@@ -108,13 +115,26 @@ def providers() -> dict[str, ProviderConfig]:
             api_key=openai_key,
             model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
         )
+    if ninerouter_enabled():
+        configs["ninerouter"] = ProviderConfig(
+            name="ninerouter",
+            base_url=ninerouter_chat_base_url(),
+            api_key=ninerouter_api_key(),
+            model=ninerouter_chat_model(),
+        )
     return configs
 
 
 def default_provider() -> str:
-    explicit = os.getenv("PKF_PROVIDER", "").strip()
+    from pkf.ninerouter import ninerouter_enabled
+
+    explicit = os.getenv("PKF_PROVIDER", "").strip().lower()
+    if explicit in {"9router", "9-router"}:
+        return "ninerouter"
     if explicit:
         return explicit
+    if ninerouter_enabled():
+        return "ninerouter"
     if os.getenv("PKF_ENV") == "production":
         if os.getenv("GROQ_API_KEY"):
             return "groq"
@@ -188,11 +208,18 @@ def fallback_model_on_rate_limit(current_model: str, base_url: str = "") -> str 
 
 def provider_pool_names() -> list[str]:
     """Ordem de provedores para rotação automática (grátis / nuvem)."""
+    from pkf.ninerouter import ninerouter_enabled
+
     available = providers()
     if explicit := os.getenv("PKF_PROVIDER_POOL", "").strip():
         candidates = [p.strip() for p in explicit.split(",") if p.strip()]
+    elif ninerouter_enabled():
+        candidates = ["ninerouter", "groq", "gemini", "mimo", "kimi", "openai"]
     else:
         candidates = ["groq", "gemini", "mimo", "kimi", "openai"]
+
+    if not ninerouter_enabled():
+        candidates = [name for name in candidates if name != "ninerouter"]
 
     primary = os.getenv("PKF_PROVIDER", "").strip()
     if primary and primary not in candidates:
@@ -216,6 +243,15 @@ def provider_pool_names() -> list[str]:
 
 
 def rate_limit_cooldown_seconds(exc: Exception) -> int:
+    from openai import APIStatusError
+
+    if isinstance(exc, APIStatusError) and exc.response is not None:
+        retry_after = exc.response.headers.get("retry-after")
+        if retry_after:
+            try:
+                return max(int(float(retry_after)), 30)
+            except ValueError:
+                pass
     text = str(exc).lower()
     if "429" not in text and "rate limit" not in text:
         return 0

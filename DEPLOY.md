@@ -50,9 +50,29 @@ Preencha pelo menos:
 
 ### 4. Subir com Docker
 
+**Só PKF (Groq/Gemini direto):**
+
 ```bash
 bash deploy/hostinger/setup.sh
 ```
+
+**PKF + 9Router (recomendado — pool free maior):**
+
+```bash
+docker compose --profile router build
+docker compose --profile router up -d
+```
+
+Configure no `.env`:
+
+```env
+NINEROUTER_URL=http://ninerouter:20128
+PKF_PROVIDER=ninerouter
+NINEROUTER_MODEL=oc/big-pickle
+GROQ_API_KEY=...    # fallback se 9Router cair
+```
+
+No dashboard 9Router (`ssh -L 20128:127.0.0.1:20128 root@VPS`): conecte OpenCode Free + combo free.
 
 Ou manualmente:
 
@@ -64,8 +84,16 @@ docker compose logs -f pkf
 
 ### 5. Acessar no navegador
 
+**Direto na API (recomendado na VPS com Caddy na porta 80):**
+
 ```
-http://SEU_IP/?token=SEU_PKF_AUTH_TOKEN
+http://SEU_IP:8765/?token=SEU_PKF_AUTH_TOKEN
+```
+
+**Via Nginx do compose (porta 8080 — evita conflito com Caddy/eventosbr na :80):**
+
+```
+http://SEU_IP:8080/?token=SEU_PKF_AUTH_TOKEN
 ```
 
 O token fica salvo no navegador após o primeiro acesso.
@@ -112,5 +140,8 @@ Dados persistentes (specs, chat, memória): volume Docker `pkf-workspace` em `/d
 **401 Token inválido**  
 → Acesse com `?token=` igual ao `PKF_AUTH_TOKEN` do `.env`
 
-**Porta 80 fechada**  
+**Porta 80 fechada ou em uso (Caddy/eventosbr)**  
+→ Use `http://SEU_IP:8765` ou `http://SEU_IP:8080` (nginx do compose). Não altere o Caddy existente.
+
+**Porta 80 fechada no firewall**  
 → Hostinger: libere HTTP no firewall do painel + `sudo ufw allow 80/tcp`

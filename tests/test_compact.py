@@ -9,6 +9,7 @@ def test_compact_truncates_long_tool_results():
     ]
     out = compact_messages(messages, "llama-3.1-8b-instant")
     assert len(out[1]["content"]) < 5000
+    assert "sha1:" in out[1]["content"]
 
 
 def test_compact_keeps_tool_call_groups():
