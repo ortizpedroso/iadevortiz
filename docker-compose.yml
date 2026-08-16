@@ -56,8 +56,6 @@ services:
 
       NINEROUTER_URL: ${NINEROUTER_URL:-}
 
-      NINEROUTER_KEY: ${NINEROUTER_KEY:-local}
-
       NINEROUTER_MODEL: ${NINEROUTER_MODEL:-oc/big-pickle}
 
     volumes:

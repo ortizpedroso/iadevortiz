@@ -1,5 +1,5 @@
 from pkf.config import default_provider, provider_pool_names, providers
-from pkf.ninerouter import ninerouter_chat_model, ninerouter_enabled, ninerouter_web_search
+from pkf.ninerouter import ninerouter_api_key, ninerouter_chat_model, ninerouter_enabled, ninerouter_web_search
 from pkf.router_native import build_provider_slots
 from pkf.web_search import web_search, web_search_configured
 
@@ -61,3 +61,9 @@ def test_web_search_requires_backend(monkeypatch):
 def test_ninerouter_web_search_requires_url(monkeypatch):
     monkeypatch.delenv("NINEROUTER_URL", raising=False)
     assert "não configurado" in ninerouter_web_search("test").lower()
+
+
+def test_ninerouter_api_key_not_local_by_default(monkeypatch):
+    monkeypatch.delenv("NINEROUTER_KEY", raising=False)
+    monkeypatch.delenv("NINEROUTER_API_KEY", raising=False)
+    assert ninerouter_api_key() == ""

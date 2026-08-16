@@ -17,11 +17,7 @@ def ninerouter_origin() -> str:
 
 
 def ninerouter_api_key() -> str:
-    return (
-        os.getenv("NINEROUTER_KEY", "").strip()
-        or os.getenv("NINEROUTER_API_KEY", "").strip()
-        or "local"
-    )
+    return os.getenv("NINEROUTER_KEY", "").strip() or os.getenv("NINEROUTER_API_KEY", "").strip()
 
 
 def ninerouter_chat_base_url() -> str:
