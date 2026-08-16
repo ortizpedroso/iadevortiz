@@ -3,7 +3,7 @@
 #      .\deploy\hostinger\deploy-vps.ps1 -Host root@187.77.240.125
 
 param(
-    [string]$Host = "root@187.77.240.125",
+    [string]$SshHost = "root@187.77.240.125",
     [string]$Key = "$env:USERPROFILE\.ssh\pkf_vps",
     [string]$RemoteDir = "/opt/pkf"
 )
@@ -15,15 +15,17 @@ if (Test-Path $Key) { $sshArgs += @("-i", $Key) }
 
 Write-Host "==> Git push local (se houver commits pendentes)"
 Push-Location $root
-git push origin main 2>$null
+$ErrorActionPreference = 'Continue'
+git push origin main | Out-Null
+$ErrorActionPreference = 'Stop'
 Pop-Location
 
 Write-Host "==> Enviar secrets.env para VPS"
 if (Test-Path (Join-Path $PSScriptRoot "secrets.env")) {
-    & scp @sshArgs (Join-Path $PSScriptRoot "secrets.env") "${Host}:${RemoteDir}/deploy/hostinger/secrets.env"
+    & scp @sshArgs (Join-Path $PSScriptRoot "secrets.env") "${SshHost}:${RemoteDir}/deploy/hostinger/secrets.env"
 }
 
-Write-Host "==> SSH: git pull + update na VPS ($Host)"
+Write-Host "==> SSH: git pull + update na VPS ($SshHost)"
 $remote = @"
 set -e
 cd $RemoteDir
@@ -34,7 +36,7 @@ curl -s http://127.0.0.1:8765/api/health | head -c 500
 echo ''
 "@
 
-& ssh @sshArgs $Host $remote
+& ssh @sshArgs $SshHost $remote
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
     Write-Host "SSH falhou. Cole na VPS (root@srv1770462):" -ForegroundColor Yellow

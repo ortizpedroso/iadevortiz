@@ -59,16 +59,12 @@ set_kv KIMI_MODEL "${KIMI_MODEL:-kimi-k3}"
 
 if [ -n "${GROQ_API_KEY:-}" ]; then
   set_kv GROQ_API_KEY "$GROQ_API_KEY"
-elif ! grep -q '^GROQ_API_KEY=.\+' .env 2>/dev/null; then
-  set_kv GROQ_API_KEY ""
 fi
 set_kv GROQ_MODEL "${GROQ_MODEL:-llama-3.1-8b-instant}"
 set_kv PKF_GROQ_FALLBACK_MODEL "${PKF_GROQ_FALLBACK_MODEL:-llama-3.1-8b-instant}"
 
 if [ -n "${GEMINI_API_KEY:-}" ]; then
   set_kv GEMINI_API_KEY "$GEMINI_API_KEY"
-elif ! grep -q '^GEMINI_API_KEY=.\+' .env 2>/dev/null; then
-  set_kv GEMINI_API_KEY ""
 fi
 set_kv GEMINI_MODEL "${GEMINI_MODEL:-gemini-2.0-flash}"
 
