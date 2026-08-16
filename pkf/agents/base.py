@@ -9,6 +9,7 @@ import networkx as nx
 from openai import APIStatusError, AsyncOpenAI
 
 from pkf.config import NODE_LIMIT, fallback_model_on_rate_limit, tool_rounds_for_agent
+from pkf.provider_errors import is_rotatable_error
 from pkf.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
@@ -82,8 +83,16 @@ class Agent:
                         print(f"[{self.name}] Rate limit em {self.model}; tentando {fb}")
                         self.model = fb
                         continue
+                if is_rotatable_error(exc) and await self.router.try_rotate_provider(exc):
+                    self.model = self.router.model_to_use
+                    continue
                 if native_tools and _looks_like_tool_unsupported(exc):
                     native_tools = False
+                    continue
+                raise
+            except (APIConnectionError, APITimeoutError) as exc:
+                if await self.router.try_rotate_provider(exc):
+                    self.model = self.router.model_to_use
                     continue
                 raise
             except Exception as exc:

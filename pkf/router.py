@@ -8,11 +8,12 @@ from pkf.agents.base import Agent
 from pkf.agents.developer import DeveloperAgent
 from pkf.agents.prompts import AGENT_PROMPTS, DEVELOPER_AGENTS
 from pkf.classifier import Intent, classify_intent, classify_intent_llm
-from pkf.config import RELEVANCE_THRESHOLD, default_fallback, model_for_task
+from pkf.config import RELEVANCE_THRESHOLD, model_for_task, rate_limit_cooldown_seconds
 from pkf.graph.project import ProjectGraph
 from pkf.memory.store import MemoryStore, export_graph
+from pkf.provider_errors import is_rotatable_error
+from pkf.provider_pool import ProviderPool
 from pkf.spec.store import active_spec_preview, approve_spec, update_spec_stack
-from pkf.providers import get_ai_client
 from pkf.tools.impl import verify_build as verify_build_tool
 from pkf.workspace_index import begin_build_session
 from pkf.tools.registry import ToolRegistry, tools_for_agent
@@ -34,16 +35,18 @@ class Router:
         model: str | None = None,
         supports_tools: bool = True,
         ui_mode: bool = False,
+        provider_pool: ProviderPool | None = None,
     ):
-        self.provider_name = provider_name
         self.workspace = workspace
         self.ui_mode = ui_mode
-        self.fallback_provider = fallback_provider if fallback_provider is not None else default_fallback(provider_name)
+        self.pool = provider_pool or ProviderPool.create(start=provider_name)
+        self.fallback_provider = fallback_provider
         if client is None:
-            client, config = get_ai_client(provider_name)
+            client, config = self.pool.get_client()
             model = config.model
             supports_tools = config.supports_tools
         self.client = client
+        self.provider_name = self.pool.current_name
         self.model_to_use = model or "llama3:8b"
         self.supports_tools = supports_tools
         self.memory = MemoryStore(workspace.root)
@@ -86,6 +89,7 @@ class Router:
             project_preview["path"] = f"/preview/{project_preview['entry']}"
         return {
             "provider": self.provider_name,
+            "provider_pool": self.pool.names,
             "model": self.model_to_use,
             "workspace": str(self.workspace.root),
             "project": self.workspace.project,
@@ -115,6 +119,22 @@ class Router:
                 "Use **Ver projeto** para ver o que já foi criado e me diga o que quer ajustar ou completar."
             )
         return message
+
+    async def try_rotate_provider(self, exc: Exception) -> bool:
+        if not is_rotatable_error(exc):
+            return False
+        cooldown = rate_limit_cooldown_seconds(exc)
+        if not self.pool.rotate(str(exc), cooldown_seconds=cooldown):
+            return False
+        client, config = self.pool.get_client()
+        self.client = client
+        self.provider_name = self.pool.current_name
+        self.model_to_use = config.model
+        self.supports_tools = config.supports_tools
+        self._register_core_agents()
+        if self.ui_mode:
+            await self._emit_progress("Continuando com outro provedor…")
+        return True
 
     def reset_conversation(self) -> None:
         for agent in self.agents.values():

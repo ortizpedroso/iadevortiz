@@ -5,7 +5,8 @@ import asyncio
 from pathlib import Path
 
 from pkf import __version__
-from pkf.config import default_fallback, default_provider, providers, ui_host, ui_port
+from pkf.config import default_provider, ui_host, ui_port
+from pkf.provider_pool import ProviderPool
 from pkf.router import Router
 from pkf.workspace import Workspace
 
@@ -41,13 +42,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     provider = args.provider or default_provider()
-    available = providers()
-    if provider not in available:
-        raise SystemExit(f"Provedor '{provider}' indisponível. Opções: {list(available)}")
+    try:
+        pool = ProviderPool.create(start=provider)
+        provider = pool.current_name
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
     workspace = Workspace(Path(args.workspace).resolve())
-    fallback = args.fallback if args.fallback is not None else default_fallback(provider)
-    router = Router(provider, workspace, fallback_provider=fallback, ui_mode=bool(args.ui))
+    router = Router(provider, workspace, provider_pool=pool, ui_mode=bool(args.ui))
     host = args.host or ui_host()
     port = args.port or ui_port()
     if args.ui:

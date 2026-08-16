@@ -10,16 +10,12 @@ def explain_provider_error(provider: str, exc: Exception) -> str:
 
     if "429" in text or "rate_limit" in lowered or "rate limit" in lowered:
         wait = _extract_retry_minutes(text)
-        wait_hint = f" Tente de novo em ~{wait} min." if wait else " Aguarde alguns minutos e tente de novo."
+        wait_hint = f" Tente de novo em ~{wait} min." if wait else ""
         return (
-            "Limite diário de tokens do Groq atingido (plano gratuito).\n\n"
+            "Todos os provedores gratuitos atingiram o limite momentâneo."
             f"{wait_hint}\n\n"
-            "Opções:\n"
-            "1. Aguardar o reset (meia-noite UTC ou quando indicado acima)\n"
-            "2. Trocar o modelo no .env da VPS para um mais leve:\n"
-            "   OPENAI_MODEL=llama-3.1-8b-instant\n"
-            "3. Usar outro provedor grátis (Gemini): GEMINI_API_KEY + PKF_PROVIDER=gemini\n"
-            "4. Upgrade em https://console.groq.com/settings/billing"
+            "A PKF tenta alternar automaticamente entre Groq, Gemini e Kimi. "
+            "Configure mais chaves no .env (PKF_PROVIDER_POOL=groq,gemini,kimi) ou aguarde o reset."
         )
 
     if provider == "ollama" and connection:

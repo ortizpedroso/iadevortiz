@@ -180,6 +180,44 @@ def fallback_model_on_rate_limit(current_model: str, base_url: str = "") -> str 
     return None
 
 
+def provider_pool_names() -> list[str]:
+    """Ordem de provedores para rotação automática (grátis / nuvem)."""
+    available = providers()
+    if explicit := os.getenv("PKF_PROVIDER_POOL", "").strip():
+        candidates = [p.strip() for p in explicit.split(",") if p.strip()]
+    else:
+        candidates = ["groq", "gemini", "kimi", "openai"]
+
+    primary = os.getenv("PKF_PROVIDER", "").strip()
+    if primary and primary not in candidates:
+        candidates.insert(0, primary)
+
+    seen_urls: set[str] = set()
+    ordered: list[str] = []
+    for name in candidates:
+        cfg = available.get(name)
+        if not cfg or not cfg.api_key or name == "ollama":
+            continue
+        url = cfg.base_url.rstrip("/").lower()
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        ordered.append(name)
+
+    if primary and primary in ordered:
+        ordered = [primary] + [n for n in ordered if n != primary]
+    return ordered
+
+
+def rate_limit_cooldown_seconds(exc: Exception) -> int:
+    text = str(exc).lower()
+    if "429" not in text and "rate limit" not in text:
+        return 0
+    if "tokens per day" in text or "tpd" in text:
+        return 3600
+    return 120
+
+
 def pkf_dir(workspace: Path) -> Path:
     path = workspace / PKF_DIR_NAME
     path.mkdir(parents=True, exist_ok=True)
