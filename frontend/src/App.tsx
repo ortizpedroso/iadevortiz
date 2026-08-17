@@ -157,12 +157,11 @@ export default function App() {
           const data = await res.json();
           applySession(data.session);
           setMessages(data.messages || []);
-          applyLibrary(data.library);
         }
       } catch {
         /* offline bootstrap */
       }
-      loadLibrary();
+      await loadLibrary();
       loadChanges();
       connect();
     }
@@ -259,9 +258,18 @@ export default function App() {
 
   async function deleteProject(slug: string) {
     const res = await fetch(`/api/projects/${slug}`, { method: "DELETE", headers: authHeaders() });
-    if (!res.ok) return;
-    const data = await res.json();
-    applyLibrary(data.library);
+    if (!res.ok) {
+      let message = "Não foi possível excluir o projeto.";
+      try {
+        const body = await res.json();
+        if (body?.error) message = String(body.error);
+      } catch {
+        /* ignore */
+      }
+      setMessages((m) => [...m, { role: "error", content: message }]);
+      return;
+    }
+    await loadLibrary();
     const sessionRes = await fetch("/api/session", { headers: authHeaders() });
     if (sessionRes.ok) {
       const payload = await sessionRes.json();

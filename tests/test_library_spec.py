@@ -60,6 +60,15 @@ def test_sidebar_frontend_wired():
     assert "window.confirm" in sidebar_src
 
 
+def test_boot_uses_load_library_only_for_projects():
+    app_src = Path(__file__).resolve().parents[1] / "frontend" / "src" / "App.tsx"
+    text = app_src.read_text(encoding="utf-8")
+    boot_start = text.index("async function boot()")
+    boot_end = text.index("loadChanges();", boot_start)
+    boot_block = text[boot_start:boot_end]
+    assert "applyLibrary(data.library)" not in boot_block
+
+
 def test_platform_spec_review_approved(tmp_path: Path):
     slug = save_platform_spec(tmp_path)
     review = f"""# Review biblioteca lateral ({slug})

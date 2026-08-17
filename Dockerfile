@@ -2,10 +2,11 @@
 
 FROM node:22-alpine AS frontend
 WORKDIR /frontend
+ARG PKF_GIT_SHA=dev
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install
 COPY frontend/ ./
-RUN npm run build
+RUN echo "PKF frontend build ${PKF_GIT_SHA}" && npm run build
 
 FROM python:3.12-slim
 
