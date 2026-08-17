@@ -1,3 +1,19 @@
+export type ChatItem = {
+  id: string;
+  title?: string;
+  project_slug?: string | null;
+  phase?: string;
+  is_active?: boolean;
+  updated_at?: string;
+};
+
+export type ProjectItem = {
+  id?: string;
+  slug: string;
+  name?: string;
+  is_active?: boolean;
+};
+
 export type Message = {
   role: string;
   content: string;
@@ -40,6 +56,13 @@ export type SessionSnapshot = {
   goal?: string;
   active_agent?: string | null;
   last_agent?: string;
+  library?: { chats?: ChatItem[]; projects?: ProjectItem[]; active_chat_id?: string | null };
+};
+
+export type LibrarySnapshot = {
+  chats: ChatItem[];
+  projects: ProjectItem[];
+  active_chat_id?: string | null;
 };
 
 export type WsEvent = {

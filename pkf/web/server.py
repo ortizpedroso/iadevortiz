@@ -24,6 +24,15 @@ from pkf.workflow.tasks import TaskTracker
 from pkf.workspace_index import build_file_tree, list_changes
 from pkf.web.auth import AuthMiddleware, SecurityHeadersMiddleware, check_ws_auth, _extract_token
 from pkf.web.history import ChatHistory
+from pkf.web.library import (
+    activate_chat,
+    activate_project,
+    attach_chat,
+    create_chat,
+    delete_chat,
+    delete_project,
+    library_snapshot,
+)
 from pkf.web.preview import preview_info, redirect_preview_entry, serve_preview_file
 
 PKG_DIR = Path(__file__).resolve().parent
@@ -128,6 +137,119 @@ def create_app(router: Router) -> FastAPI:
     async def preview_file(rel_path: str):
         return serve_preview_file(router.workspace, rel_path)
 
+    @app.get("/api/library")
+    async def library():
+        history: ChatHistory = app.state.history
+        data = await library_snapshot(router.workspace, history.db_context)
+        if router.workspace.project:
+            for project in data.get("projects", []):
+                project["is_active"] = project.get("slug") == router.workspace.project
+        return data
+
+    @app.post("/api/chats")
+    async def chats_create():
+        history: ChatHistory = app.state.history
+        async with app.state.lock:
+            result = await create_chat(router.workspace, history.db_context)
+            router.cycle = DevCycle()
+            router.cycle.persist(router.workspace.root)
+            history.messages = []
+            history.active_chat_id = result.get("chat_id")
+            for agent in router.agents.values():
+                if agent.messages:
+                    agent.messages = [agent.messages[0]]
+        snapshot = router.snapshot()
+        return {
+            "ok": True,
+            **result,
+            "session": snapshot,
+            "library": await library_snapshot(router.workspace, history.db_context),
+        }
+
+    @app.post("/api/chats/{chat_id}/activate")
+    async def chats_activate(chat_id: str):
+        history: ChatHistory = app.state.history
+        async with app.state.lock:
+            messages = await activate_chat(router.workspace, chat_id, history.db_context)
+            history.active_chat_id = chat_id
+            await history.replace_messages(messages)
+            router.cycle = DevCycle.load(router.workspace.root)
+            if database_enabled():
+                cycle = await history.db_context.load_dev_cycle()
+                if cycle:
+                    router.cycle = cycle
+            router._register_core_agents()
+            router.restore_chat_history(history.messages)
+        snapshot = router.snapshot()
+        if database_enabled():
+            await history.db_context.setup()
+            snapshot["tasks"] = await history.db_context.load_tasks()
+        return {"ok": True, "session": snapshot, "messages": history.messages}
+
+    @app.delete("/api/chats/{chat_id}")
+    async def chats_delete(chat_id: str):
+        history: ChatHistory = app.state.history
+        async with app.state.lock:
+            await delete_chat(router.workspace, chat_id, history.db_context)
+            if database_enabled():
+                await history.db_context.setup()
+                history.active_chat_id = (
+                    str(history.db_context.session_id) if history.db_context.session_id else None
+                )
+                history.messages = await history.db_context.get_messages()
+                router.cycle = await history.db_context.load_dev_cycle() or DevCycle()
+            else:
+                from pkf.web.library import load_file_messages
+
+                history.active_chat_id, history.messages = load_file_messages(router.workspace.global_root)
+                router.cycle = DevCycle.load(router.workspace.root)
+            router._register_core_agents()
+            router.restore_chat_history(history.messages)
+        return {"ok": True, "library": await library_snapshot(router.workspace, history.db_context)}
+
+    @app.post("/api/chats/{chat_id}/attach")
+    async def chats_attach(chat_id: str, payload: dict = Body(default_factory=dict)):
+        history: ChatHistory = app.state.history
+        slug = payload.get("project_slug") or payload.get("slug")
+        async with app.state.lock:
+            await attach_chat(
+                router.workspace,
+                chat_id,
+                slug,
+                history.db_context,
+                history.active_chat_id,
+            )
+            if history.active_chat_id == chat_id:
+                router.cycle = DevCycle.load(router.workspace.root)
+                if database_enabled():
+                    cycle = await history.db_context.load_dev_cycle()
+                    if cycle:
+                        router.cycle = cycle
+                router._register_core_agents()
+        return {"ok": True, "library": await library_snapshot(router.workspace, history.db_context)}
+
+    @app.post("/api/projects/{slug}/activate")
+    async def projects_activate(slug: str):
+        history: ChatHistory = app.state.history
+        async with app.state.lock:
+            await activate_project(router.workspace, slug, history.db_context)
+            router.cycle = DevCycle.load(router.workspace.root)
+            if database_enabled():
+                cycle = await history.db_context.load_dev_cycle()
+                if cycle:
+                    router.cycle = cycle
+            router._register_core_agents()
+        return {"ok": True, "session": router.snapshot(), "library": await library_snapshot(router.workspace, history.db_context)}
+
+    @app.delete("/api/projects/{slug}")
+    async def projects_delete(slug: str):
+        history: ChatHistory = app.state.history
+        async with app.state.lock:
+            await delete_project(router.workspace, slug, history.db_context)
+            router.cycle = DevCycle.load(router.workspace.root)
+            router._register_core_agents()
+        return {"ok": True, "library": await library_snapshot(router.workspace, history.db_context)}
+
     @app.get("/api/session")
     async def session():
         history: ChatHistory = app.state.history
@@ -147,7 +269,7 @@ def create_app(router: Router) -> FastAPI:
             if database_enabled():
                 await history.db_context.setup()
                 snapshot["tasks"] = await history.db_context.load_tasks()
-            return {"session": snapshot, "messages": history.messages}
+            return {"session": snapshot, "messages": history.messages, "library": await library_snapshot(router.workspace, history.db_context)}
         except Exception as exc:
             return {
                 "session": {

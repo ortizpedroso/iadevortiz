@@ -6,7 +6,7 @@ import { MessageList } from "./components/MessageList";
 import { Sidebar } from "./components/Sidebar";
 import { SpecPanel } from "./components/SpecPanel";
 import { authHeaders, getToken, previewUrl, wsUrl } from "./lib/api";
-import type { Message, SessionSnapshot, SpecPreview, TaskNode, WsEvent } from "./types";
+import type { ChatItem, Message, ProjectItem, SessionSnapshot, SpecPreview, TaskNode, WsEvent } from "./types";
 
 export default function App() {
   const [authRequired, setAuthRequired] = useState(false);
@@ -25,7 +25,28 @@ export default function App() {
   const [previewSrc, setPreviewSrc] = useState("");
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
+  const [chats, setChats] = useState<ChatItem[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
   const socketRef = useRef<WebSocket | null>(null);
+
+  const applyLibrary = useCallback((library?: { chats?: ChatItem[]; projects?: ProjectItem[] }) => {
+    if (!library) return;
+    if (library.chats) setChats(library.chats);
+    if (library.projects) setProjects(library.projects);
+  }, []);
+
+  const loadLibrary = useCallback(async () => {
+    try {
+      const res = await fetch("/api/library", { headers: authHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setChats(data.chats || []);
+        setProjects(data.projects || []);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const loadChanges = useCallback(async () => {
     try {
@@ -39,15 +60,21 @@ export default function App() {
     }
   }, []);
 
-  const applySession = useCallback((data: SessionSnapshot) => {
+  const applySession = useCallback((data: SessionSnapshot, replaceSpec = false) => {
     setSession((s) => ({ ...s, ...data }));
     if (data.tasks) setTasks(data.tasks);
     if (data.spec_preview) {
       setSpecPreview(data.spec_preview);
       if (data.spec_preview.status === "pending_approval") setPanel("spec");
+    } else if (replaceSpec) {
+      setSpecPreview(null);
+      setPanel("project");
     }
     if (data.project_preview?.available && data.project_preview.path) {
       setPreviewSrc(previewUrl(data.project_preview.path));
+    } else if (replaceSpec) {
+      setPreviewSrc("");
+      setPreviewOpen(false);
     }
     if (data.active_agent) setActiveAgent(data.active_agent);
   }, []);
@@ -130,16 +157,18 @@ export default function App() {
           const data = await res.json();
           applySession(data.session);
           setMessages(data.messages || []);
+          applyLibrary(data.library);
         }
       } catch {
         /* offline bootstrap */
       }
+      loadLibrary();
       loadChanges();
       connect();
     }
     boot();
     return () => socketRef.current?.close();
-  }, [applySession, connect, loadChanges]);
+  }, [applySession, applyLibrary, connect, loadChanges, loadLibrary]);
 
   function handleAuth(token: string) {
     sessionStorage.setItem("pkf_token", token);
@@ -169,6 +198,77 @@ export default function App() {
     setSession({});
     setTasks([]);
     loadChanges();
+    loadLibrary();
+  }
+
+  async function newChat() {
+    const res = await fetch("/api/chats", { method: "POST", headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    setMessages([]);
+    setSpecPreview(null);
+    applyLibrary(data.library);
+    if (data.session) applySession(data.session);
+  }
+
+  async function selectChat(id: string) {
+    const res = await fetch(`/api/chats/${id}/activate`, { method: "POST", headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    setMessages(data.messages || []);
+    applySession(data.session || {}, true);
+    loadLibrary();
+    loadChanges();
+  }
+
+  async function deleteChat(id: string) {
+    if (!confirm("Excluir este chat?")) return;
+    const res = await fetch(`/api/chats/${id}`, { method: "DELETE", headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    applyLibrary(data.library);
+    await loadLibrary();
+    const sessionRes = await fetch("/api/session", { headers: authHeaders() });
+    if (sessionRes.ok) {
+      const payload = await sessionRes.json();
+      setMessages(payload.messages || []);
+      applySession(payload.session, true);
+      loadChanges();
+    }
+  }
+
+  async function attachChat(chatId: string, projectSlug: string | null) {
+    const res = await fetch(`/api/chats/${chatId}/attach`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ project_slug: projectSlug }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    applyLibrary(data.library);
+  }
+
+  async function selectProject(slug: string) {
+    const res = await fetch(`/api/projects/${slug}/activate`, { method: "POST", headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    applySession(data.session || {}, true);
+    applyLibrary(data.library);
+    loadChanges();
+  }
+
+  async function deleteProject(slug: string) {
+    if (!confirm(`Excluir o projeto "${slug}" e todos os arquivos?`)) return;
+    const res = await fetch(`/api/projects/${slug}`, { method: "DELETE", headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    applyLibrary(data.library);
+    const sessionRes = await fetch("/api/session", { headers: authHeaders() });
+    if (sessionRes.ok) {
+      const payload = await sessionRes.json();
+      applySession(payload.session, true);
+      loadChanges();
+    }
   }
 
   const projectName =
@@ -208,6 +308,14 @@ export default function App() {
         database={!!session.database}
         phase={session.phase}
         model={session.model}
+        chats={chats}
+        projects={projects}
+        onSelectChat={selectChat}
+        onDeleteChat={deleteChat}
+        onAttachChat={attachChat}
+        onSelectProject={selectProject}
+        onDeleteProject={deleteProject}
+        onNewChat={newChat}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

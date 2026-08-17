@@ -200,3 +200,116 @@ async def upsert_spec_record(
                 confirmed_stack=confirmed_stack,
             )
         )
+
+
+async def list_user_projects(session: AsyncSession, user_id: uuid.UUID) -> list[dict]:
+    result = await session.execute(
+        select(Project).where(Project.user_id == user_id).order_by(Project.updated_at.desc())
+    )
+    return [
+        {
+            "id": str(row.id),
+            "slug": row.slug,
+            "name": row.name or row.slug,
+            "is_active": False,
+        }
+        for row in result.scalars()
+    ]
+
+
+async def list_user_chats(session: AsyncSession, user_id: uuid.UUID) -> list[dict]:
+    result = await session.execute(
+        select(ChatSession)
+        .where(ChatSession.user_id == user_id)
+        .order_by(ChatSession.updated_at.desc())
+    )
+    chats: list[dict] = []
+    for chat in result.scalars():
+        msg_result = await session.execute(
+            select(Message)
+            .where(Message.session_id == chat.id, Message.role == "user")
+            .order_by(Message.created_at)
+            .limit(1)
+        )
+        first = msg_result.scalar_one_or_none()
+        title = "Novo chat"
+        if first and first.content.strip():
+            text = first.content.strip().replace("\n", " ")
+            title = text[:56] + ("…" if len(text) > 56 else "")
+        project_slug = None
+        if chat.project_id:
+            project = await session.get(Project, chat.project_id)
+            project_slug = project.slug if project else None
+        chats.append(
+            {
+                "id": str(chat.id),
+                "title": title,
+                "project_slug": project_slug,
+                "phase": chat.phase,
+                "is_active": bool(chat.is_active),
+                "updated_at": chat.updated_at.isoformat() if chat.updated_at else "",
+            }
+        )
+    return chats
+
+
+async def activate_chat_session(session: AsyncSession, user: User, chat_id: uuid.UUID) -> ChatSession:
+    await session.execute(
+        update(ChatSession).where(ChatSession.user_id == user.id).values(is_active=False)
+    )
+    chat = await session.get(ChatSession, chat_id)
+    if not chat or chat.user_id != user.id:
+        raise ValueError("Chat não encontrado")
+    chat.is_active = True
+    return chat
+
+
+async def attach_chat_to_project(
+    session: AsyncSession,
+    user: User,
+    chat_id: uuid.UUID,
+    project: Project | None,
+) -> None:
+    chat = await session.get(ChatSession, chat_id)
+    if not chat or chat.user_id != user.id:
+        raise ValueError("Chat não encontrado")
+    chat.project_id = project.id if project else None
+
+
+async def delete_chat_session(
+    session: AsyncSession,
+    user: User,
+    chat_id: uuid.UUID,
+) -> ChatSession | None:
+    chat = await session.get(ChatSession, chat_id)
+    if not chat or chat.user_id != user.id:
+        raise ValueError("Chat não encontrado")
+    was_active = chat.is_active
+    await session.delete(chat)
+    await session.flush()
+    if not was_active:
+        return None
+    result = await session.execute(
+        select(ChatSession)
+        .where(ChatSession.user_id == user.id)
+        .order_by(ChatSession.updated_at.desc())
+        .limit(1)
+    )
+    next_chat = result.scalar_one_or_none()
+    if next_chat:
+        next_chat.is_active = True
+        return next_chat
+    new_chat = ChatSession(user_id=user.id, is_active=True)
+    session.add(new_chat)
+    await session.flush()
+    return new_chat
+
+
+async def delete_project_record(session: AsyncSession, user: User, slug: str) -> None:
+    result = await session.execute(
+        select(Project).where(Project.user_id == user.id, Project.slug == slug)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        return
+    await session.delete(project)

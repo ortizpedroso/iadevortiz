@@ -60,6 +60,7 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - **Retry inteligente**: reexecuta só agentes que falharam (até `PKF_BUILD_RETRIES`)
 - **Review→fix loop**: até `PKF_REVIEW_FIX_CYCLES` ciclos automáticos pós-build
 - UI Vite + React 19 + Tailwind 4: rail, painel spec, preview, indicador agente/provider
+- **Biblioteca lateral**: listagem de chats e projetos — criar, ativar, excluir, anexar chat↔projeto
 - Modal de autenticação (`PKF_AUTH_TOKEN`); health público reduzido
 - Pool híbrido: **9Router primário** + **router nativo fallback**
 - **Provider/modelo por agente** via `PKF_<AGENT>_PROVIDER` e `PKF_<AGENT>_MODEL`
@@ -78,9 +79,22 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 
 ## UI / UX
 
+- **Sidebar esquerda**: seções Chats e Projetos (criar, selecionar, excluir, anexar projeto ao chat)
 - Indicador no header: agente ativo · provider · modelo
 - Paleta escura (#191919, accent #d97757)
 - Acessibilidade: skip link, aria-live, reduced motion
+
+## API biblioteca
+
+| Endpoint | Função |
+|---|---|
+| `GET /api/library` | Lista chats e projetos |
+| `POST /api/chats` | Novo chat |
+| `POST /api/chats/{id}/activate` | Ativa chat e carrega mensagens |
+| `DELETE /api/chats/{id}` | Exclui chat |
+| `POST /api/chats/{id}/attach` | Anexa ou desanexa projeto |
+| `POST /api/projects/{slug}/activate` | Ativa projeto |
+| `DELETE /api/projects/{slug}` | Exclui projeto |
 
 ## Stack
 

@@ -62,6 +62,7 @@ A UI moderna (Vite/React) é servida quando `frontend/dist/` existe (build Docke
 
 - **Visual:** tema escuro entre Claude e Cursor — rail lateral, chat centralizado, accent terracota
 - **Painéis:** projeto/tarefas, spec (aprovação manual), preview embutido
+- **Biblioteca lateral:** chats e projetos listados à esquerda — criar, selecionar, excluir e anexar chat a projeto
 - **Auth:** modal de token (`PKF_AUTH_TOKEN`); health público reduzido
 - **Acessibilidade:** skip link, `aria-live`, reduced motion
 

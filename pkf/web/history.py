@@ -6,6 +6,7 @@ from pathlib import Path
 from pkf.config import pkf_dir
 from pkf.db.config import database_enabled
 from pkf.db.context import DbContext
+from pkf.web.library import load_file_messages, persist_file_messages
 from pkf.workspace import Workspace
 
 
@@ -17,15 +18,17 @@ class ChatHistory:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.db = DbContext(ws)
         self.messages: list[dict] = []
+        self.active_chat_id: str | None = None
 
     async def load(self) -> None:
         if database_enabled():
             await self.db.setup()
             self.messages = await self.db.get_messages()
+            self.active_chat_id = str(self.db.session_id) if self.db.session_id else None
             return
-        self.messages = self._load_file()
+        self.active_chat_id, self.messages = load_file_messages(self.workspace.global_root)
 
-    def _load_file(self) -> list[dict]:
+    def _load_legacy_file(self) -> list[dict]:
         if not self.path.exists():
             return []
         try:
@@ -35,9 +38,11 @@ class ChatHistory:
             return []
 
     async def _save_file(self) -> None:
-        self.path.write_text(json.dumps(self.messages, ensure_ascii=False, indent=2), encoding="utf-8")
+        persist_file_messages(self.workspace.global_root, self.active_chat_id, self.messages)
 
     async def append(self, message: dict) -> None:
+        if not database_enabled() and not self.active_chat_id:
+            await self.load()
         self.messages.append(message)
         if database_enabled():
             await self.db.setup()
@@ -45,12 +50,40 @@ class ChatHistory:
         else:
             await self._save_file()
 
+    async def replace_messages(self, messages: list[dict]) -> None:
+        self.messages = list(messages)
+        if database_enabled():
+            await self.db.setup()
+            if self.db.session_id:
+                from pkf.db.engine import get_session_factory
+                from pkf.db.repository import clear_messages, ensure_default_user
+
+                factory = get_session_factory()
+                async with factory() as session:
+                    await clear_messages(session, self.db.session_id)
+                    for msg in messages:
+                        from pkf.db.repository import add_message
+
+                        await add_message(
+                            session,
+                            self.db.session_id,
+                            msg.get("role", "user"),
+                            msg.get("content", ""),
+                            msg.get("agent"),
+                        )
+                    await session.commit()
+        else:
+            await self._save_file()
+
     async def clear(self) -> None:
         self.messages = []
         if database_enabled():
             await self.db.clear()
-        elif self.path.exists():
-            self.path.write_text("[]", encoding="utf-8")
+            self.active_chat_id = str(self.db.session_id) if self.db.session_id else None
+        else:
+            if not self.active_chat_id:
+                await self.load()
+            await self._save_file()
 
     @property
     def db_context(self) -> DbContext:

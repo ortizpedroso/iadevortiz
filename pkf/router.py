@@ -223,6 +223,20 @@ class Router:
                 supports_tools=self.supports_tools,
             )
 
+    def restore_chat_history(self, messages: list[dict], limit: int = 24) -> None:
+        """Reidrata mensagens recentes nos agentes após troca de chat."""
+        recent = [
+            {"role": m.get("role"), "content": m.get("content", "")}
+            for m in messages[-limit:]
+            if m.get("role") in ("user", "assistant") and (m.get("content") or "").strip()
+        ]
+        if not recent:
+            return
+        for agent in self.agents.values():
+            system = agent.messages[0] if agent.messages else None
+            agent.messages = [system] if system else []
+            agent.messages.extend(recent)
+
     def _restore_memory_agents(self) -> None:
         for name, summary in self.memory.index.items():
             if name in self.agents:
