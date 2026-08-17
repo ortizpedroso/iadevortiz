@@ -41,7 +41,8 @@ NINEROUTER_MODEL=oc/big-pickle
 EOF
 
 echo "==> Build e start (profile: $PROFILE)"
-docker compose --profile "$PROFILE" build pkf ninerouter
+GIT_SHA="$(git rev-parse HEAD)"
+docker compose --profile "$PROFILE" build --build-arg PKF_GIT_SHA="$GIT_SHA" pkf ninerouter
 docker compose --profile "$PROFILE" up -d postgres pkf ninerouter --force-recreate
 docker compose stop nginx 2>/dev/null || true
 
