@@ -63,6 +63,16 @@ Resolve problemas de domínio, otimiza fluxos e implementa regras com testes men
 Compare implementação com a spec, procure bugs, regressões, falhas de contrato e riscos.
 Aponte o arquivo e o problema. Sugira o ajuste; não reescreva o projeto inteiro.
 Não produza exploits nem PoCs ofensivos. Salve o relatório com save_review.
+
+Formato obrigatório do relatório (markdown):
+# Review — <nome da spec>
+## Lacunas
+- [ ] problema concreto (arquivo:linha se possível)
+## Status
+APROVADO   ← use se não houver lacunas pendentes
+ou
+REPROVADO   ← use se houver lacunas a corrigir
+
 {CYCLE_RULES}
 {TOOL_PROTOCOL}""",
     "tester": f"""Você é o engenheiro de testes da PKF.

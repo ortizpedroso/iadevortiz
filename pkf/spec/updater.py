@@ -53,39 +53,41 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 
 ## Capacidades
 
-- Pipeline **/spec → aprovação → /build → /review** com loop até aprovação
-- UI Vite + React 19 + Tailwind 4: rail de ícones, painel de projeto, painel de spec, preview embutido
-- Modal de autenticação (sem `prompt()`); token via `PKF_AUTH_TOKEN`
-- Pool híbrido: **9Router primário** (OpenCode Free, NVIDIA NIM, combos) + **router nativo fallback**
-- Pool de provedores nativo com **3 tiers** (subscription → cheap → free)
-- **Multi-chave** por provedor (GROQ_API_KEY, GROQ_API_KEY_2, GROQ_API_KEYS)
+- Pipeline **/spec → aprovação manual → /build → review→fix loop** até aprovação
+- **Build em fases**: backend → logic → frontend → tester (dependências respeitadas)
+- **Planner LLM** com fallback heurístico por keywords na spec
+- **Handoff API**: backend documenta `.pkf/handoff/api.md` → frontend consome
+- **Retry inteligente**: reexecuta só agentes que falharam (até `PKF_BUILD_RETRIES`)
+- **Review→fix loop**: até `PKF_REVIEW_FIX_CYCLES` ciclos automáticos pós-build
+- UI Vite + React 19 + Tailwind 4: rail, painel spec, preview, indicador agente/provider
+- Modal de autenticação (`PKF_AUTH_TOKEN`); health público reduzido
+- Pool híbrido: **9Router primário** + **router nativo fallback**
+- **Provider/modelo por agente** via `PKF_<AGENT>_PROVIDER` e `PKF_<AGENT>_MODEL`
 - DeepSeek-R1 reasoning (architect, reviewer, logic)
-- Compactação RTK de tool results (head/hash/tail)
-- Web search nativo (Tavily ou 9Router `/v1/search`)
-- PostgreSQL para sessões, mensagens, specs e tarefas
-- Memória persistente: MEMORY.md, checkpoint.md, progresso por tarefa
-- Busca de skills BM25 + skills frontend-design e python-toolchain
-- Árvore de tarefas T1/T2/T3 na UI
-- Comando /goal com juiz independente pós-build
-- Build paralelo com retry automático (até 2 tentativas)
-- Changelog automático na spec após build
-- Headers de segurança (nosniff, frame-options, referrer-policy)
-- Health `/api/health` reduzido sem autenticação
+- PostgreSQL, memória persistente, skills BM25, juiz /goal
+- Headers de segurança; changelog automático na spec após build
+
+## Fluxo /build
+
+1. Brainstorm (architect, sem código)
+2. Planner (LLM ou heurística) → fases ordenadas
+3. Implementação em fases com handoff API
+4. Verificação de arquivos + retry por agente
+5. Loop review → correção → review até **Status: APROVADO**
+6. Juiz independente (/goal) + resposta amigável na UI
 
 ## UI / UX
 
-- Paleta escura quente (#191919, accent #d97757)
-- Tipografia: Inter (UI) + Source Serif 4 (títulos)
-- Composer fixo estilo Claude; mensagens do usuário à direita
-- Acessibilidade: skip link, `aria-live`, foco visível, `prefers-reduced-motion`
-- SEO: meta description, theme-color, `noindex` na UI privada
+- Indicador no header: agente ativo · provider · modelo
+- Paleta escura (#191919, accent #d97757)
+- Acessibilidade: skip link, aria-live, reduced motion
 
-## Stack sugerida padrão
+## Stack
 
 - frontend: React + Vite + Tailwind
 - backend: Python FastAPI + WebSocket
 - database: PostgreSQL
-- deploy: Docker Compose na VPS (:8765)
+- deploy: Docker Compose (:8765) + 9Router (:20128 localhost)
 """
     doc = SpecDocument(
         title="PKF Platform",

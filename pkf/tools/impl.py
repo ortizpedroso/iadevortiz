@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import ast
+import difflib
 import json
+import os
 import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -11,6 +15,7 @@ from pkf.graph.project import ProjectGraph
 from pkf.spec.store import save_spec_document
 from pkf.workspace import Workspace, WorkspaceError
 from pkf.workspace_index import build_code_index, query_code_index, record_change, verify_workspace_files
+from pkf.semantic_index import update_file_index
 from pkf.skills.search import skill_search_tool_output
 from pkf.web_search import web_search
 
@@ -28,21 +33,8 @@ ALLOWED_COMMANDS = (
 )
 
 ALLOWED_GIT = {"status", "diff", "log", "branch", "show", "rev-parse"}
-BLOCKED_TOKENS = {
-    "rm -rf",
-    "del /f",
-    "format ",
-    "shutdown",
-    "reg ",
-    "curl ",
-    "wget ",
-    "ssh ",
-    "scp ",
-    "powershell -enc",
-    "invoke-webrequest",
-    "npm publish",
-    "pip install",
-}
+SHELL_CHAINING = ("&&", ";", "|", "`", "$(", ">", "<")
+MAX_COMMAND_OUTPUT = 10_000
 
 
 def _slug(name: str) -> str:
@@ -81,6 +73,32 @@ def read_file(workspace: Workspace, path: str) -> str:
     return text
 
 
+def _validate_syntax(rel_path: str, content: str) -> str | None:
+    suffix = Path(rel_path).suffix.lower()
+    if suffix == ".py":
+        try:
+            ast.parse(content)
+        except SyntaxError as exc:
+            return f"Erro de sintaxe Python: {exc}"
+    elif suffix == ".json":
+        try:
+            json.loads(content)
+        except json.JSONDecodeError as exc:
+            return f"JSON inválido: {exc}"
+    return None
+
+
+def _short_unified_diff(old: str, new: str, rel_path: str, max_lines: int = 24) -> str:
+    diff_lines = difflib.unified_diff(
+        old.splitlines(keepends=True),
+        new.splitlines(keepends=True),
+        fromfile=f"a/{rel_path}",
+        tofile=f"b/{rel_path}",
+        lineterm="",
+    )
+    return "".join(list(diff_lines)[:max_lines])[:800]
+
+
 def write_file(workspace: Workspace, path: str, content: str) -> str:
     target = workspace.resolve(path)
     if workspace.is_secret(target):
@@ -89,10 +107,23 @@ def write_file(workspace: Workspace, path: str, content: str) -> str:
     allowed_internal = rel.startswith(".pkf/specs/") or rel.startswith(".pkf/reviews/")
     if workspace.is_ignored(target) and not allowed_internal:
         return f"Escrita bloqueada em caminho ignorado: {path}"
-    action = "create" if not target.exists() else "overwrite"
+    existed = target.exists()
+    original = target.read_text(encoding="utf-8") if existed else None
+    action = "create" if not existed else "overwrite"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8", newline="\n")
+    syntax_error = _validate_syntax(rel, content)
+    if syntax_error:
+        if existed and original is not None:
+            target.write_text(original, encoding="utf-8", newline="\n")
+        elif target.exists():
+            target.unlink()
+        return f"{syntax_error} Escrita revertida."
     record_change(workspace, rel, action, content[:300])
+    try:
+        update_file_index(workspace, rel)
+    except Exception:
+        pass
     return f"Arquivo gravado: {rel} ({len(content)} caracteres)"
 
 
@@ -112,18 +143,39 @@ def edit_file(
         return f"Edição bloqueada em caminho ignorado: {path}"
     if not target.exists() or not target.is_file():
         return f"Arquivo não encontrado: {path}"
+    if old_string == new_string:
+        return "Nenhuma mudança: old_string e new_string são idênticos."
     content = target.read_text(encoding="utf-8")
     if old_string not in content:
         return f"Trecho não encontrado em {path}. Leia o arquivo e tente de novo."
-    count = content.count(old_string) if replace_all else min(1, content.count(old_string))
-    new_content = content.replace(old_string, new_string, count if replace_all else 1)
+    occurrences = content.count(old_string)
+    if occurrences > 1 and not replace_all:
+        return (
+            f"Trecho ambíguo em {path}: aparece {occurrences} vezes. "
+            "Inclua mais contexto para torná-lo único, ou use replace_all=true."
+        )
+    count = occurrences if replace_all else 1
+    new_content = content.replace(old_string, new_string, count)
     target.write_text(new_content, encoding="utf-8", newline="\n")
-    rel = workspace.rel(target)
-    record_change(workspace, rel, "edit", new_string[:300])
+    syntax_error = _validate_syntax(rel, new_content)
+    if syntax_error:
+        target.write_text(content, encoding="utf-8", newline="\n")
+        return f"{syntax_error} Edição revertida."
+    diff = _short_unified_diff(content, new_content, rel)
+    audit = f"old={old_string[:120]!r} new={new_string[:120]!r}\n{diff}"
+    record_change(workspace, rel, "edit", audit)
+    try:
+        update_file_index(workspace, rel)
+    except Exception:
+        pass
     return f"Editado {rel}: {count} substituição(ões)."
 
 
-def search_code(workspace: Workspace, query: str, path: str = ".") -> str:
+def search_code(workspace: Workspace, query: str, path: str = ".", mode: str = "text") -> str:
+    if (mode or "text").lower() == "semantic":
+        from pkf.semantic_index import semantic_search
+
+        return semantic_search(workspace, query)
     start = workspace.resolve(path)
     if not start.exists():
         return f"Caminho não encontrado: {path}"
@@ -145,15 +197,49 @@ def search_code(workspace: Workspace, query: str, path: str = ".") -> str:
     return "\n".join(matches) or "Nenhum resultado."
 
 
+def _safe_subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    blocked: list[str] = []
+    for key in list(env):
+        upper = key.upper()
+        if (
+            upper.endswith("_API_KEY")
+            or upper.endswith("_TOKEN")
+            or upper.endswith("_SECRET")
+            or upper == "DATABASE_URL"
+            or "SECRET" in upper
+        ):
+            blocked.append(key)
+    for key in blocked:
+        env.pop(key, None)
+    return env
+
+
+def _truncate_output(text: str, limit: int = MAX_COMMAND_OUTPUT) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"\n… (saída truncada em {limit} caracteres)"
+
+
 def run_command(workspace: Workspace, command: str) -> str:
-    cleaned = " ".join(command.strip().split())
-    lower = cleaned.lower()
-    if any(token in lower for token in BLOCKED_TOKENS):
-        return "Comando bloqueado por segurança."
-    parts = cleaned.split()
+    raw = command.strip()
+    if not raw:
+        return "Comando vazio."
+    for token in SHELL_CHAINING:
+        if token in raw:
+            return (
+                f"Comando bloqueado: encadeamento '{token}' não é suportado. "
+                "Use um único comando por vez."
+            )
+    try:
+        parts = shlex.split(raw, posix=os.name != "nt")
+    except ValueError as exc:
+        return f"Comando inválido: {exc}"
     if not parts:
         return "Comando vazio."
     binary = Path(parts[0]).name.lower()
+    if binary.endswith(".exe"):
+        binary = binary[:-4]
     if binary not in ALLOWED_COMMANDS:
         return f"Comando não permitido: {binary}. Use as ferramentas de arquivo ou um comando da allowlist."
     if binary == "git":
@@ -162,18 +248,20 @@ def run_command(workspace: Workspace, command: str) -> str:
             return "Git permitido apenas para status, diff, log, branch, show e rev-parse."
     try:
         completed = subprocess.run(
-            cleaned,
+            parts,
             cwd=workspace.root,
-            shell=True,
+            shell=False,
             capture_output=True,
             text=True,
             timeout=COMMAND_TIMEOUT,
+            env=_safe_subprocess_env(),
         )
     except subprocess.TimeoutExpired:
         return f"Comando excedeu {COMMAND_TIMEOUT}s."
-    output = (completed.stdout or "") + (completed.stderr or "")
-    output = output.strip() or "(sem saída)"
-    return f"exit={completed.returncode}\n{output[:8000]}"
+    stdout = _truncate_output(completed.stdout or "")
+    stderr = _truncate_output(completed.stderr or "")
+    output = (stdout + stderr).strip() or "(sem saída)"
+    return f"exit={completed.returncode}\n{output}"
 
 
 def get_spec(workspace: Workspace, name: str = "") -> str:
@@ -272,7 +360,12 @@ def dispatch(workspace: Workspace, name: str, arguments: dict) -> str:
                 bool(arguments.get("replace_all")),
             )
         if name == "search_code":
-            return search_code(workspace, arguments["query"], arguments.get("path", "."))
+            return search_code(
+                workspace,
+                arguments["query"],
+                arguments.get("path", "."),
+                arguments.get("mode", "text"),
+            )
         if name == "run_command":
             return run_command(workspace, arguments["command"])
         if name == "get_spec":

@@ -52,7 +52,7 @@ Inclui PostgreSQL, PKF (`:8765`) e Nginx opcional (`:8080` — evita conflito co
 | Comando | Função |
 |---|---|
 | `/spec` | Gera spec automática |
-| `/build` | Pipeline compose completo (requer spec aprovada na UI) |
+| `/build` | Pipeline em fases (backend→frontend) + review→fix loop |
 | `/review` | Revisa código vs spec |
 | `/goal` | Meta de parada do build |
 

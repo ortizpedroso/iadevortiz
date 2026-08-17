@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from pkf.tools.impl import dispatch, parse_arguments
 from pkf.workspace import Workspace
+
+if TYPE_CHECKING:
+    from pkf.router import Router
+
+_WRITE_TOOLS = frozenset({"write_file", "edit_file"})
 
 _SHARED_CORE = [
     "project_context",
@@ -70,12 +76,17 @@ TOOL_DEFINITIONS: dict[str, dict] = {
         },
     },
     "search_code": {
-        "description": "Busca um padrão regex no código do workspace.",
+        "description": "Busca no código: mode=text (regex) ou mode=semantic (similaridade por significado).",
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {"type": "string"},
                 "path": {"type": "string", "description": "Pasta ou arquivo inicial."},
+                "mode": {
+                    "type": "string",
+                    "enum": ["text", "semantic"],
+                    "description": "text=regex; semantic=busca por significado (índice local).",
+                },
             },
             "required": ["query"],
         },
@@ -88,7 +99,10 @@ TOOL_DEFINITIONS: dict[str, dict] = {
         },
     },
     "run_command": {
-        "description": "Executa um comando permitido (python, pytest, npm, git status/diff/log, ruff, mypy).",
+        "description": (
+            "Executa um comando permitido (python, pytest, npm, git status/diff/log, ruff, mypy). "
+            "Pipes e encadeamento (&&, ;, |) não são suportados por design."
+        ),
         "parameters": {
             "type": "object",
             "properties": {"command": {"type": "string"}},
@@ -230,8 +244,15 @@ class ToolCall:
 
 
 class ToolRegistry:
-    def __init__(self, workspace: Workspace, tool_names: list[str], optional: list[str] | None = None):
+    def __init__(
+        self,
+        workspace: Workspace,
+        tool_names: list[str],
+        optional: list[str] | None = None,
+        router: "Router | None" = None,
+    ):
         self.workspace = workspace
+        self.router = router
         self.tool_names = [name for name in tool_names if name in TOOL_DEFINITIONS]
         agent_optional = optional if optional is not None else _SHARED_OPTIONAL
         self._optional = [n for n in agent_optional if n in TOOL_DEFINITIONS]
@@ -245,6 +266,32 @@ class ToolRegistry:
     def schemas(self) -> list[dict]:
         names = list(dict.fromkeys(self.tool_names + self._optional))
         return openai_tool_schemas(names)
+
+    def _rel_tool_path(self, path: str) -> str:
+        return self.workspace.rel(self.workspace.resolve(path))
+
+    async def execute_async(self, name: str, arguments) -> str:
+        if name not in self.tool_names and name in self._optional:
+            self.tool_names.append(name)
+        if name not in self.tool_names:
+            return f"Ferramenta '{name}' não disponível para este agente."
+        args = parse_arguments(arguments)
+        if name in _WRITE_TOOLS:
+            path = args.get("path", "")
+            if path:
+                rel = self._rel_tool_path(path)
+                lock = self.workspace.file_lock(rel)
+                if lock.locked() and self.router:
+                    await self.router.emit(
+                        "tool",
+                        agent=getattr(self.router, "_active_agent", None),
+                        name=name,
+                        info=f"aguardando lock em {rel}",
+                        status="waiting",
+                    )
+                async with lock:
+                    return dispatch(self.workspace, name, args)
+        return dispatch(self.workspace, name, args)
 
     def execute(self, name: str, arguments) -> str:
         if name not in self.tool_names and name in self._optional:

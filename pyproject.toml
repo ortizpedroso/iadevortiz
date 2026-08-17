@@ -1,6 +1,6 @@
 [project]
 name = "pkf"
-version = "0.3.0"
+version = "0.3.1"
 description = "IA de desenvolvimento multiagente com ciclo spec/build/review"
 readme = "PKF.md"
 requires-python = ">=3.10"

@@ -23,6 +23,8 @@ export default function App() {
   const [status, setStatus] = useState("Conectando…");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSrc, setPreviewSrc] = useState("");
+  const [activeAgent, setActiveAgent] = useState<string | null>(null);
+  const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
 
   const loadChanges = useCallback(async () => {
@@ -47,6 +49,7 @@ export default function App() {
     if (data.project_preview?.available && data.project_preview.path) {
       setPreviewSrc(previewUrl(data.project_preview.path));
     }
+    if (data.active_agent) setActiveAgent(data.active_agent);
   }, []);
 
   const connect = useCallback(() => {
@@ -74,6 +77,11 @@ export default function App() {
         setThinking(true);
         return;
       }
+      if (event.type === "active_agent") {
+        if (event.agent) setActiveAgent(String(event.agent));
+        if (event.provider) setActiveProvider(String(event.provider));
+        return;
+      }
       if (event.type === "task_tree" && event.tasks) {
         setTasks(event.tasks);
         return;
@@ -89,6 +97,8 @@ export default function App() {
         setThinking(false);
         setBusy(false);
         setProgress("");
+        setActiveAgent(null);
+        setActiveProvider(null);
         setMessages((m) => [
           ...m,
           { role: "assistant", content: event.content || "", agent: event.agent as string },
@@ -210,13 +220,23 @@ export default function App() {
           >
             ☰
           </button>
-          <div className="flex items-center gap-2 text-sm" aria-live="polite">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                busy ? "bg-[#d97757]" : status === "Pronto" ? "bg-emerald-500" : "bg-[#666]"
-              }`}
-            />
-            <span className="text-[#9b9b9b]">{busy ? "Trabalhando…" : status}</span>
+          <div className="flex min-w-0 flex-col text-sm" aria-live="polite">
+            <div className="flex items-center gap-2">
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${
+                  busy ? "bg-[#d97757]" : status === "Pronto" ? "bg-emerald-500" : "bg-[#666]"
+                }`}
+              />
+              <span className="text-[#9b9b9b]">{busy ? "Trabalhando…" : status}</span>
+            </div>
+            {(activeAgent || session.provider) && busy ? (
+              <span className="truncate text-xs text-[#666]">
+                {activeAgent || session.last_agent || "pkf"}
+                {" · "}
+                {activeProvider || session.provider || "—"}
+                {session.model ? ` · ${session.model}` : ""}
+              </span>
+            ) : null}
           </div>
           {session.project_preview?.available ? (
             <div className="ml-auto flex gap-2">

@@ -85,9 +85,10 @@ class TaskTracker:
             status="running",
             children=[
                 TaskNode(id="T1.1", title=f"Spec: {spec_label}", status="done"),
-                TaskNode(id="T2", title="Implementação paralela", status="running", children=children),
+                TaskNode(id="T2", title="Implementação em fases", status="running", children=children),
                 TaskNode(id="T3", title="Verificação", status="pending"),
-                TaskNode(id="T4", title="Review", status="pending"),
+                TaskNode(id="T4", title="Review e correções", status="pending"),
+                TaskNode(id="T5", title="Aprovação final", status="pending"),
             ],
         )
         self.persist()

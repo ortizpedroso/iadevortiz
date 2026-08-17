@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-MAX_BUILD_RETRIES = 2
+MAX_BUILD_RETRIES = int(__import__("os").getenv("PKF_BUILD_RETRIES", "2"))
+MAX_REVIEW_FIX_CYCLES = int(__import__("os").getenv("PKF_REVIEW_FIX_CYCLES", "3"))
+
+HANDOFF_API_PATH = ".pkf/handoff/api.md"
 
 
 async def run_brainstorm(router, spec_name: str | None) -> str:
@@ -16,6 +19,7 @@ async def run_brainstorm(router, spec_name: str | None) -> str:
     if spec_name:
         prompt += f"\nSpec ativa: {spec_name}"
     try:
+        router.bind_agent_provider("architect")
         return await architect.process(prompt)
     except Exception:
         return ""

@@ -12,6 +12,7 @@ PKF_DIR_NAME = ".pkf"
 NODE_LIMIT = 12
 MAX_TOOL_ROUNDS = int(os.getenv("PKF_MAX_TOOL_ROUNDS", "16"))
 MAX_BUILD_TOOL_ROUNDS = int(os.getenv("PKF_BUILD_TOOL_ROUNDS", "30"))
+MAX_REVIEW_FIX_CYCLES = int(os.getenv("PKF_REVIEW_FIX_CYCLES", "3"))
 RELEVANCE_THRESHOLD = 2
 API_TIMEOUT = 120.0
 COMMAND_TIMEOUT = 45
@@ -179,6 +180,15 @@ def ui_host() -> str:
 
 def ui_port() -> int:
     return int(os.getenv("PKF_PORT", "8765"))
+
+
+def agent_provider_override(agent: str) -> str | None:
+    """Provider dedicado por agente — ex.: PKF_BACKEND_PROVIDER=groq"""
+    key = f"PKF_{agent.upper()}_PROVIDER"
+    explicit = os.getenv(key, "").strip().lower()
+    if explicit in {"9router", "9-router"}:
+        return "ninerouter"
+    return explicit or None
 
 
 def model_for_task(task: str, default: str) -> str:

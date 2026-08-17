@@ -10,10 +10,10 @@ from pkf.workspace import Workspace
 
 def test_edit_file_replaces_snippet(tmp_path: Path):
     ws = Workspace(tmp_path)
-    write_file(ws, "a.py", "hello world\n")
+    write_file(ws, "a.py", 'msg = "hello world"\n')
     result = edit_file(ws, "a.py", "world", "PKF")
     assert "1 substituição" in result
-    assert (tmp_path / "a.py").read_text(encoding="utf-8") == "hello PKF\n"
+    assert (tmp_path / "a.py").read_text(encoding="utf-8") == 'msg = "hello PKF"\n'
 
 
 def test_project_graph_predefined_and_dynamic(tmp_path: Path):

@@ -148,7 +148,7 @@ class Agent:
                     arguments=call["arguments"],
                     status="running",
                 )
-                result = self.tools.execute(call["name"], call["arguments"]) if self.tools else "Sem ferramentas."
+                result = await self.tools.execute_async(call["name"], call["arguments"]) if self.tools else "Sem ferramentas."
                 if self.tools:
                     self.tools.maybe_expand(call["name"])
                 await self.router.emit(

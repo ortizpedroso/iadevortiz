@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from pkf.config import DEFAULT_IGNORES, SECRET_NAMES, SECRET_SUFFIXES
@@ -23,6 +24,13 @@ class Workspace:
             self.root = self.global_root / "projects" / project
         else:
             self.root = self.global_root
+        self._file_locks: dict[str, asyncio.Lock] = {}
+
+    def file_lock(self, rel_path: str) -> asyncio.Lock:
+        key = rel_path.replace("\\", "/")
+        if key not in self._file_locks:
+            self._file_locks[key] = asyncio.Lock()
+        return self._file_locks[key]
 
     def set_project(self, slug: str) -> None:
         slug = slug.strip().lower()

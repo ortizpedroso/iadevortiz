@@ -38,6 +38,8 @@ export type SessionSnapshot = {
   tasks?: TaskNode[];
   database?: boolean;
   goal?: string;
+  active_agent?: string | null;
+  last_agent?: string;
 };
 
 export type WsEvent = {

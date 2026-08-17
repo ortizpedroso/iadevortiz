@@ -8,7 +8,7 @@ from pkf.agents.base import Agent
 from pkf.agents.developer import DeveloperAgent
 from pkf.agents.prompts import AGENT_PROMPTS, DEVELOPER_AGENTS
 from pkf.classifier import Intent, classify_intent, classify_intent_llm
-from pkf.config import RELEVANCE_THRESHOLD, model_for_task, rate_limit_cooldown_seconds
+from pkf.config import RELEVANCE_THRESHOLD, agent_provider_override, model_for_task, rate_limit_cooldown_seconds
 from pkf.graph.project import ProjectGraph
 from pkf.judge import evaluate_build_goal
 from pkf.memory.persistent import append_memory_note, read_memory_context, write_checkpoint
@@ -21,10 +21,11 @@ from pkf.spec.updater import append_build_changelog, save_platform_spec
 from pkf.tools.impl import verify_build as verify_build_tool
 from pkf.workspace_index import begin_build_session
 from pkf.tools.registry import ToolRegistry, tools_for_agent
-from pkf.workflow.compose import MAX_BUILD_RETRIES, run_brainstorm, verify_ok
+from pkf.workflow.compose import MAX_BUILD_RETRIES, MAX_REVIEW_FIX_CYCLES, run_brainstorm, verify_ok
 from pkf.workflow.cycle import DevCycle, parse_command
-from pkf.workflow.orchestrator import run_build_tasks
-from pkf.workflow.planner import plan_build
+from pkf.workflow.orchestrator import failed_agents, run_build_phases
+from pkf.workflow.planner import group_tasks_into_phases, plan_build, plan_build_llm, plan_fix_tasks
+from pkf.workflow.review import load_latest_review, parse_review_status
 from pkf.workflow.tasks import TaskTracker
 from pkf.projects.manager import slug_from_request
 from pkf.web.preview import preview_info
@@ -60,6 +61,7 @@ class Router:
         self.agents: dict[str, Agent] = {}
         self._event_handler = None
         self._last_user_query = ""
+        self._active_agent: str | None = None
         self.db = None
         self._register_core_agents()
         self._restore_memory_agents()
@@ -81,7 +83,21 @@ class Router:
         }:
             return
         if event_type == "task_progress" and self.ui_mode:
-            await self._emit_progress(payload.get("message", "Trabalhando…"))
+            msg = payload.get("message", "Trabalhando…")
+            agent = payload.get("agent")
+            provider = payload.get("provider")
+            if agent:
+                msg = f"{msg} ({agent} · {provider or self.provider_name})"
+            await self._emit_progress(msg)
+            if self._event_handler:
+                await self._event_handler(
+                    {
+                        "type": "active_agent",
+                        "agent": agent,
+                        "provider": provider or self.provider_name,
+                        "model": payload.get("model") or self.model_to_use,
+                    }
+                )
             return
         if self._event_handler:
             await self._event_handler({"type": event_type, **payload})
@@ -115,7 +131,8 @@ class Router:
             "spec_preview": preview,
             "project_preview": project_preview,
             "project_graph": graph.to_dict() if not self.ui_mode else None,
-            "last_agent": "pkf" if self.ui_mode else self.cycle.last_agent,
+            "last_agent": self.cycle.last_agent or self._active_agent or "pkf",
+            "active_agent": self._active_agent,
             "agents": list(AGENT_PROMPTS),
             "goal": self.cycle.goal,
             "tasks": tasks,
@@ -165,6 +182,22 @@ class Router:
         self.cycle.persist(self.workspace.root)
         self._register_core_agents()
 
+    def bind_agent_provider(self, agent_name: str) -> None:
+        """Aplica override de provider/modelo por agente antes de process()."""
+        agent = self.agents.get(agent_name)
+        if not agent:
+            return
+        override = agent_provider_override(agent_name)
+        if override:
+            client, config = self.pool.get_client(override)
+            agent.client = client
+            agent.model = model_for_task(agent_name, config.model)
+        else:
+            client, config = self.pool.get_client()
+            agent.client = client
+            agent.model = model_for_task(agent_name, config.model)
+        self._active_agent = agent_name
+
     def _register_core_agents(self) -> None:
         context = self.workspace.scan_summary()
         memory_ctx = read_memory_context(self.workspace.root)
@@ -177,7 +210,7 @@ class Router:
             if skills:
                 system_prompt += f"\n\nSkills e templates relevantes:\n{skills}"
             core, optional = tools_for_agent(name)
-            tools = ToolRegistry(self.workspace, core, optional)
+            tools = ToolRegistry(self.workspace, core, optional, router=self)
             cls = DeveloperAgent if name in DEVELOPER_AGENTS else Agent
             agent_model = model_for_task(name, self.model_to_use)
             self.agents[name] = cls(
@@ -298,6 +331,7 @@ class Router:
         await self.emit("routing", agent=agent.name, kind=intent.kind, source=intent.source)
         self.cycle.last_agent = agent.name
         self.cycle.persist(self.workspace.root)
+        self.bind_agent_provider(agent.name)
         reply = await agent.process(payload)
         self.cycle = DevCycle.load(self.workspace.root)
         preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
@@ -330,7 +364,7 @@ class Router:
             self.workspace.root,
             "BUILD",
             self.cycle.active_spec,
-            "Iniciando pipeline compose",
+            "Iniciando pipeline em fases",
         )
 
         if self.ui_mode:
@@ -344,28 +378,40 @@ class Router:
                 brainstorm[:2000],
             )
 
-        tasks = plan_build(self.workspace.root, self.cycle.active_spec)
+        tasks = await plan_build_llm(self.client, self.model_to_use, self.workspace.root, self.cycle.active_spec)
+        if not tasks:
+            tasks = plan_build(self.workspace.root, self.cycle.active_spec)
+        phases = group_tasks_into_phases(tasks)
+
         tracker = TaskTracker(self.workspace.root, db_context=self.db)
         tracker.reset_for_build(self.cycle.active_spec, [t.agent for t in tasks])
         await self.emit_task_tree(tracker)
         await self.emit(
             "plan",
-            tasks=[{"agent": t.agent, "node": t.node_id} for t in tasks],
+            tasks=[{"agent": t.agent, "node": t.node_id, "phase": t.phase} for t in tasks],
         )
 
         begin_build_session(self.workspace)
         if self.ui_mode:
-            await self._emit_progress("Estou implementando seu projeto…")
+            await self._emit_progress("Implementando em fases (backend → lógica → frontend)…")
 
         results: list[tuple[str, str]] = []
         verify = ""
         attempt = 0
+        pending_agents: set[str] | None = None
         while attempt < MAX_BUILD_RETRIES:
             attempt += 1
             if attempt > 1:
                 tracker.set_phase_status("T2", "running")
-                await self._emit_progress(f"Tentativa {attempt}/{MAX_BUILD_RETRIES}…")
-            results = await run_build_tasks(self, tasks, tracker)
+                await self._emit_progress(
+                    f"Reexecutando agentes com falha (tentativa {attempt}/{MAX_BUILD_RETRIES})…"
+                )
+            results = await run_build_phases(
+                self,
+                phases,
+                tracker,
+                only_agents=pending_agents,
+            )
             errors = [reply for _, reply in results if reply.startswith("Erro:")]
             verify = verify_build_tool(self.workspace)
             await self.emit("build_verify", result=verify)
@@ -376,6 +422,7 @@ class Router:
             await self.emit_task_tree(tracker)
             if ok:
                 break
+            pending_agents = failed_agents(results) or {t.agent for t in tasks}
 
         errors = [reply for _, reply in results if reply.startswith("Erro:")]
         if errors or not verify_ok(verify):
@@ -384,7 +431,7 @@ class Router:
                     "Encontrei dificuldades ao implementar parte do projeto. "
                     "Descreva o que deseja ajustar e tento de novo."
                 )
-            lines = ["## Build paralelo com erros", "", verify, ""]
+            lines = ["## Build em fases com erros", "", verify, ""]
             for agent_name, reply in results:
                 lines.append(f"### {agent_name}")
                 lines.append(reply[:1500])
@@ -406,40 +453,47 @@ class Router:
             verify,
             self.cycle.goal,
         )
+
         tracker.set_phase_status("T4", "running")
-        review_reply = await self._auto_review()
-        tracker.set_phase_status("T4", "done")
+        review_ok, review_reply = await self._run_review_fix_loop(tracker)
+        tracker.set_phase_status("T4", "done" if review_ok else "failed")
+        tracker.set_phase_status("T5", "done" if review_ok and approved else "failed")
         await self.emit_task_tree(tracker)
         write_checkpoint(
             self.workspace.root,
             "REVIEW",
             self.cycle.active_spec,
-            judge_note,
+            review_reply[:2000] if review_reply else judge_note,
         )
         append_memory_note(
             self.workspace.root,
             "Build",
-            f"Spec: {self.cycle.active_spec}\nVerificação: {verify[:400]}\nJuiz: {judge_note}",
+            f"Spec: {self.cycle.active_spec}\nVerificação: {verify[:400]}\nJuiz: {judge_note}\nReview OK: {review_ok}",
         )
 
         if self.ui_mode:
             info = preview_info(self.workspace)
+            if not review_ok:
+                return (
+                    "Implementei o projeto, mas o review ainda aponta pendências após correções automáticas.\n\n"
+                    "Use **Ver projeto** e descreva o que ajustar, ou rode `/review` manualmente."
+                )
             if not approved:
                 return (
-                    "Implementei parte do projeto, mas a meta ainda não foi totalmente atingida.\n\n"
+                    "Implementação revisada e aprovada pelo revisor, mas a meta (/goal) ainda não foi totalmente atingida.\n\n"
                     f"{judge_note}\n\nUse **Ver projeto** e diga o que ajustar."
                 )
             if info.get("available"):
                 return (
-                    "Pronto! Seu projeto foi implementado, verificado e revisado.\n\n"
-                    "Use **Ver projeto** no topo para abrir o preview ao lado ou no navegador."
+                    "Pronto! Projeto implementado em fases, verificado e aprovado no review.\n\n"
+                    "Use **Ver projeto** no topo para abrir o preview."
                 )
             return (
-                "Implementação concluída e revisada. Assim que houver uma página (index.html), "
+                "Implementação concluída e aprovada no review. Assim que houver index.html, "
                 "o link **Ver projeto** aparecerá no topo."
             )
 
-        lines = ["## Build paralelo concluído", "", verify, ""]
+        lines = ["## Build em fases concluído", "", verify, ""]
         for agent_name, reply in results:
             lines.append(f"### {agent_name}")
             lines.append(reply[:1500])
@@ -447,14 +501,43 @@ class Router:
 
         lines.append("## Juiz (/goal)")
         lines.append(judge_note)
-        lines.append("## Review automático")
+        lines.append("## Review (loop até aprovação)")
         lines.append(review_reply or "")
+        lines.append(f"\nReview aprovado: {'sim' if review_ok else 'não'}")
         return "\n".join(lines)
+
+    async def _run_review_fix_loop(self, tracker: TaskTracker) -> tuple[bool, str]:
+        """Review → fix → review até aprovação ou esgotar ciclos."""
+        last_reply = ""
+        for cycle in range(1, MAX_REVIEW_FIX_CYCLES + 1):
+            if self.ui_mode:
+                await self._emit_progress(f"Review automático ({cycle}/{MAX_REVIEW_FIX_CYCLES})…")
+            last_reply = await self._auto_review()
+            saved = load_latest_review(self.workspace.root, self.cycle.active_spec)
+            review_text = saved or last_reply
+            approved, issues = parse_review_status(review_text)
+            if approved:
+                return True, review_text or last_reply
+            if cycle >= MAX_REVIEW_FIX_CYCLES:
+                break
+            if self.ui_mode:
+                await self._emit_progress(
+                    f"Corrigindo {len(issues)} problema(s) apontados no review…"
+                )
+            fix_tasks = plan_fix_tasks(self.cycle.active_spec, issues)
+            fix_phases = group_tasks_into_phases(fix_tasks)
+            await run_build_phases(self, fix_phases, tracker)
+            verify = verify_build_tool(self.workspace)
+            if not verify_ok(verify):
+                last_reply += "\n\nVerificação pós-correção falhou."
+
+        return False, last_reply
 
     async def _auto_review(self) -> str:
         self.cycle.phase = "REVIEW"
         self.cycle.last_agent = "reviewer"
         self.cycle.persist(self.workspace.root)
+        self.bind_agent_provider("reviewer")
         await self.emit("routing", agent="reviewer", kind="command", source="auto")
         _, review_payload = self.cycle.apply("/review", "command", "")
         return await self.agents["reviewer"].process(review_payload) or ""
@@ -511,7 +594,7 @@ def help_text() -> str:
     return """
 Comandos:
   /spec [nome]     Abre ou continua a especificação
-  /build [nome]    Implementa a spec (agentes em paralelo + review auto)
+  /build [nome]    Implementa a spec (fases + review→fix loop)
   /review          Revisa o código contra a spec
   /goal [meta]     Define condição de parada para o build
   /status          Mostra fase, spec e agente
