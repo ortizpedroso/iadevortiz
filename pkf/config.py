@@ -121,7 +121,7 @@ def providers() -> dict[str, ProviderConfig]:
             name="openai",
             base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             api_key=openai_key,
-            model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+            model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
         )
     if ninerouter_enabled():
         configs["ninerouter"] = ProviderConfig(
