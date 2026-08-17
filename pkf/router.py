@@ -366,19 +366,6 @@ class Router:
             await self.emit("spec_preview", spec=preview)
         return self._user_reply(reply) if self.ui_mode and reply else reply
 
-    async def _auto_approve_spec(self) -> None:
-        name = self.cycle.active_spec
-        if not name:
-            return
-        preview = active_spec_preview(self.workspace.root, name)
-        if not preview or preview.get("status") == "approved":
-            return
-        confirmed = preview.get("suggested_stack") or {}
-        approve_spec(self.workspace.root, name, confirmed)
-        self.cycle = DevCycle.load(self.workspace.root)
-        self.cycle.spec_status = "approved"
-        self.cycle.persist(self.workspace.root)
-
     async def _run_parallel_build(self, remainder: str) -> str:
         import os
 
