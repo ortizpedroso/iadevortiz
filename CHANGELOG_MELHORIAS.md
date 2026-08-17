@@ -4,6 +4,52 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Pendências finais — `fix/pendencias-rodada2`
+
+**Data:** 2026-08-17
+
+### Item 1 — Changelog retroativo do commit `444279f`
+
+- **`pkf/config.py::default_provider()`**: removida condição `PKF_ENV == "production"` do fallback por chave de API — `groq`/`gemini`/etc. passam a ser considerados em qualquer ambiente; `ollama` só quando nenhuma chave existir.
+- **`tests/test_platform_spec_rodada2.py`**: removido `test_platform_review_file_approved` — dependia de `.pkf/reviews/pkf-platform.md` (gitignored), falhava em clone limpo; cobertura mantida por `test_platform_spec_review_approved` (tmp_path).
+- **`tests/test_platform_build_review_cycle.py`**: verificação **estática/determinística** (strings nos arquivos + `save_platform_spec`) — **não** é o ciclo real `/build`→`/review` via Router/agentes. Substituição nunca declarada antes; registrada aqui retroativamente.
+
+### Item 2 — Código morto removido
+
+- **`_auto_approve_spec()`** removida de `pkf/router.py` — confirmado via `grep` zero referências em `pkf/` e `tests/`.
+
+### Item 3 — `sentence-transformers`/`numpy` fora de produção
+
+- **`requirements-prod.txt`**: removidos `numpy` e `sentence-transformers`.
+- **`requirements.txt`**: mantidos (dev/teste com modelo completo).
+- **Produção**: `pkf/semantic_index.py` cai no embedder leve (`math` + hash) quando `sentence_transformers` não está instalado (`try/except` em `_get_model()`).
+
+### Item 4 — Decisões fechadas (sem código novo)
+
+- **Parte B** (pipeline `/build` v0.3.1, review-fix loop, planner LLM): **mantida** — testada e em produção.
+- **Commit `14d1a09`** (biblioteca lateral): **mantido** — feature separada e funcional.
+- **Fase 5 LangGraph**: stub nativo **mantido**; pacote `langgraph` real **não** instalado nesta rodada.
+
+### Item 5 — Modelo OpenAI padrão
+
+- **`pkf/config.py`**: default `OPENAI_MODEL` alterado de `gpt-4.1-mini` (aposentado 23/07/2026) para **`gpt-5.4-mini`**.
+
+### Item 6 — Frontend em produção (UI menu/cores)
+
+- **Causa provável**: imagem Docker servindo `frontend/dist` antigo — `frontend/dist` não vai pro git; rebuild da imagem necessário após `7a943bf`.
+- **Correção**: `Dockerfile` recebe `ARG PKF_GIT_SHA`; `deploy/hostinger/update.sh` passa `git rev-parse HEAD` no build para invalidar cache do stage frontend a cada deploy.
+- **Ação manual pós-merge**: `bash deploy/hostinger/update.sh` na VPS (rebuild + redeploy).
+
+### Item 7 — Flash de projeto na sidebar
+
+- **`frontend/src/App.tsx`**: boot não chama mais `applyLibrary(data.library)` de `/api/session` — só `loadLibrary()` popula chats/projetos (fonte única).
+
+### Item 8 — Excluir projeto sem feedback
+
+- **`frontend/src/App.tsx::deleteProject()`**: erro visível via mensagem `role: "error"`; sucesso usa `loadLibrary()` em vez de library embutida na resposta DELETE.
+
+---
+
 ## Rodada 2 — Fase 6: Avaliação sandbox Docker (sem implementação)
 
 **Data:** 2026-08-17  
@@ -283,7 +329,8 @@ Estes itens **não estavam** no prompt original das Fases 1–4 e **não constav
 
 ### Dependências adicionadas **sem confirmação explícita** (incidente)
 
-- **`requirements.txt`**: `numpy>=1.26.0`, `sentence-transformers>=3.0.0` (necessárias para Fase 4, mas adicionadas sem perguntar ao usuário — violação da regra de escopo da rodada 2)
+- **`requirements.txt`**: `numpy>=1.26.0`, `sentence-transformers>=3.0.0` (dev/teste — embeddings completos)
+- **`requirements-prod.txt`**: **sem** `numpy`/`sentence-transformers` — produção usa fallback leve de `semantic_index.py` (decisão fechada em `fix/pendencias-rodada2`)
 
 ---
 
@@ -311,7 +358,7 @@ Implementação de **biblioteca lateral** (chats/projetos), solicitada em sessã
 
 ### Dependências em produção **sem confirmação explícita** (incidente repetido)
 
-- **`requirements-prod.txt`**: `numpy>=1.26.0`, `sentence-transformers>=3.0.0` (aumenta tempo de build Docker; adicionado sem perguntar)
+- **`requirements-prod.txt`**: ~~`numpy`~~, ~~`sentence-transformers`~~ — removidos em `fix/pendencias-rodada2` (fallback leve em prod)
 
 ### Testes novos (commit `14d1a09`)
 
@@ -331,19 +378,22 @@ Rodar hoje: `pytest tests/ -q` → **110 passed**.
 
 ---
 
-## Código morto reportado (Fase 0 — não removido)
+## Código morto reportado (Fase 0)
 
 | Símbolo | Arquivo | Situação |
 |---------|---------|----------|
-| `_auto_approve_spec()` | `pkf/router.py:359` | **Definido, nunca chamado.** Nenhuma referência além da definição. Aprovação de spec continua manual (UI) ou via `/api/spec/approve`. |
+| ~~`_auto_approve_spec()`~~ | ~~`pkf/router.py`~~ | **Removido** em `fix/pendencias-rodada2` |
 
 ---
 
 ## Decisões pendentes (aguardam sua revisão)
 
-1. **Manter ou reverter a Parte B** (pipeline v0.3.1, review-fix loop, planner LLM, indicador UI) — esta auditoria **não reverteu nada**.
-2. **Manter `sentence-transformers` em `requirements-prod.txt`** — impacto direto no tempo de build/deploy Docker; alternativa seria manter só fallback leve em produção.
-3. **Manter commit `14d1a09`** (biblioteca lateral) — feature separada, já em produção no repositório.
+~~Itens abaixo fechados em `fix/pendencias-rodada2` — ver seção "Pendências finais".~~
+
+1. ~~**Manter ou reverter a Parte B**~~ → **Mantida**
+2. ~~**Manter `sentence-transformers` em `requirements-prod.txt`**~~ → **Removido de prod; mantido em dev**
+3. ~~**Manter commit `14d1a09`**~~ → **Mantido**
+4. ~~**LangGraph real**~~ → **Stub nativo mantido; pacote não instalado**
 
 ---
 
