@@ -49,6 +49,7 @@ def test_build_slots_ninerouter_first(monkeypatch):
 
 
 def test_ninerouter_skipped_on_missing_key(monkeypatch):
+    monkeypatch.delenv("PKF_ENV", raising=False)
     monkeypatch.setenv("NINEROUTER_URL", "http://127.0.0.1:20128")
     monkeypatch.setenv("GROQ_API_KEY", "g")
     monkeypatch.delenv("NINEROUTER_KEY", raising=False)
@@ -64,6 +65,7 @@ def test_ninerouter_skipped_on_missing_key(monkeypatch):
 
 
 def test_ninerouter_skipped_on_http_401(monkeypatch):
+    monkeypatch.delenv("PKF_ENV", raising=False)
     monkeypatch.setenv("NINEROUTER_URL", "http://127.0.0.1:20128")
     monkeypatch.setenv("NINEROUTER_KEY", "bad-key")
     monkeypatch.setenv("GROQ_API_KEY", "g")

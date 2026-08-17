@@ -145,17 +145,16 @@ def default_provider() -> str:
         skip, _reason = ninerouter_should_skip()
         if not skip:
             return "ninerouter"
-    if os.getenv("PKF_ENV") == "production":
-        if os.getenv("GROQ_API_KEY"):
-            return "groq"
-        if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
-            return "gemini"
-        if os.getenv("MOONSHOT_API_KEY"):
-            return "kimi"
-        if os.getenv("OPENAI_API_KEY"):
-            return "openai"
-        if os.getenv("DEEPSEEK_API_KEY"):
-            return "deepseek"
+    if os.getenv("GROQ_API_KEY"):
+        return "groq"
+    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+        return "gemini"
+    if os.getenv("MOONSHOT_API_KEY"):
+        return "kimi"
+    if os.getenv("OPENAI_API_KEY"):
+        return "openai"
+    if os.getenv("DEEPSEEK_API_KEY"):
+        return "deepseek"
     return "ollama"
 
 

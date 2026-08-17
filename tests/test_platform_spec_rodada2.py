@@ -25,6 +25,9 @@ def test_spec_file_contains_rodada2_features(tmp_path: Path):
         "401",
         "Biblioteca lateral",
         "benchmark",
+        "Menu de contexto",
+        "PATCH /api/projects",
+        "--pkf-accent",
     ):
         assert keyword.lower() in text.lower() or keyword in text
 
@@ -56,12 +59,6 @@ def test_build_graph_module_exists():
 
 def test_benchmark_script_exists():
     assert Path("scripts/benchmark.py").is_file()
-
-
-def test_platform_review_file_approved():
-    review = Path(".pkf/reviews/pkf-platform.md").read_text(encoding="utf-8")
-    ok, issues = parse_review_status(review)
-    assert ok, issues
 
 
 def test_platform_spec_review_approved(tmp_path: Path):

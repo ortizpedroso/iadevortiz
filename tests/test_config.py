@@ -12,7 +12,15 @@ def test_production_defaults_to_ninerouter_when_url_set(monkeypatch):
 
 
 def test_production_defaults_to_groq_when_key_set(monkeypatch):
-    monkeypatch.setenv("PKF_ENV", "production")
+    monkeypatch.delenv("PKF_ENV", raising=False)
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.delenv("PKF_PROVIDER", raising=False)
+    monkeypatch.delenv("NINEROUTER_URL", raising=False)
+    assert default_provider() == "groq"
+
+
+def test_default_provider_falls_back_to_groq_without_production_env(monkeypatch):
+    monkeypatch.delenv("PKF_ENV", raising=False)
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
     monkeypatch.delenv("PKF_PROVIDER", raising=False)
     monkeypatch.delenv("NINEROUTER_URL", raising=False)
