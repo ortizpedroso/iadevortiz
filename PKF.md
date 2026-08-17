@@ -42,10 +42,45 @@ python -m pkf --ui
 ## Deploy VPS
 
 ```bash
-cd /opt/pkf && git pull && docker compose build pkf && docker compose up -d
+cd /opt/pkf && git pull && bash deploy/hostinger/update.sh
 ```
 
 Inclui PostgreSQL, PKF (`:8765`) e Nginx opcional (`:8080` — evita conflito com Caddy na :80).
+
+## Deploy automático (GitHub Actions)
+
+Todo **push na `main`** dispara o workflow `.github/workflows/deploy.yml`:
+
+1. SSH na VPS
+2. `git pull origin main`
+3. `bash deploy/hostinger/update.sh` (rebuild com `PKF_GIT_SHA` para invalidar cache do frontend)
+4. Health check opcional com retry
+
+### Secrets obrigatórios (cadastro manual, uma única vez)
+
+Em **GitHub → Settings → Secrets and variables → Actions → New repository secret**:
+
+| Secret | Obrigatório | Descrição |
+|---|---|---|
+| `VPS_HOST` | Sim | IP ou hostname da VPS |
+| `VPS_USER` | Sim | Usuário SSH (ex.: `root`) |
+| `VPS_SSH_KEY` | Sim | Chave privada SSH (conteúdo completo do arquivo) |
+| `VPS_PORT` | Não | Porta SSH (padrão `22` se omitido) |
+| `VPS_HEALTHCHECK_URL` | Não | URL pública do health check (ex.: `http://SEU_IP:8765/api/health`) |
+
+O Cursor **não** configura esses secrets — exige acesso à conta GitHub e à chave privada da VPS.
+
+### Recomendação de segurança (não automatizada)
+
+Gere uma chave **dedicada** só para deploy, em vez de reusar a chave pessoal:
+
+```bash
+ssh-keygen -t ed25519 -f deploy_key -C "github-actions-deploy"
+# Na VPS: adicionar deploy_key.pub em ~/.ssh/authorized_keys
+# No GitHub: VPS_SSH_KEY = conteúdo de deploy_key (privada)
+```
+
+Se o secret vazar, revogue só essa chave — sem comprometer a chave pessoal da conta.
 
 ## Comandos
 

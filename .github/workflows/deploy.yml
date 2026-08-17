@@ -1,0 +1,46 @@
+name: Deploy to VPS
+
+"on":
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          command_timeout: 9m
+          script: |
+            set -euo pipefail
+            cd /opt/pkf
+            git pull origin main
+            bash deploy/hostinger/update.sh
+
+      - name: Verify deployment health
+        if: ${{ secrets.VPS_HEALTHCHECK_URL != '' }}
+        run: |
+          set -euo pipefail
+          url="${{ secrets.VPS_HEALTHCHECK_URL }}"
+          for attempt in 1 2 3; do
+            echo "Health check attempt ${attempt}/3: ${url}"
+            if curl -fsS --max-time 30 "${url}"; then
+              echo "Health check OK"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Health check failed after 3 attempts"
+          exit 1

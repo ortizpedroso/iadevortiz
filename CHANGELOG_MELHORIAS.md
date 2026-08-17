@@ -4,6 +4,27 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## CI/CD — Deploy automático via GitHub Actions
+
+**Data:** 2026-08-17
+
+### Implementado
+
+- **`.github/workflows/deploy.yml`**: dispara em push na `main`; SSH via `appleboy/ssh-action@v1.2.0`; executa `git pull` + `deploy/hostinger/update.sh` na VPS; timeout 10 min; health check opcional com 3 tentativas (`VPS_HEALTHCHECK_URL`).
+- **`PKF.md`**: seção "Deploy automático" com lista de Secrets e recomendação de chave SSH dedicada.
+- **`tests/test_deploy_workflow.py`**: validação estrutural + `yaml.safe_load()` quando PyYAML disponível.
+
+### Manual (fora do Cursor)
+
+- Cadastrar Secrets no GitHub: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_PORT` (opcional), `VPS_HEALTHCHECK_URL` (opcional).
+- Gerar chave SSH dedicada na VPS (recomendado).
+
+### Merge `fix/pendencias-rodada2`
+
+- Integrado na `main` via PR #1 (`5639840`).
+
+---
+
 ## Pendências finais — `fix/pendencias-rodada2`
 
 **Data:** 2026-08-17
