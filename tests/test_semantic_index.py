@@ -70,3 +70,24 @@ def test_rebuild_index(tmp_path: Path):
     write_file(ws, "x.py", "def foo():\n    pass\n")
     msg = rebuild_index(ws)
     assert "semântico" in msg.lower() or "chunks" in msg.lower()
+
+
+def test_semantic_fallback_without_sentence_transformers(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("PKF_TEST_SEMANTIC", raising=False)
+    import pkf.semantic_index as si
+
+    si._MODEL = None
+
+    def _missing_model():
+        try:
+            raise ImportError("sentence_transformers unavailable")
+        except ImportError:
+            si._MODEL = "test"
+            return si._MODEL
+
+    monkeypatch.setattr(si, "_get_model", _missing_model)
+    ws = Workspace(tmp_path)
+    write_file(ws, "auth.py", "def login():\n    return True\n")
+    result = semantic_search(ws, "login auth")
+    assert "auth.py" in result
+
