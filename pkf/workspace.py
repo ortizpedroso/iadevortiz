@@ -4,7 +4,12 @@ import asyncio
 from pathlib import Path
 
 from pkf.config import DEFAULT_IGNORES, SECRET_NAMES, SECRET_SUFFIXES
-from pkf.projects.manager import ensure_project, load_active_project, save_active_project
+from pkf.projects.manager import (
+    ensure_project,
+    get_project_display_name,
+    load_active_project,
+    save_active_project,
+)
 
 
 class WorkspaceError(ValueError):
@@ -46,7 +51,9 @@ class Workspace:
 
     @property
     def project_label(self) -> str:
-        return self.project or "(sem projeto ativo)"
+        if not self.project:
+            return "(sem projeto ativo)"
+        return get_project_display_name(self.global_root, self.project)
 
     def resolve(self, rel_path: str) -> Path:
         raw = Path(rel_path)

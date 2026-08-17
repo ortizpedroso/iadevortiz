@@ -15,6 +15,7 @@ REQUIRED_ENDPOINTS = (
     "/api/chats/{chat_id}/activate",
     "/api/chats/{chat_id}/attach",
     "/api/projects/{slug}/activate",
+    "PATCH /api/projects/{slug}",
 )
 
 
@@ -32,6 +33,8 @@ def test_server_exposes_library_routes():
     assert '"/api/chats/{chat_id}/activate"' in source
     assert '"/api/chats/{chat_id}/attach"' in source
     assert '"/api/projects/{slug}/activate"' in source
+    assert '"/api/projects/{slug}"' in source
+    assert "projects_rename" in source or '@app.patch("/api/projects/{slug}")' in source
 
 
 def test_sidebar_frontend_wired():
@@ -41,9 +44,20 @@ def test_sidebar_frontend_wired():
     sidebar_src = (
         Path(__file__).resolve().parents[1] / "frontend" / "src" / "components" / "Sidebar.tsx"
     ).read_text(encoding="utf-8")
-    for prop in ("onSelectChat", "onDeleteChat", "onAttachChat", "onSelectProject", "onDeleteProject", "onNewChat"):
+    for prop in (
+        "onSelectChat",
+        "onDeleteChat",
+        "onAttachChat",
+        "onSelectProject",
+        "onDeleteProject",
+        "onRenameProject",
+        "onNewChat",
+    ):
         assert prop in app_src
         assert prop in sidebar_src
+    assert "⋮" in sidebar_src or "Renomear" in sidebar_src
+    assert "Renomear" in sidebar_src
+    assert "window.confirm" in sidebar_src
 
 
 def test_platform_spec_review_approved(tmp_path: Path):

@@ -44,37 +44,37 @@ export function SpecPanel({ spec, specName, onApproved }: Props) {
   }
 
   return (
-    <aside className="flex w-full flex-col border-t border-[#2e2e2e] bg-[#212121] lg:w-96 lg:border-l lg:border-t-0">
-      <header className="border-b border-[#2e2e2e] px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9b9b9b]">Especificação</p>
+    <aside className="flex w-full flex-col border-t border-[var(--pkf-border)] bg-[var(--pkf-bg-panel)] lg:w-96 lg:border-l lg:border-t-0">
+      <header className="border-b border-[var(--pkf-border)] px-4 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--pkf-muted)]">Especificação</p>
         <h2 className="font-serif text-lg font-semibold">{spec.title || "Spec do projeto"}</h2>
-        <p className="mt-1 text-xs text-[#d97757]">Aguardando aprovação</p>
+        <p className="mt-1 text-xs text-[var(--pkf-accent)]">Aguardando aprovação</p>
       </header>
       <div className="min-h-0 flex-1 overflow-auto px-4 py-3 text-sm leading-relaxed text-[#cfcfcf]">
         <pre className="whitespace-pre-wrap font-sans">{spec.body?.slice(0, 4000) || "—"}</pre>
         {Object.keys(stack).length ? (
           <div className="mt-4 space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#9b9b9b]">Stack</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--pkf-muted)]">Stack</p>
             {Object.entries(stack).map(([key, value]) => (
               <label key={key} className="block text-xs">
-                <span className="text-[#9b9b9b]">{key}</span>
+                <span className="text-[var(--pkf-muted)]">{key}</span>
                 <input
                   value={value}
                   onChange={(e) => setStack((s) => ({ ...s, [key]: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-[#2e2e2e] bg-[#191919] px-2 py-1.5 font-mono text-xs outline-none focus:border-[#d97757]"
+                  className="pkf-input mt-1 w-full font-mono text-xs"
                 />
               </label>
             ))}
           </div>
         ) : null}
       </div>
-      <footer className="border-t border-[#2e2e2e] p-4">
+      <footer className="border-t border-[var(--pkf-border)] p-4">
         {error ? <p className="mb-2 text-xs text-red-300">{error}</p> : null}
         <button
           type="button"
           disabled={busy}
           onClick={approve}
-          className="w-full rounded-xl bg-[#d97757] py-2.5 text-sm font-semibold text-[#191919] hover:brightness-110 disabled:opacity-50"
+          className="w-full rounded-xl bg-[var(--pkf-accent)] py-2.5 text-sm font-semibold text-[var(--pkf-bg-primary)] hover:brightness-110 disabled:opacity-50 pkf-focus-ring"
         >
           {busy ? "Aprovando…" : "Aprovar spec"}
         </button>

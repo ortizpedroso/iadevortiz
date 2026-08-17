@@ -11,16 +11,16 @@ export function MessageList({
   if (!messages.length && !thinking) {
     return (
       <div className="mx-auto max-w-2xl px-4 pt-[12vh] text-center">
-        <h1 className="font-serif text-4xl font-semibold tracking-tight text-[#ececec] md:text-5xl">
+        <h1 className="font-serif text-4xl font-semibold tracking-tight text-[var(--pkf-text)] md:text-5xl">
           O que vamos construir?
         </h1>
-        <p className="mt-4 text-[#9b9b9b]">
+        <p className="mt-4 text-[var(--pkf-muted)]">
           Descreva seu app ou funcionalidade. A PKF especifica, implementa e revisa por você.
         </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-2 text-xs text-[#666]">
-          <span className="rounded-full border border-[#2e2e2e] px-3 py-1">/spec</span>
-          <span className="rounded-full border border-[#2e2e2e] px-3 py-1">/build</span>
-          <span className="rounded-full border border-[#2e2e2e] px-3 py-1">/review</span>
+        <div className="mt-8 flex flex-wrap justify-center gap-2 text-xs text-[var(--pkf-text-dim)]">
+          <span className="rounded-full border border-[var(--pkf-border)] px-3 py-1">/spec</span>
+          <span className="rounded-full border border-[var(--pkf-border)] px-3 py-1">/build</span>
+          <span className="rounded-full border border-[var(--pkf-border)] px-3 py-1">/review</span>
         </div>
       </div>
     );
@@ -35,16 +35,16 @@ export function MessageList({
           <article key={i} className={isUser ? "flex justify-end" : ""} aria-label={isUser ? "Sua mensagem" : "Resposta PKF"}>
             {!isUser ? (
               <div className="mb-2 flex items-center gap-2">
-                <span className="grid h-6 w-6 place-items-center rounded-md bg-[#d97757]/15 text-xs font-bold text-[#d97757]">
+                <span className="grid h-6 w-6 place-items-center rounded-lg bg-[var(--pkf-accent)]/15 text-xs font-bold text-[var(--pkf-accent)]">
                   P
                 </span>
-                <span className="text-xs font-medium text-[#9b9b9b]">{msg.agent && msg.agent !== "pkf" ? msg.agent : "PKF"}</span>
+                <span className="text-xs font-medium text-[var(--pkf-muted)]">{msg.agent && msg.agent !== "pkf" ? msg.agent : "PKF"}</span>
               </div>
             ) : null}
             <div
               className={`text-[15px] leading-relaxed ${
                 isUser
-                  ? "max-w-[85%] rounded-2xl rounded-br-md bg-[#2e2e2e] px-4 py-3 text-[#ececec]"
+                  ? "max-w-[85%] rounded-2xl rounded-br-md bg-[var(--pkf-border)] px-4 py-3 text-[var(--pkf-text)]"
                   : isError
                     ? "rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-red-200"
                     : "pkf-markdown text-[#d4d4d4]"
@@ -59,11 +59,11 @@ export function MessageList({
         );
       })}
       {thinking ? (
-        <div className="flex items-center gap-2 text-sm text-[#9b9b9b]" aria-live="polite">
+        <div className="flex items-center gap-2 text-sm text-[var(--pkf-muted)]" aria-live="polite">
           <span className="inline-flex gap-1">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#d97757]" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#d97757] [animation-delay:150ms]" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#d97757] [animation-delay:300ms]" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--pkf-accent)]" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--pkf-accent)] [animation-delay:150ms]" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--pkf-accent)] [animation-delay:300ms]" />
           </span>
           Trabalhando…
         </div>

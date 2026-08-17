@@ -305,6 +305,16 @@ async def delete_chat_session(
     return new_chat
 
 
+async def rename_project_record(session: AsyncSession, user: User, slug: str, name: str) -> None:
+    result = await session.execute(
+        select(Project).where(Project.user_id == user.id, Project.slug == slug)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        return
+    project.name = name
+
+
 async def delete_project_record(session: AsyncSession, user: User, slug: str) -> None:
     result = await session.execute(
         select(Project).where(Project.user_id == user.id, Project.slug == slug)

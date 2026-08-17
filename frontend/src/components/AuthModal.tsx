@@ -25,15 +25,15 @@ export function AuthModal({ open, onSubmit }: Props) {
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl border border-[#2e2e2e] bg-[#212121] p-6 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-[var(--pkf-border)] bg-[var(--pkf-bg-panel)] p-6 shadow-2xl"
       >
-        <h2 id="auth-title" className="font-serif text-2xl font-semibold text-[#ececec]">
+        <h2 id="auth-title" className="font-serif text-2xl font-semibold text-[var(--pkf-text)]">
           Entrar na PKF
         </h2>
-        <p className="mt-2 text-sm text-[#9b9b9b]">
+        <p className="mt-2 text-sm text-[var(--pkf-muted)]">
           Informe o token de acesso configurado em <code className="font-mono">PKF_AUTH_TOKEN</code>.
         </p>
-        <label htmlFor="auth-token" className="mt-5 block text-xs font-medium uppercase tracking-wide text-[#9b9b9b]">
+        <label htmlFor="auth-token" className="mt-5 block text-xs font-medium uppercase tracking-wide text-[var(--pkf-muted)]">
           Token
         </label>
         <input
@@ -43,13 +43,13 @@ export function AuthModal({ open, onSubmit }: Props) {
           autoFocus
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          className="mt-2 w-full rounded-xl border border-[#2e2e2e] bg-[#191919] px-4 py-3 text-sm outline-none focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/30"
+          className="pkf-input mt-2 w-full px-4 py-3 text-sm"
           placeholder="Bearer token"
         />
         <button
           type="submit"
           disabled={!token.trim()}
-          className="mt-5 w-full rounded-xl bg-[#d97757] py-3 text-sm font-semibold text-[#191919] transition hover:brightness-110 disabled:opacity-40"
+          className="mt-5 w-full rounded-xl bg-[var(--pkf-accent)] py-3 text-sm font-semibold text-[var(--pkf-bg-primary)] transition hover:brightness-110 disabled:opacity-40 pkf-focus-ring"
         >
           Continuar
         </button>

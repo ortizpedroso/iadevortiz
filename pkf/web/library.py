@@ -21,7 +21,15 @@ from pkf.db.repository import (
     list_user_chats,
     list_user_projects,
 )
-from pkf.projects.manager import ensure_project, list_projects, project_dir, save_active_project
+from pkf.projects.manager import (
+    ensure_project,
+    get_project_display_name,
+    list_projects,
+    project_dir,
+    remove_project_name,
+    save_active_project,
+    save_project_name,
+)
 from pkf.workspace import Workspace
 
 
@@ -180,11 +188,20 @@ def _file_list_projects(global_root: Path, active_slug: str | None) -> list[dict
     return [
         {
             "slug": slug,
-            "name": slug.replace("-", " ").title(),
+            "name": get_project_display_name(global_root, slug),
             "is_active": slug == active_slug,
         }
         for slug in list_projects(global_root)
     ]
+
+
+def _validate_project_name(name: str) -> str:
+    name = name.strip()
+    if not name:
+        raise ValueError("Nome inválido")
+    if len(name) > 120:
+        raise ValueError("Nome muito longo")
+    return name
 
 
 async def library_snapshot(workspace: Workspace, db: DbContext | None = None) -> dict:
@@ -205,7 +222,7 @@ async def library_snapshot(workspace: Workspace, db: DbContext | None = None) ->
                 projects.append(
                     {
                         "slug": slug,
-                        "name": slug.replace("-", " ").title(),
+                        "name": get_project_display_name(workspace.global_root, slug),
                         "is_active": slug == active_slug,
                     }
                 )
@@ -390,6 +407,30 @@ async def attach_chat(
             workspace.clear_project()
 
 
+async def rename_project(
+    workspace: Workspace,
+    slug: str,
+    name: str,
+    db: DbContext | None = None,
+) -> None:
+    slug = _validate_slug(slug)
+    display_name = _validate_project_name(name)
+    if database_enabled() and db:
+        from pkf.db.repository import rename_project_record
+
+        await db.setup()
+        factory = get_session_factory()
+        async with factory() as session:
+            user = await ensure_default_user(session)
+            await rename_project_record(session, user, slug, display_name)
+            await session.commit()
+
+    project_path = _safe_project_path(workspace.global_root, slug)
+    if not project_path.is_dir():
+        raise ValueError("Projeto não encontrado")
+    save_project_name(workspace.global_root, slug, display_name)
+
+
 async def delete_project(workspace: Workspace, slug: str, db: DbContext | None = None) -> None:
     slug = _validate_slug(slug)
     if database_enabled() and db:
@@ -411,6 +452,7 @@ async def delete_project(workspace: Workspace, slug: str, db: DbContext | None =
     project_path = _safe_project_path(global_root, slug)
     if project_path.is_dir():
         shutil.rmtree(project_path)
+    remove_project_name(global_root, slug)
     if workspace.project == slug:
         workspace.clear_project()
         save_active_project(global_root, None)

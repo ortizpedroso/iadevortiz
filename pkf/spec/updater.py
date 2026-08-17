@@ -85,9 +85,11 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 ## UI / UX
 
 - **Sidebar esquerda**: seções Chats e Projetos (criar, selecionar, excluir, anexar projeto ao chat)
+- **Menu de contexto em Projetos**: ícone ⋮ com Renomear (inline) e Excluir (com confirmação)
+- **Tema escuro consolidado**: variáveis CSS (`--pkf-bg-primary`, `--pkf-accent`, etc.) e estados hover/focus consistentes
 - Indicador no header: agente ativo · provider · modelo
 - Paleta escura (#191919, accent #d97757)
-- Acessibilidade: skip link, aria-live, reduced motion
+- Acessibilidade: skip link, aria-live, reduced motion, `:focus-visible` com acento
 
 ## API biblioteca
 
@@ -99,6 +101,7 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 | `DELETE /api/chats/{id}` | Exclui chat |
 | `POST /api/chats/{id}/attach` | Anexa ou desanexa projeto |
 | `POST /api/projects/{slug}/activate` | Ativa projeto |
+| `PATCH /api/projects/{slug}` | Renomeia nome de exibição (slug inalterado) |
 | `DELETE /api/projects/{slug}` | Exclui projeto |
 
 ## Configuração (rodada 2)

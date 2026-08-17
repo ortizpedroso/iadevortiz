@@ -12,7 +12,9 @@ from pkf.web.library import (
     delete_project,
     library_snapshot,
     persist_file_messages,
+    rename_project,
 )
+from pkf.projects.manager import ensure_project
 from pkf.workspace import Workspace
 
 
@@ -125,6 +127,43 @@ async def test_delete_active_chat_realigns_workspace(ws: Workspace):
 async def test_library_rejects_path_traversal_slug(ws: Workspace):
     with pytest.raises(ValueError):
         await delete_project(ws, "..")
+
+
+@pytest.mark.asyncio
+async def test_library_rename_project_file_mode(ws: Workspace):
+    from pkf.web.library import activate_project
+
+    await activate_project(ws, "meu-app")
+    await rename_project(ws, "meu-app", "Meu App Legal")
+    snap = await library_snapshot(ws)
+    project = next(p for p in snap["projects"] if p["slug"] == "meu-app")
+    assert project["name"] == "Meu App Legal"
+    assert ws.project_label == "Meu App Legal"
+
+
+@pytest.mark.asyncio
+async def test_library_rename_project_db_mode(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+    from pkf.db.context import DbContext
+    from pkf.db.engine import close_db, init_db
+    from pkf.web.library import activate_project
+
+    ws = Workspace(tmp_path)
+    ctx = DbContext(ws)
+    await init_db()
+    await activate_project(ws, "db-proj", ctx)
+    await rename_project(ws, "db-proj", "DB Project", ctx)
+    snap = await library_snapshot(ws, ctx)
+    project = next(p for p in snap["projects"] if p["slug"] == "db-proj")
+    assert project["name"] == "DB Project"
+    await close_db()
+
+
+@pytest.mark.asyncio
+async def test_library_rename_rejects_empty_name(ws: Workspace):
+    ensure_project(ws.global_root, "x")
+    with pytest.raises(ValueError):
+        await rename_project(ws, "x", "   ")
 
 
 @pytest.mark.asyncio

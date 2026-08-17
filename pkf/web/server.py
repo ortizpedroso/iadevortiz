@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Body, FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from pkf.config import auth_token
@@ -240,6 +240,25 @@ def create_app(router: Router) -> FastAPI:
                     router.cycle = cycle
             router._register_core_agents()
         return {"ok": True, "session": router.snapshot(), "library": await library_snapshot(router.workspace, history.db_context)}
+
+    @app.patch("/api/projects/{slug}")
+    async def projects_rename(slug: str, payload: dict = Body(default_factory=dict)):
+        history: ChatHistory = app.state.history
+        name = (payload.get("name") or "").strip()
+        if not name:
+            return JSONResponse({"ok": False, "error": "Nome inválido"}, status_code=400)
+        try:
+            async with app.state.lock:
+                from pkf.web.library import rename_project
+
+                await rename_project(router.workspace, slug, name, history.db_context)
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        return {
+            "ok": True,
+            "library": await library_snapshot(router.workspace, history.db_context),
+            "session": router.snapshot(),
+        }
 
     @app.delete("/api/projects/{slug}")
     async def projects_delete(slug: str):

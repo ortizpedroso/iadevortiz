@@ -258,7 +258,6 @@ export default function App() {
   }
 
   async function deleteProject(slug: string) {
-    if (!confirm(`Excluir o projeto "${slug}" e todos os arquivos?`)) return;
     const res = await fetch(`/api/projects/${slug}`, { method: "DELETE", headers: authHeaders() });
     if (!res.ok) return;
     const data = await res.json();
@@ -269,6 +268,18 @@ export default function App() {
       applySession(payload.session, true);
       loadChanges();
     }
+  }
+
+  async function renameProject(slug: string, name: string) {
+    const res = await fetch(`/api/projects/${slug}`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    applyLibrary(data.library);
+    if (data.session) applySession(data.session, true);
   }
 
   const projectName =
@@ -285,7 +296,7 @@ export default function App() {
 
       <a
         href="#main-chat"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded focus:bg-[#d97757] focus:px-3 focus:py-2 focus:text-[#191919]"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded focus:bg-[var(--pkf-accent)] focus:px-3 focus:py-2 focus:text-[var(--pkf-bg-primary)]"
       >
         Ir ao chat
       </a>
@@ -315,14 +326,15 @@ export default function App() {
         onAttachChat={attachChat}
         onSelectProject={selectProject}
         onDeleteProject={deleteProject}
+        onRenameProject={renameProject}
         onNewChat={newChat}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-12 items-center gap-3 border-b border-[#2e2e2e] px-4">
+        <header className="flex min-h-12 items-center gap-3 border-b border-[var(--pkf-border)] px-4">
           <button
             type="button"
-            className="grid h-10 w-10 place-items-center rounded-lg md:hidden"
+            className="pkf-btn-icon grid h-10 w-10 place-items-center rounded-lg md:hidden"
             aria-label="Abrir menu"
             onClick={() => setPanel(panel === "project" ? null : "project")}
           >
@@ -332,13 +344,13 @@ export default function App() {
             <div className="flex items-center gap-2">
               <span
                 className={`h-2 w-2 shrink-0 rounded-full ${
-                  busy ? "bg-[#d97757]" : status === "Pronto" ? "bg-emerald-500" : "bg-[#666]"
+                  busy ? "bg-[var(--pkf-accent)]" : status === "Pronto" ? "bg-emerald-500" : "bg-[var(--pkf-text-dim)]"
                 }`}
               />
-              <span className="text-[#9b9b9b]">{busy ? "Trabalhando…" : status}</span>
+              <span className="text-[var(--pkf-muted)]">{busy ? "Trabalhando…" : status}</span>
             </div>
             {(activeAgent || session.provider) && busy ? (
-              <span className="truncate text-xs text-[#666]">
+              <span className="truncate text-xs text-[var(--pkf-text-dim)]">
                 {activeAgent || session.last_agent || "pkf"}
                 {" · "}
                 {activeProvider || session.provider || "—"}

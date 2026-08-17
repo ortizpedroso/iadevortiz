@@ -35,6 +35,48 @@ def list_projects(global_root: Path) -> list[str]:
     return sorted(p.name for p in base.iterdir() if p.is_dir())
 
 
+def _project_names_path(global_root: Path) -> Path:
+    return pkf_dir(global_root) / "projects" / "names.json"
+
+
+def load_project_names(global_root: Path) -> dict[str, str]:
+    path = _project_names_path(global_root)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_project_name(global_root: Path, slug: str, name: str) -> None:
+    names = load_project_names(global_root)
+    names[slug] = name
+    path = _project_names_path(global_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(names, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def remove_project_name(global_root: Path, slug: str) -> None:
+    names = load_project_names(global_root)
+    if slug in names:
+        del names[slug]
+        path = _project_names_path(global_root)
+        if names:
+            path.write_text(json.dumps(names, ensure_ascii=False, indent=2), encoding="utf-8")
+        elif path.exists():
+            path.unlink()
+
+
+def default_project_name(slug: str) -> str:
+    return slug.replace("-", " ").title()
+
+
+def get_project_display_name(global_root: Path, slug: str) -> str:
+    return load_project_names(global_root).get(slug) or default_project_name(slug)
+
+
 def load_active_project(global_root: Path) -> str | None:
     path = pkf_dir(global_root) / "project.json"
     if not path.exists():

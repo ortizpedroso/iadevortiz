@@ -8,15 +8,15 @@ type Props = {
 
 export function IconRail({ panel, onPanel, hasSpec, previewAvailable, onPreview }: Props) {
   const btn =
-    "grid h-11 w-11 place-items-center rounded-xl text-[#9b9b9b] transition hover:bg-[#2e2e2e] hover:text-[#ececec] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#d97757]";
-  const active = "bg-[#2e2e2e] text-[#ececec]";
+    "grid h-11 w-11 place-items-center rounded-xl text-[var(--pkf-muted)] transition hover:bg-[var(--pkf-border)] hover:text-[var(--pkf-text)] pkf-focus-ring";
+  const active = "bg-[var(--pkf-border)] text-[var(--pkf-text)]";
 
   return (
     <nav
       aria-label="Navegação principal"
-      className="hidden w-14 shrink-0 flex-col items-center gap-2 border-r border-[#2e2e2e] bg-[#141414] py-4 md:flex"
+      className="hidden w-14 shrink-0 flex-col items-center gap-2 border-r border-[var(--pkf-border)] bg-[var(--pkf-bg-rail)] py-4 md:flex"
     >
-      <div className="mb-2 grid h-9 w-9 place-items-center rounded-lg bg-[#d97757]/15 text-sm font-bold text-[#d97757]">
+      <div className="mb-2 grid h-9 w-9 place-items-center rounded-lg bg-[var(--pkf-accent)]/15 text-sm font-bold text-[var(--pkf-accent)]">
         P
       </div>
       <button
