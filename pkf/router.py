@@ -8,7 +8,7 @@ from pkf.agents.base import Agent
 from pkf.agents.developer import DeveloperAgent
 from pkf.agents.prompts import AGENT_PROMPTS, DEVELOPER_AGENTS
 from pkf.classifier import Intent, classify_intent, classify_intent_llm
-from pkf.config import RELEVANCE_THRESHOLD, agent_provider_override, model_for_task, rate_limit_cooldown_seconds
+from pkf.config import RELEVANCE_THRESHOLD, agent_provider_override, agent_uses_quality_tier, model_for_task, rate_limit_cooldown_seconds
 from pkf.graph.project import ProjectGraph
 from pkf.judge import evaluate_build_goal
 from pkf.memory.persistent import append_memory_note, read_memory_context, write_checkpoint
@@ -47,6 +47,7 @@ class Router:
         self.workspace = workspace
         self.ui_mode = ui_mode
         self.pool = provider_pool or ProviderPool.create(start=provider_name)
+        self._warn_ninerouter_auth_if_needed()
         self.fallback_provider = fallback_provider
         if client is None:
             client, config = self.pool.get_client()
@@ -66,6 +67,15 @@ class Router:
         self._register_core_agents()
         self._restore_memory_agents()
         save_platform_spec(workspace.root)
+
+    def _warn_ninerouter_auth_if_needed(self) -> None:
+        from pkf.ninerouter import ninerouter_auth_warning, ninerouter_enabled, ninerouter_should_skip
+
+        if not ninerouter_enabled():
+            return
+        skip, reason = ninerouter_should_skip()
+        if skip:
+            print(ninerouter_auth_warning(reason))
 
     def set_event_handler(self, handler) -> None:
         self._event_handler = handler
@@ -190,12 +200,12 @@ class Router:
         override = agent_provider_override(agent_name)
         if override:
             client, config = self.pool.get_client(override)
-            agent.client = client
-            agent.model = model_for_task(agent_name, config.model)
+        elif agent_uses_quality_tier(agent_name):
+            client, config = self.pool.get_client_for_agent(agent_name)
         else:
             client, config = self.pool.get_client()
-            agent.client = client
-            agent.model = model_for_task(agent_name, config.model)
+        agent.client = client
+        agent.model = model_for_task(agent_name, config.model)
         self._active_agent = agent_name
 
     def _register_core_agents(self) -> None:
@@ -370,6 +380,12 @@ class Router:
         self.cycle.persist(self.workspace.root)
 
     async def _run_parallel_build(self, remainder: str) -> str:
+        import os
+
+        if os.getenv("PKF_USE_LANGGRAPH_BUILD", "").strip() in {"1", "true", "yes"}:
+            from pkf.workflow.build_graph import run_build_graph
+
+            return await run_build_graph(self, remainder)
         self.cycle.phase = "BUILD"
         if remainder:
             self.cycle.set_spec(remainder)

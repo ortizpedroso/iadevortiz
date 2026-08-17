@@ -62,7 +62,12 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - UI Vite + React 19 + Tailwind 4: rail, painel spec, preview, indicador agente/provider
 - **Biblioteca lateral**: listagem de chats e projetos — criar, ativar, excluir, anexar chat↔projeto
 - Modal de autenticação (`PKF_AUTH_TOKEN`); health público reduzido
-- Pool híbrido: **9Router primário** + **router nativo fallback**
+- Pool híbrido: **9Router primário por padrão** (quando `NINEROUTER_URL` definida) + **router nativo fallback**
+- Skip proativo 9Router em **401/chave ausente** — aviso no boot, fallback Groq/Gemini
+- **Headroom proxy** opt-in (`PKF_HEADROOM_PROXY_URL`) — compressão de contexto via proxy OpenAI-compatible
+- **Tier de qualidade** (`PKF_TIER_QUALITY`) — Claude via 9Router/gateway só para `architect` e `reviewer`
+- **Build grafo piloto** (`PKF_USE_LANGGRAPH_BUILD=1`) — pipeline /build alternativo em `build_graph.py`
+- **Benchmark interno** (`scripts/benchmark.py`) — specs de referência, saída JSON/tabela (mock)
 - **Provider/modelo por agente** via `PKF_<AGENT>_PROVIDER` e `PKF_<AGENT>_MODEL`
 - DeepSeek-R1 reasoning (architect, reviewer, logic)
 - PostgreSQL, memória persistente, skills BM25, juiz /goal
@@ -95,6 +100,23 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 | `POST /api/chats/{id}/attach` | Anexa ou desanexa projeto |
 | `POST /api/projects/{slug}/activate` | Ativa projeto |
 | `DELETE /api/projects/{slug}` | Exclui projeto |
+
+## Configuração (rodada 2)
+
+| Variável | Função |
+|---|---|
+| `PKF_HEADROOM_PROXY_URL` | Proxy Headroom (opt-in) |
+| `NINEROUTER_URL` | 9Router como primário automático |
+| `NINEROUTER_KEY` | Chave sk-... do dashboard 9Router |
+| `PKF_TIER_QUALITY` | Provedor tier qualidade (ex.: `ninerouter`) |
+| `PKF_QUALITY_MODEL` | Modelo Claude (ex.: `kr/claude-sonnet-4.5`) |
+| `PKF_USE_LANGGRAPH_BUILD` | `1` = pipeline /build via grafo piloto |
+
+## Ferramentas de confiabilidade (rodada 1)
+
+- `edit_file`/`write_file`: validação sintaxe, diff auditado, lock por arquivo
+- `run_command`: sandbox shlex, allowlist, env filtrado
+- `search_code`: modo semântico (`mode=semantic`) via índice local
 
 ## Stack
 

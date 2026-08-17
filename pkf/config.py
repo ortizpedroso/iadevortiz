@@ -134,7 +134,7 @@ def providers() -> dict[str, ProviderConfig]:
 
 
 def default_provider() -> str:
-    from pkf.ninerouter import ninerouter_enabled
+    from pkf.ninerouter import ninerouter_enabled, ninerouter_should_skip
 
     explicit = os.getenv("PKF_PROVIDER", "").strip().lower()
     if explicit in {"9router", "9-router"}:
@@ -142,7 +142,9 @@ def default_provider() -> str:
     if explicit:
         return explicit
     if ninerouter_enabled():
-        return "ninerouter"
+        skip, _reason = ninerouter_should_skip()
+        if not skip:
+            return "ninerouter"
     if os.getenv("PKF_ENV") == "production":
         if os.getenv("GROQ_API_KEY"):
             return "groq"
@@ -180,6 +182,32 @@ def ui_host() -> str:
 
 def ui_port() -> int:
     return int(os.getenv("PKF_PORT", "8765"))
+
+
+def headroom_proxy_url() -> str | None:
+    """URL do proxy Headroom (OpenAI-compatible). Opt-in via PKF_HEADROOM_PROXY_URL."""
+    url = os.getenv("PKF_HEADROOM_PROXY_URL", "").strip()
+    return url or None
+
+
+QUALITY_TIER_AGENTS = frozenset({"architect", "reviewer"})
+
+
+def quality_tier_provider() -> str | None:
+    """Provedor do tier de qualidade (ex.: ninerouter com kr/claude-*)."""
+    name = os.getenv("PKF_TIER_QUALITY", "").strip().lower()
+    if name in {"9router", "9-router"}:
+        return "ninerouter"
+    return name or None
+
+
+def quality_tier_model() -> str | None:
+    explicit = os.getenv("PKF_QUALITY_MODEL", "").strip()
+    return explicit or None
+
+
+def agent_uses_quality_tier(agent: str) -> bool:
+    return agent in QUALITY_TIER_AGENTS and quality_tier_provider() is not None
 
 
 def agent_provider_override(agent: str) -> str | None:
@@ -237,17 +265,22 @@ def fallback_model_on_rate_limit(current_model: str, base_url: str = "") -> str 
 
 def provider_pool_names() -> list[str]:
     """Ordem de provedores para rotação automática (grátis / nuvem)."""
-    from pkf.ninerouter import ninerouter_enabled
+    from pkf.ninerouter import ninerouter_enabled, ninerouter_should_skip
 
     available = providers()
     if explicit := os.getenv("PKF_PROVIDER_POOL", "").strip():
         candidates = [p.strip() for p in explicit.split(",") if p.strip()]
     elif ninerouter_enabled():
-        candidates = ["ninerouter", "groq", "gemini", "deepseek", "mimo", "kimi", "openai"]
+        skip, _reason = ninerouter_should_skip()
+        candidates = (
+            ["groq", "gemini", "deepseek", "mimo", "kimi", "openai"]
+            if skip
+            else ["ninerouter", "groq", "gemini", "deepseek", "mimo", "kimi", "openai"]
+        )
     else:
         candidates = ["groq", "gemini", "deepseek", "mimo", "kimi", "openai"]
 
-    if not ninerouter_enabled():
+    if not ninerouter_enabled() or ninerouter_should_skip()[0]:
         candidates = [name for name in candidates if name != "ninerouter"]
 
     primary = os.getenv("PKF_PROVIDER", "").strip()

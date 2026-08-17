@@ -91,9 +91,13 @@ def _ninerouter_slot() -> dict | None:
         ninerouter_api_key,
         ninerouter_chat_model,
         ninerouter_enabled,
+        ninerouter_should_skip,
     )
 
     if not ninerouter_enabled():
+        return None
+    skip, _reason = ninerouter_should_skip()
+    if skip:
         return None
     return {
         "slot_id": "ninerouter#0",
@@ -101,6 +105,45 @@ def _ninerouter_slot() -> dict | None:
         "api_key": ninerouter_api_key(),
         "tier": "subscription",
         "model": ninerouter_chat_model(),
+    }
+
+
+def _quality_slot() -> dict | None:
+    from pkf.config import quality_tier_model, quality_tier_provider
+    from pkf.config import providers as provider_catalog
+
+    provider = quality_tier_provider()
+    if not provider:
+        return None
+    catalog = provider_catalog()
+    if provider not in catalog:
+        return None
+    if provider == "ninerouter":
+        from pkf.ninerouter import ninerouter_api_key, ninerouter_should_skip
+
+        if ninerouter_should_skip()[0]:
+            return None
+        api_key = ninerouter_api_key() or "local"
+        model = quality_tier_model() or catalog[provider].model
+        return {
+            "slot_id": "ninerouter#quality",
+            "provider": "ninerouter",
+            "api_key": api_key,
+            "tier": "quality",
+            "model": model,
+        }
+    keys = collect_api_keys(provider)
+    if not keys and catalog[provider].api_key:
+        keys = [catalog[provider].api_key]
+    if not keys:
+        return None
+    model = quality_tier_model() or catalog[provider].model
+    return {
+        "slot_id": f"{provider}#quality",
+        "provider": provider,
+        "api_key": keys[0],
+        "tier": "quality",
+        "model": model,
     }
 
 
@@ -112,6 +155,9 @@ def build_provider_slots() -> list[dict]:
     gateway = _ninerouter_slot()
     if gateway:
         slots.append(gateway)
+    quality = _quality_slot()
+    if quality:
+        slots.append(quality)
     for tier in tier_order():
         for provider in _tier_provider_names(tier):
             if provider in {"ninerouter", "9router"}:

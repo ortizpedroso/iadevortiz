@@ -1,7 +1,21 @@
 from pkf.config import default_provider, provider_pool_names, providers
-from pkf.ninerouter import ninerouter_api_key, ninerouter_chat_model, ninerouter_enabled, ninerouter_web_search
+from pkf.ninerouter import (
+    is_ninerouter_auth_error,
+    ninerouter_api_key,
+    ninerouter_auth_warning,
+    ninerouter_chat_model,
+    ninerouter_enabled,
+    ninerouter_should_skip,
+    ninerouter_web_search,
+)
+from pkf.provider_pool import ProviderPool
 from pkf.router_native import build_provider_slots
 from pkf.web_search import web_search, web_search_configured
+
+
+def _mock_ninerouter_ok(monkeypatch):
+    monkeypatch.setenv("NINEROUTER_KEY", "sk-test")
+    monkeypatch.setattr("pkf.ninerouter.ninerouter_health", lambda: (True, "ok"))
 
 
 def test_default_provider_prefers_ninerouter(monkeypatch):
@@ -9,6 +23,7 @@ def test_default_provider_prefers_ninerouter(monkeypatch):
     monkeypatch.setenv("NINEROUTER_URL", "http://127.0.0.1:20128")
     monkeypatch.setenv("GROQ_API_KEY", "g")
     monkeypatch.delenv("PKF_PROVIDER", raising=False)
+    _mock_ninerouter_ok(monkeypatch)
     assert default_provider() == "ninerouter"
 
 
@@ -17,6 +32,7 @@ def test_provider_pool_puts_ninerouter_first(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "g")
     monkeypatch.delenv("PKF_PROVIDER", raising=False)
     monkeypatch.delenv("PKF_PROVIDER_POOL", raising=False)
+    _mock_ninerouter_ok(monkeypatch)
     names = provider_pool_names()
     assert names[0] == "ninerouter"
     assert "groq" in names
@@ -26,9 +42,63 @@ def test_build_slots_ninerouter_first(monkeypatch):
     monkeypatch.setenv("NINEROUTER_URL", "http://127.0.0.1:20128")
     monkeypatch.setenv("GROQ_API_KEY", "g")
     monkeypatch.setenv("PKF_TIER_SUBSCRIPTION", "groq")
+    _mock_ninerouter_ok(monkeypatch)
     slots = build_provider_slots()
     assert slots[0]["provider"] == "ninerouter"
     assert any(slot["provider"] == "groq" for slot in slots)
+
+
+def test_ninerouter_skipped_on_missing_key(monkeypatch):
+    monkeypatch.setenv("NINEROUTER_URL", "http://127.0.0.1:20128")
+    monkeypatch.setenv("GROQ_API_KEY", "g")
+    monkeypatch.delenv("NINEROUTER_KEY", raising=False)
+    monkeypatch.delenv("NINEROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("PKF_PROVIDER", raising=False)
+    skip, reason = ninerouter_should_skip()
+    assert skip is True
+    assert "ausente" in reason.lower()
+    assert default_provider() == "groq"
+    slots = build_provider_slots()
+    assert all(slot["provider"] != "ninerouter" for slot in slots)
+    assert any(slot["provider"] == "groq" for slot in slots)
+
+
+def test_ninerouter_skipped_on_http_401(monkeypatch):
+    monkeypatch.setenv("NINEROUTER_URL", "http://127.0.0.1:20128")
+    monkeypatch.setenv("NINEROUTER_KEY", "bad-key")
+    monkeypatch.setenv("GROQ_API_KEY", "g")
+    monkeypatch.delenv("PKF_PROVIDER", raising=False)
+    monkeypatch.setattr(
+        "pkf.ninerouter.ninerouter_health",
+        lambda: (False, "HTTP 401: Unauthorized"),
+    )
+    skip, reason = ninerouter_should_skip()
+    assert skip is True
+    assert "401" in reason
+    assert default_provider() == "groq"
+    pool = ProviderPool.create(start=default_provider())
+    assert pool.current_name == "groq"
+
+
+def test_ninerouter_auth_warning_format():
+    text = ninerouter_auth_warning("HTTP 401: Unauthorized")
+    assert "[9Router]" in text
+    assert "fix-ninerouter-key.sh" in text
+    assert "Gemini/Groq" in text
+
+
+def test_is_ninerouter_auth_error():
+    assert is_ninerouter_auth_error("HTTP 401: Unauthorized")
+    assert is_ninerouter_auth_error("API key required for remote API access")
+    assert not is_ninerouter_auth_error("Connection refused")
+
+
+def test_without_ninerouter_url_unchanged(monkeypatch):
+    monkeypatch.delenv("NINEROUTER_URL", raising=False)
+    monkeypatch.setenv("GROQ_API_KEY", "g")
+    monkeypatch.delenv("PKF_PROVIDER", raising=False)
+    assert default_provider() in {"groq", "ollama"}
+    assert "ninerouter" not in provider_pool_names()
 
 
 def test_ninerouter_provider_registered(monkeypatch):

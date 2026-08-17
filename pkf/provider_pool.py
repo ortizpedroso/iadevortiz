@@ -118,6 +118,27 @@ class ProviderPool:
         slot = self.current_slot
         return get_ai_client(slot.provider, api_key=slot.api_key, model=slot.model)
 
+    def get_client_for_agent(self, agent_name: str) -> tuple[AsyncOpenAI, ProviderConfig]:
+        from pkf.config import agent_provider_override, agent_uses_quality_tier
+
+        override = agent_provider_override(agent_name)
+        if override:
+            return self.get_client(override)
+        if agent_uses_quality_tier(agent_name):
+            for index, slot in enumerate(self.slots):
+                if slot.tier == "quality":
+                    self._index = index
+                    return get_ai_client(slot.provider, api_key=slot.api_key, model=slot.model)
+        saved = self._index
+        for index, slot in enumerate(self.slots):
+            if slot.tier != "quality":
+                self._index = index
+                break
+        try:
+            return self.get_client()
+        finally:
+            self._index = saved
+
     def status(self) -> dict:
         now = time.time()
         return {

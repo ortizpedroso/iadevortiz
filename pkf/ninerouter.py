@@ -56,6 +56,42 @@ def ninerouter_health() -> tuple[bool, str]:
         return False, str(exc)
 
 
+def is_ninerouter_auth_error(detail: str) -> bool:
+    text = (detail or "").lower()
+    if "401" in text or "403" in text:
+        return True
+    if "api key required" in text:
+        return True
+    if "ninerouter_key ausente" in text:
+        return True
+    return False
+
+
+def ninerouter_auth_warning(reason: str = "401") -> str:
+    label = reason.strip() or "401"
+    if "ausente" in label.lower():
+        label = "401"
+    return (
+        f"[9Router] Chave inválida ou ausente ({label}). PKF seguirá com Gemini/Groq.\n"
+        "Para corrigir na VPS: cd /opt/pkf && bash deploy/hostinger/fix-ninerouter-key.sh\n"
+        "Ou manualmente: túnel `ssh -L 20128:127.0.0.1:20128 root@VPS`, gere uma chave sk-... "
+        "no dashboard do 9Router, defina NINEROUTER_KEY=sk-... no .env, e rode "
+        "`docker compose --profile router up -d pkf --force-recreate`."
+    )
+
+
+def ninerouter_should_skip() -> tuple[bool, str]:
+    """Pula 9Router na sessão quando a chave está ausente ou o health retorna 401/403."""
+    if not ninerouter_enabled():
+        return False, ""
+    if not ninerouter_api_key():
+        return True, "NINEROUTER_KEY ausente"
+    ok, detail = ninerouter_health()
+    if not ok and is_ninerouter_auth_error(detail):
+        return True, detail
+    return False, detail if not ok else ""
+
+
 def ninerouter_web_search(query: str, max_results: int = 5) -> str:
     text = (query or "").strip()
     if not text:

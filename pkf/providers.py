@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from openai import AsyncOpenAI
 
-from pkf.config import API_TIMEOUT, ProviderConfig, providers
+from pkf.config import API_TIMEOUT, ProviderConfig, headroom_proxy_url, providers
 
 
 def get_provider(name: str) -> ProviderConfig:
@@ -29,9 +29,16 @@ def get_ai_client(
         config = replace(config, api_key=api_key)
     if model:
         config = replace(config, model=model)
-    print(f"Conectando ao provedor '{config.name}' em: {config.base_url} ({config.model})")
+    effective_base_url = headroom_proxy_url() or config.base_url
+    if effective_base_url != config.base_url:
+        print(
+            f"Headroom proxy ativo: '{config.name}' via {effective_base_url} "
+            f"(upstream {config.base_url}, {config.model})"
+        )
+    else:
+        print(f"Conectando ao provedor '{config.name}' em: {config.base_url} ({config.model})")
     client = AsyncOpenAI(
-        base_url=config.base_url,
+        base_url=effective_base_url,
         api_key=config.api_key,
         timeout=API_TIMEOUT,
     )
