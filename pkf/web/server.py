@@ -153,7 +153,10 @@ def create_app(router: Router) -> FastAPI:
 
     @app.get("/favicon.ico")
     async def favicon():
-        return JSONResponse(content={}, status_code=204)
+        return Response(status_code=204)
+
+    @app.get("/")
+    async def index():
         response = FileResponse(static_root / "index.html")
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         return response
