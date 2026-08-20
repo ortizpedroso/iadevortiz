@@ -21,6 +21,7 @@ type Props = {
   onAttachChat: (chatId: string, projectSlug: string | null) => void;
   onSelectProject: (slug: string) => void;
   onDeleteProject: (slug: string) => void;
+  onBulkDeleteProjects: (slugs: string[], deleteAll?: boolean) => void;
   onRenameProject: (slug: string, name: string) => void;
   onPinProject: (slug: string, pinned: boolean) => void;
   onNewChat: () => void;
@@ -32,12 +33,18 @@ function ProjectRow({
   onDelete,
   onRename,
   onPin,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   project: ProjectItem;
   onSelect: (slug: string) => void;
   onDelete: (project: ProjectItem) => void;
   onRename: (slug: string, name: string) => void;
   onPin: (slug: string, pinned: boolean) => void;
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (slug: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -90,6 +97,15 @@ function ProjectRow({
             : "text-[var(--pkf-muted)] hover:bg-[var(--pkf-bg-panel)]/70 hover:text-[var(--pkf-text)]"
         }`}
       >
+        {selectMode ? (
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={() => onToggleSelect?.(project.slug)}
+            aria-label={`Selecionar ${label}`}
+            className="h-4 w-4 shrink-0 rounded border-[var(--pkf-border)] accent-[var(--pkf-accent)]"
+          />
+        ) : null}
         {project.pinned ? (
           <span className="shrink-0 text-[10px] text-[var(--pkf-accent)]" aria-hidden>
             📌
@@ -115,12 +131,13 @@ function ProjectRow({
           <button
             type="button"
             className="min-w-0 flex-1 truncate text-left text-sm"
-            onClick={() => onSelect(project.slug)}
+            onClick={() => (selectMode ? onToggleSelect?.(project.slug) : onSelect(project.slug))}
           >
             {label}
           </button>
         )}
         <div ref={menuRef} className="relative shrink-0">
+          {!selectMode ? (
           <button
             type="button"
             aria-label={`Ações do projeto ${label}`}
@@ -131,7 +148,8 @@ function ProjectRow({
           >
             ⋯
           </button>
-          {menuOpen ? (
+          ) : null}
+          {menuOpen && !selectMode ? (
             <div
               role="menu"
               className="absolute right-0 top-full z-40 mt-1 min-w-[9.5rem] rounded-xl border border-[var(--pkf-border)] bg-[var(--pkf-bg-elevated)] py-1 shadow-2xl"
@@ -308,13 +326,57 @@ export function Sidebar({
   onAttachChat,
   onSelectProject,
   onDeleteProject,
+  onBulkDeleteProjects,
   onRenameProject,
   onPinProject,
   onNewChat,
 }: Props) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [projectSelectMode, setProjectSelectMode] = useState(false);
+  const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set());
 
   if (!open) return null;
+
+  function toggleProjectSlug(slug: string) {
+    setSelectedSlugs((current) => {
+      const next = new Set(current);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  }
+
+  function exitProjectSelectMode() {
+    setProjectSelectMode(false);
+    setSelectedSlugs(new Set());
+  }
+
+  function handleBulkDeleteSelected() {
+    const slugs = Array.from(selectedSlugs);
+    if (!slugs.length) return;
+    const names = projects
+      .filter((p) => selectedSlugs.has(p.slug))
+      .map((p) => p.name || p.slug)
+      .join(", ");
+    if (!window.confirm(`Excluir ${slugs.length} projeto(s)?\n\n${names}\n\nTodos os arquivos serão removidos.`)) {
+      return;
+    }
+    onBulkDeleteProjects(slugs);
+    exitProjectSelectMode();
+  }
+
+  function handleDeleteAllProjects() {
+    if (!projects.length) return;
+    if (
+      !window.confirm(
+        `Excluir TODOS os ${projects.length} projetos?\n\nEsta ação não pode ser desfeita.`
+      )
+    ) {
+      return;
+    }
+    onBulkDeleteProjects([], true);
+    exitProjectSelectMode();
+  }
 
   function handleDeleteProject(project: ProjectItem) {
     if (!window.confirm(`Excluir o projeto "${project.name || project.slug}" e todos os arquivos?`)) return;
@@ -353,22 +415,82 @@ export function Sidebar({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
           <section className="mb-6">
-            <h2 className="mb-2 px-2 text-xs font-medium text-[var(--pkf-text-dim)]">Projetos</h2>
+            <div className="mb-2 flex items-center justify-between px-2">
+              <h2 className="text-xs font-medium text-[var(--pkf-text-dim)]">Projetos</h2>
+              {ready && projects.length > 0 ? (
+                projectSelectMode ? (
+                  <button
+                    type="button"
+                    className="text-[10px] text-[var(--pkf-muted)] hover:text-[var(--pkf-text)]"
+                    onClick={exitProjectSelectMode}
+                  >
+                    Cancelar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-[10px] text-[var(--pkf-accent)] hover:underline"
+                    onClick={() => setProjectSelectMode(true)}
+                  >
+                    Selecionar
+                  </button>
+                )
+              ) : null}
+            </div>
             {!ready ? (
               <p className="px-2 text-sm text-[var(--pkf-text-dim)]">Carregando…</p>
             ) : projects.length ? (
-              <ul className="space-y-0.5">
-                {projects.map((project) => (
-                  <ProjectRow
-                    key={project.slug}
-                    project={project}
-                    onSelect={onSelectProject}
-                    onDelete={handleDeleteProject}
-                    onRename={onRenameProject}
-                    onPin={onPinProject}
-                  />
-                ))}
-              </ul>
+              <>
+                {projectSelectMode ? (
+                  <div className="mb-2 flex items-center gap-2 px-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedSlugs.size === projects.length}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedSlugs(new Set(projects.map((p) => p.slug)));
+                        else setSelectedSlugs(new Set());
+                      }}
+                      aria-label="Selecionar todos os projetos"
+                      className="h-4 w-4 rounded border-[var(--pkf-border)] accent-[var(--pkf-accent)]"
+                    />
+                    <span className="text-[10px] text-[var(--pkf-text-dim)]">Todos</span>
+                  </div>
+                ) : null}
+                <ul className="space-y-0.5">
+                  {projects.map((project) => (
+                    <ProjectRow
+                      key={project.slug}
+                      project={project}
+                      onSelect={onSelectProject}
+                      onDelete={handleDeleteProject}
+                      onRename={onRenameProject}
+                      onPin={onPinProject}
+                      selectMode={projectSelectMode}
+                      selected={selectedSlugs.has(project.slug)}
+                      onToggleSelect={toggleProjectSlug}
+                    />
+                  ))}
+                </ul>
+                {projectSelectMode ? (
+                  <div className="mt-3 space-y-2">
+                    <button
+                      type="button"
+                      disabled={selectedSlugs.size === 0}
+                      onClick={handleBulkDeleteSelected}
+                      className="w-full rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 transition hover:bg-red-100 disabled:opacity-40"
+                    >
+                      Excluir selecionados ({selectedSlugs.size})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteAllProjects}
+                      className="w-full rounded-xl border border-[var(--pkf-border)] px-3 py-2 text-xs text-[var(--pkf-muted)] hover:text-red-700"
+                    >
+                      Excluir todos ({projects.length})
+                    </button>
+                  </div>
+                ) : null}
+              </>
             ) : (
               <p className="px-2 text-sm text-[var(--pkf-text-dim)]">Nenhum projeto ainda</p>
             )}

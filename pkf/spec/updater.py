@@ -49,18 +49,21 @@ def save_platform_spec(workspace_root, slug: str = "pkf-platform") -> str:
 
 ## Visão
 
-Assistente multiagente para especificar, implementar, revisar e testar software — com UI inspirada em Claude/Cursor (tema escuro, rail lateral, chat centralizado).
+Assistente multiagente para especificar, implementar, revisar e testar software — UI inspirada em Claude (tema claro bege, sidebar lateral, chat centralizado).
 
 ## Capacidades
 
 - Pipeline **/spec → aprovação manual → /build → review→fix loop** até aprovação
+- **Duas implementações de /build**:
+  - **Clássica** (padrão): fases backend → logic → frontend → tester, brainstorm, juiz /goal, changelog
+  - **Grafo piloto** (`PKF_USE_LANGGRAPH_BUILD=1`): plan → build → review em `build_graph.py`
 - **Build em fases**: backend → logic → frontend → tester (dependências respeitadas)
 - **Planner LLM** com fallback heurístico por keywords na spec
 - **Handoff API**: backend documenta `.pkf/handoff/api.md` → frontend consome
 - **Retry inteligente**: reexecuta só agentes que falharam (até `PKF_BUILD_RETRIES`)
 - **Review→fix loop**: até `PKF_REVIEW_FIX_CYCLES` ciclos automáticos pós-build
 - UI Vite + React 19 + Tailwind 4: rail, painel spec, preview, indicador agente/provider
-- **Biblioteca lateral**: listagem de chats e projetos — criar, ativar, excluir, anexar chat↔projeto
+- **Biblioteca lateral**: listagem de chats e projetos — criar, ativar, excluir (individual ou em massa), anexar chat↔projeto
 - Modal de autenticação (`PKF_AUTH_TOKEN`); health público reduzido
 - Pool híbrido: **9Router primário por padrão** (quando `NINEROUTER_URL` definida) + **router nativo fallback**
 - Skip proativo 9Router em **401/chave ausente** — aviso no boot, fallback Groq/Gemini
@@ -84,12 +87,12 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 
 ## UI / UX
 
-- **Sidebar esquerda**: seções Chats e Projetos (criar, selecionar, excluir, anexar projeto ao chat)
-- **Menu de contexto em Projetos**: ícone ⋮ com Renomear (inline) e Excluir (com confirmação)
-- **Tema escuro consolidado**: variáveis CSS (`--pkf-bg-primary`, `--pkf-accent`, etc.) e estados hover/focus consistentes
+- **Sidebar esquerda**: seções Projetos e Conversas
+- **Projetos**: Menu de contexto ⋯ (fixar, renomear, excluir) + modo **Selecionar** para excluir vários ou todos
+- **Conversas**: Menu de contexto ⋯ (vincular projeto, excluir chat)
+- **Tema claro Claude**: variáveis CSS (`--pkf-bg-primary`, `--pkf-accent`, etc.), fundo `#faf9f5`, sidebar `#f0eee6`
 - Indicador no header: agente ativo · provider · modelo
-- Paleta escura (#191919, accent #d97757)
-- Acessibilidade: skip link, aria-live, reduced motion, `:focus-visible` com acento
+- Acessibilidade: skip link, aria-live, `:focus-visible` com acento
 
 ## API biblioteca
 
@@ -102,7 +105,9 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 | `POST /api/chats/{id}/attach` | Anexa ou desanexa projeto |
 | `POST /api/projects/{slug}/activate` | Ativa projeto |
 | `PATCH /api/projects/{slug}` | Renomeia nome de exibição (slug inalterado) |
-| `DELETE /api/projects/{slug}` | Exclui projeto |
+| `DELETE /api/projects/{slug}` | Exclui um projeto |
+| `POST /api/projects/bulk-delete` | Exclui vários (`slugs`) ou todos (`all: true`) |
+| `POST /api/projects/{slug}/pin` | Fixa/desafixa projeto |
 
 ## Configuração (rodada 2)
 
