@@ -2,9 +2,10 @@ from pkf.config import fallback_model_on_not_found
 from pkf.config import fallback_model_on_not_found as fb
 
 
-def test_openai_fallback_chain_from_gpt4o_mini():
+def test_openai_fallback_chain_from_gpt54_mini():
     base = "https://api.openai.com/v1"
-    assert fallback_model_on_not_found("gpt-4o-mini", base) == "gpt-4o"
+    assert fallback_model_on_not_found("gpt-5.4-mini", base) == "gpt-4o-mini"
+    assert fb("gpt-4o-mini", base) == "gpt-4o"
     assert fb("gpt-4o", base) == "gpt-3.5-turbo"
     assert fb("gpt-3.5-turbo", base) is None
 

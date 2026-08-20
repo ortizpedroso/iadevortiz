@@ -4,6 +4,74 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Fix: flicker sidebar + cadeia OpenAI
+
+**Data:** 2026-08-20
+
+### Tarefa 1 — Boot sem fonte duplicada de projetos/chats
+
+**Problema:** o boot chamava `applyLibrary(data.library)` na resposta de `/api/session` e em seguida `loadLibrary()` — duas fontes, com possível flash de projeto obsoleto antes da lista correta.
+
+**Antes (`frontend/src/App.tsx`):**
+
+```tsx
+applySession(data.session, true);
+setMessages(data.messages || []);
+applyLibrary(data.library);
+sessionBootstrappedRef.current = true;
+// ...
+if (!sessionBootstrappedRef.current) {
+  await loadLibrary();
+} else {
+  await loadLibrary();
+}
+```
+
+**Depois:**
+
+```tsx
+applySession(data.session, true);
+setMessages(data.messages || []);
+sessionBootstrappedRef.current = true;
+// ...
+await loadLibrary();
+```
+
+A sessão continua vindo de `/api/session` (mensagens, chat ativo, token). Projetos/chats vêm **só** de `loadLibrary()`.
+
+**Contexto:** `applyLibrary(data.library)` no boot foi reintroduzido no commit `7cf2587` (PR #4 — sidebar estilo Claude), sobrepondo o fix da rodada 2.
+
+### Tarefa 2 — Cadeia OpenAI com modelo mais recente primeiro
+
+**Antes (`pkf/config.py`):**
+
+```python
+model=os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+_OPENAI_MODEL_CHAIN = ("gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo")
+```
+
+**Depois:**
+
+```python
+model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
+_OPENAI_MODEL_CHAIN = ("gpt-5.4-mini", "gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo")
+```
+
+`fallback_model_on_rate_limit()` **não alterado** — só a cadeia de 404 (`fallback_model_on_not_found`).
+
+### Definition of Done
+
+- [x] Boot de `App.tsx` usa `loadLibrary()` como única fonte da lista de projetos/chats
+- [x] `if/else` redundante simplificado para `await loadLibrary()` direto
+- [x] `_OPENAI_MODEL_CHAIN` começa com `gpt-5.4-mini`, demais mantidos como fallback
+- [x] Default de `OPENAI_MODEL` atualizado para `gpt-5.4-mini`
+
+### Testes
+
+`python3 -m pytest tests/ -q` → **175 passed**
+
+---
+
 ## Leva OmniRoute / WebSocket / CI — auditoria retroativa
 
 **Período:** 2026-08-19 → 2026-08-20  

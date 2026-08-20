@@ -126,7 +126,7 @@ def providers() -> dict[str, ProviderConfig]:
             name="openai",
             base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             api_key=openai_key,
-            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
         )
     if ninerouter_enabled():
         configs["ninerouter"] = ProviderConfig(
@@ -302,7 +302,7 @@ OPENAI_FALLBACK_MODELS: tuple[str, ...] = tuple(
     if part.strip()
 )
 
-_OPENAI_MODEL_CHAIN: tuple[str, ...] = ("gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo")
+_OPENAI_MODEL_CHAIN: tuple[str, ...] = ("gpt-5.4-mini", "gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo")
 
 GEMINI_FALLBACK_MODELS: tuple[str, ...] = tuple(
     part.strip()

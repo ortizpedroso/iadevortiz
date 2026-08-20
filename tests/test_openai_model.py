@@ -9,7 +9,7 @@ def test_openai_default_model_when_env_unset(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
     cfg = providers()["openai"]
-    assert cfg.model == "gpt-4o-mini"
+    assert cfg.model == "gpt-5.4-mini"
 
 
 def test_set_env_keys_migrates_retired_openai_models(tmp_path: Path):
