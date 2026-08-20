@@ -134,6 +134,10 @@ services:
 
       DATA_DIR: /app/data
 
+      INITIAL_PASSWORD: ${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}
+
+      OMNIROUTE_PASSWORD: ${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}
+
       REQUIRE_API_KEY: "false"
 
       HOSTNAME: "0.0.0.0"

@@ -80,8 +80,48 @@ function extractKey(data) {
 }
 
 (async () => {
-  let login = await request("POST", "/api/auth/login", { password: dashPass });
-  let loginData = parseJson(login.body);
+  const bootstrap = await request("GET", "/api/settings/require-login", null, null);
+  const bootstrapData = parseJson(bootstrap.body);
+
+  async function tryLogin(password) {
+    const attempt = await request("POST", "/api/auth/login", { password });
+    const data = parseJson(attempt.body);
+    return { attempt, data };
+  }
+
+  let activePass = dashPass;
+  let login = await tryLogin(activePass);
+  let loginData = login.data;
+
+  if (!loginData.success) {
+    const loginErr = parseJson(login.body);
+    const needsSetup =
+      loginErr.needsSetup === true ||
+      bootstrapData.hasPassword === false ||
+      (loginErr.error || "").toLowerCase().includes("onboarding");
+
+    if (needsSetup) {
+      const setup = await request(
+        "POST",
+        "/api/settings/require-login",
+        { requireLogin: true, password: newPass },
+        null
+      );
+      const setupData = parseJson(setup.body);
+      if (!setupData.success) {
+        console.log(JSON.stringify({ error: "setup_failed", detail: setup.body }));
+        return;
+      }
+      console.error(`[info] OmniRoute onboarding: senha inicial definida (${newPass})`);
+      activePass = newPass;
+      login = await tryLogin(activePass);
+      loginData = login.data;
+    } else if (newPass !== activePass) {
+      login = await tryLogin(newPass);
+      loginData = login.data;
+      if (loginData.success) activePass = newPass;
+    }
+  }
 
   if (!loginData.success) {
     console.log(JSON.stringify({ error: "login_failed", detail: login.body }));
@@ -94,7 +134,7 @@ function extractKey(data) {
     const change = await request(
       "PATCH",
       "/api/settings",
-      { currentPassword: dashPass, newPassword: newPass },
+      { currentPassword: activePass, newPassword: newPass },
       cookie
     );
     const changeData = parseJson(change.body);
@@ -124,7 +164,7 @@ function extractKey(data) {
     }
   }
 
-  console.log(JSON.stringify({ key, dashboard_password: loginData.mustChangePassword ? newPass : dashPass }));
+  console.log(JSON.stringify({ key, dashboard_password: loginData.mustChangePassword ? newPass : activePass }));
 })().catch((err) => {
   console.log(JSON.stringify({ error: "exception", detail: String(err) }));
 });

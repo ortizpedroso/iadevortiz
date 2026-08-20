@@ -70,5 +70,5 @@ docker compose --profile "$PROFILE" ps
 echo ""
 curl -s http://127.0.0.1:8765/api/health || true
 echo ""
-echo "PKF: http://SEU_IP:8765/?token=SEU_PKF_AUTH_TOKEN"
+echo "PKF: http://SEU_IP:8765/?token=$(grep '^PKF_AUTH_TOKEN=' .env 2>/dev/null | head -n1 | cut -d= -f2- || echo 'SEU_PKF_AUTH_TOKEN')"
 echo "OmniRoute dashboard: ssh -L 20128:127.0.0.1:20128 root@VPS  →  http://localhost:20128"

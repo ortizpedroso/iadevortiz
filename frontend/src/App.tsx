@@ -95,8 +95,14 @@ export default function App() {
     };
     ws.onclose = (ev) => {
       if (ev.code === 4401 || (authRequiredRef.current && !getToken())) {
+        sessionStorage.removeItem("pkf_token");
         setAuthOpen(true);
         setStatus("Token necessário");
+        socketRef.current = null;
+        return;
+      }
+      if (ev.code === 1011) {
+        setStatus("Erro de sessão");
         socketRef.current = null;
         return;
       }
@@ -190,7 +196,9 @@ export default function App() {
       try {
         const res = await fetch("/api/session", { headers: authHeaders() });
         if (res.status === 401) {
+          sessionStorage.removeItem("pkf_token");
           setAuthOpen(true);
+          setStatus("Token necessário");
           return;
         }
         if (res.ok) {
