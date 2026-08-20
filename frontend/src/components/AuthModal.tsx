@@ -12,7 +12,7 @@ export function AuthModal({ open, onSubmit }: Props) {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const value = token.trim();
+    const value = token.trim().replace(/^Bearer\s+/i, "");
     if (value) onSubmit(value);
   }
 
@@ -31,7 +31,7 @@ export function AuthModal({ open, onSubmit }: Props) {
           Entrar na PKF
         </h2>
         <p className="mt-2 text-sm text-[var(--pkf-muted)]">
-          Informe o token de acesso configurado em <code className="font-mono">PKF_AUTH_TOKEN</code>.
+          Informe o token de acesso configurado em <code className="font-mono">PKF_AUTH_TOKEN</code> (sem a palavra Bearer).
         </p>
         <label htmlFor="auth-token" className="mt-5 block text-xs font-medium uppercase tracking-wide text-[var(--pkf-muted)]">
           Token
@@ -44,7 +44,7 @@ export function AuthModal({ open, onSubmit }: Props) {
           value={token}
           onChange={(e) => setToken(e.target.value)}
           className="pkf-input mt-2 w-full px-4 py-3 text-sm"
-          placeholder="Bearer token"
+          placeholder="ex.: teste123"
         />
         <button
           type="submit"

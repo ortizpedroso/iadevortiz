@@ -104,6 +104,22 @@ set_kv PKF_HOST "${PKF_HOST:-0.0.0.0}"
 set_kv PKF_PORT "${PKF_PORT:-8765}"
 set_kv PKF_NO_BROWSER "${PKF_NO_BROWSER:-1}"
 set_kv PKF_AUTH_TOKEN "${PKF_AUTH_TOKEN:-teste123}"
+
+dedupe_env_key() {
+  local key="$1"
+  if [ "$(grep -c "^${key}=" .env 2>/dev/null || echo 0)" -le 1 ]; then
+    return 0
+  fi
+  local value=""
+  value="$(grep "^${key}=" .env | tail -n1 | cut -d= -f2-)"
+  grep -v "^${key}=" .env > .env.tmp
+  printf '%s=%s\n' "$key" "$value" >> .env.tmp
+  mv .env.tmp .env
+  echo "==> Removida duplicata de ${key} no .env"
+}
+
+dedupe_env_key PKF_AUTH_TOKEN
+dedupe_env_key NINEROUTER_KEY
 set_kv PKF_FALLBACK "${PKF_FALLBACK:-}"
 
 set_kv PKF_PROVIDER "${PKF_PROVIDER:-ninerouter}"

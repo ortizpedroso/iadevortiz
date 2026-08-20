@@ -102,10 +102,11 @@ export default function App() {
       const likelyAuthFailure =
         ev.code === 4401 ||
         ev.code === 1008 ||
-        (authRequiredRef.current && !getToken()) ||
-        (authRequiredRef.current && ev.code === 1006 && reconnectAttemptsRef.current >= 1);
+        (authRequiredRef.current && !getToken());
       if (likelyAuthFailure) {
-        sessionStorage.removeItem("pkf_token");
+        if (ev.code === 4401 || ev.code === 1008) {
+          sessionStorage.removeItem("pkf_token");
+        }
         setAuthOpen(true);
         setStatus(ev.code === 4401 || ev.code === 1008 ? "Token inválido" : "Token necessário");
         socketRef.current = null;
