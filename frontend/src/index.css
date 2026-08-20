@@ -15,12 +15,15 @@
 }
 
 :root {
-  --pkf-bg-primary: #191919;
+  --pkf-bg-primary: #1a1a1a;
   --pkf-bg-panel: #212121;
+  --pkf-bg-sidebar: #171717;
+  --pkf-bg-elevated: #262626;
+  --pkf-bg-hover: #2a2a2a;
   --pkf-bg-rail: #141414;
-  --pkf-border: #2e2e2e;
-  --pkf-muted: #9b9b9b;
-  --pkf-text-dim: #666666;
+  --pkf-border: #303030;
+  --pkf-muted: #a1a1a1;
+  --pkf-text-dim: #737373;
   --pkf-text: #ececec;
   --pkf-accent: #d97757;
 }

@@ -12,6 +12,7 @@ export type ProjectItem = {
   slug: string;
   name?: string;
   is_active?: boolean;
+  pinned?: boolean;
 };
 
 export type Message = {

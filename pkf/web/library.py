@@ -27,9 +27,12 @@ from pkf.projects.manager import (
     get_project_display_name,
     list_projects,
     project_dir,
+    remove_pinned_project,
     remove_project_name,
     save_active_project,
     save_project_name,
+    set_project_pinned,
+    sort_projects,
 )
 from pkf.workspace import Workspace
 
@@ -184,7 +187,7 @@ def _file_list_chats(workspace_root: Path) -> list[dict]:
 
 
 def _file_list_projects(global_root: Path, active_slug: str | None) -> list[dict]:
-    return [
+    projects = [
         {
             "slug": slug,
             "name": get_project_display_name(global_root, slug),
@@ -192,6 +195,7 @@ def _file_list_projects(global_root: Path, active_slug: str | None) -> list[dict
         }
         for slug in list_projects(global_root)
     ]
+    return sort_projects(projects, global_root)
 
 
 def _validate_project_name(name: str) -> str:
@@ -226,6 +230,7 @@ async def library_snapshot(workspace: Workspace, db: DbContext | None = None) ->
                     }
                 )
         projects.sort(key=lambda p: (p.get("name") or p["slug"]).lower())
+        projects = sort_projects(projects, workspace.global_root)
         return {"chats": chats, "projects": projects, "active_chat_id": str(db.session_id) if db.session_id else None}
 
     global_root = workspace.global_root
@@ -430,6 +435,14 @@ async def rename_project(
     save_project_name(workspace.global_root, slug, display_name)
 
 
+async def pin_project(workspace: Workspace, slug: str, pinned: bool) -> None:
+    slug = _validate_slug(slug)
+    project_path = _safe_project_path(workspace.global_root, slug)
+    if not project_path.is_dir():
+        raise ValueError("Projeto não encontrado")
+    set_project_pinned(workspace.global_root, slug, pinned)
+
+
 async def delete_project(workspace: Workspace, slug: str, db: DbContext | None = None) -> None:
     slug = _validate_slug(slug)
     if database_enabled() and db:
@@ -452,6 +465,7 @@ async def delete_project(workspace: Workspace, slug: str, db: DbContext | None =
     if project_path.is_dir():
         shutil.rmtree(project_path)
     remove_project_name(global_root, slug)
+    remove_pinned_project(global_root, slug)
     if workspace.project == slug:
         workspace.clear_project()
         save_active_project(global_root, None)

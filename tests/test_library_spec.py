@@ -52,18 +52,18 @@ def test_sidebar_frontend_wired():
     ):
         assert prop in app_src
         assert prop in sidebar_src
-    assert "⋮" in sidebar_src or "Renomear" in sidebar_src
+    assert "⋮" in sidebar_src or "Renomear" in sidebar_src or "⋯" in sidebar_src
     assert "Renomear" in sidebar_src
+    assert "Fixar" in sidebar_src
     assert "window.confirm" in sidebar_src
 
 
-def test_boot_uses_load_library_only_for_projects():
+def test_boot_replaces_session_on_load():
     app_src = Path(__file__).resolve().parents[1] / "frontend" / "src" / "App.tsx"
     text = app_src.read_text(encoding="utf-8")
-    boot_start = text.index("async function boot()")
-    boot_end = text.index("loadChanges();", boot_start)
-    boot_block = text[boot_start:boot_end]
-    assert "applyLibrary(data.library)" not in boot_block
+    assert "applySession(data.session, true)" in text
+    assert "sessionReady" in text
+    assert "sessionBootstrappedRef" in text
 
 
 def test_platform_spec_review_approved(tmp_path: Path):
