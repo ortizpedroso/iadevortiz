@@ -26,7 +26,7 @@ def ninerouter_chat_model() -> str:
     return (
         os.getenv("NINEROUTER_MODEL", "").strip()
         or os.getenv("PKF_NINEROUTER_MODEL", "").strip()
-        or "oc/big-pickle"
+        or "auto/free"
     )
 
 
@@ -66,24 +66,14 @@ def is_ninerouter_auth_error(detail: str) -> bool:
 def ninerouter_auth_warning(reason: str = "401") -> str:
     from pkf.config import router_only_mode
 
-    label = reason.strip() or "401"
-    if "ausente" in label.lower():
-        label = "401"
     if router_only_mode():
         return (
-            f"[OmniRoute] Chave inválida ou ausente ({label}). PKF em modo router-only — "
-            "sem fallback Groq/Gemini.\n"
-            "Para corrigir na VPS: cd /opt/pkf && bash deploy/hostinger/fix-ninerouter-key.sh\n"
-            "Ou manualmente: túnel `ssh -L 20128:127.0.0.1:20128 root@VPS`, gere uma chave sk-... "
-            "no dashboard OmniRoute, defina NINEROUTER_KEY=sk-... no .env, e rode "
-            "`docker compose --profile router up -d pkf --force-recreate`."
+            "[OmniRoute] Gateway temporariamente indisponível. "
+            "Execute na VPS: bash deploy/hostinger/update.sh"
         )
     return (
-        f"[9Router] Chave inválida ou ausente ({label}). PKF seguirá com Gemini/Groq.\n"
-        "Para corrigir na VPS: cd /opt/pkf && bash deploy/hostinger/fix-ninerouter-key.sh\n"
-        "Ou manualmente: túnel `ssh -L 20128:127.0.0.1:20128 root@VPS`, gere uma chave sk-... "
-        "no dashboard do 9Router, defina NINEROUTER_KEY=sk-... no .env, e rode "
-        "`docker compose --profile router up -d pkf --force-recreate`."
+        f"[9Router] Chave inválida ou ausente ({reason.strip() or '401'}). "
+        "Execute: bash deploy/hostinger/fix-ninerouter-key.sh"
     )
 
 

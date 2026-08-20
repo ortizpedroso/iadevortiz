@@ -91,27 +91,41 @@ def _model_for_tier(provider: str, tier: str) -> str | None:
     return None
 
 
-def _ninerouter_slot() -> dict | None:
-    from pkf.config import router_only_mode
+def _ninerouter_slots() -> list[dict]:
+    from pkf.config import ninerouter_model_chain, router_only_mode
     from pkf.ninerouter import (
         ninerouter_api_key,
-        ninerouter_chat_model,
         ninerouter_enabled,
         ninerouter_should_skip,
     )
 
     if not ninerouter_enabled():
-        return None
+        return []
     skip, _reason = ninerouter_should_skip()
     if skip and not router_only_mode():
-        return None
-    return {
-        "slot_id": "ninerouter#0",
-        "provider": "ninerouter",
-        "api_key": ninerouter_api_key(),
-        "tier": "subscription",
-        "model": ninerouter_chat_model(),
-    }
+        return []
+    key = ninerouter_api_key() or "local"
+    models = list(ninerouter_model_chain())
+    if not models:
+        models = ["auto/free"]
+    tiers = ("subscription", "cheap", "free")
+    slots: list[dict] = []
+    for index, model in enumerate(models[:3]):
+        slots.append(
+            {
+                "slot_id": f"ninerouter#{index}",
+                "provider": "ninerouter",
+                "api_key": key,
+                "tier": tiers[min(index, len(tiers) - 1)],
+                "model": model,
+            }
+        )
+    return slots
+
+
+def _ninerouter_slot() -> dict | None:
+    slots = _ninerouter_slots()
+    return slots[0] if slots else None
 
 
 def _quality_slot() -> dict | None:
@@ -157,10 +171,7 @@ def build_provider_slots() -> list[dict]:
     from pkf.config import provider_pool_names, providers, router_only_mode
 
     if router_only_mode():
-        slots: list[dict] = []
-        gateway = _ninerouter_slot()
-        if gateway:
-            slots.append(gateway)
+        slots = _ninerouter_slots()
         quality = _quality_slot()
         if quality:
             slots.append(quality)

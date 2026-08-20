@@ -270,6 +270,32 @@ def is_gemini_client(base_url: str) -> bool:
     return "generativelanguage.googleapis.com" in url or "googleapis.com" in url
 
 
+def is_ninerouter_client(base_url: str) -> bool:
+    from pkf.ninerouter import ninerouter_origin
+
+    origin = ninerouter_origin().lower()
+    url = (base_url or "").lower().rstrip("/")
+    return origin in url or url.endswith(":20128") or "/v1" in url and "20128" in url
+
+
+def ninerouter_model_chain() -> tuple[str, ...]:
+    from pkf.ninerouter import ninerouter_chat_model
+
+    raw = os.getenv(
+        "PKF_NINEROUTER_MODEL_CHAIN",
+        "auto/free,auto,auto/coding,oc/big-pickle",
+    )
+    parts = [part.strip() for part in raw.split(",") if part.strip()]
+    primary = ninerouter_chat_model()
+    if primary and primary not in parts:
+        parts.insert(0, primary)
+    seen: list[str] = []
+    for model in parts:
+        if model not in seen:
+            seen.append(model)
+    return tuple(seen)
+
+
 OPENAI_FALLBACK_MODELS: tuple[str, ...] = tuple(
     part.strip()
     for part in os.getenv("PKF_OPENAI_FALLBACK_MODELS", "gpt-4o,gpt-3.5-turbo").split(",")
@@ -288,6 +314,15 @@ _GEMINI_MODEL_CHAIN: tuple[str, ...] = ("gemini-2.5-flash", "gemini-3.6-flash", 
 
 
 def fallback_model_on_rate_limit(current_model: str, base_url: str = "") -> str | None:
+    if is_ninerouter_client(base_url):
+        chain = list(ninerouter_model_chain())
+        try:
+            index = chain.index(current_model)
+        except ValueError:
+            return chain[1] if len(chain) > 1 else None
+        if index + 1 < len(chain):
+            return chain[index + 1]
+        return None
     if not is_groq_client(base_url):
         return None
     if current_model in _GROQ_HEAVY_MODELS:

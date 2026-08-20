@@ -15,3 +15,12 @@ def test_openai_model_not_found_message():
     text = explain_provider_error("openai", exc)
     assert "modelo configurado" in text.lower() or "model" in text.lower()
     assert "OPENAI_MODEL" in text
+
+
+def test_router_only_rate_limit_message(monkeypatch):
+    monkeypatch.setenv("PKF_ROUTER_ONLY", "1")
+    text = explain_provider_error("ninerouter", Exception("Error 429 rate limit exceeded"))
+    assert "limite" in text.lower()
+    assert "Groq" not in text
+    assert "Gemini" not in text
+    assert "alterna modelos" in text.lower()
