@@ -21,7 +21,7 @@ async def test_delete_chat_with_messages_db_mode(tmp_path, monkeypatch):
     chat_id = created["chat_id"]
     factory = get_session_factory()
     async with factory() as session:
-        user = await ensure_default_user(session)
+        await ensure_default_user(session)
         import uuid
 
         await add_message(session, uuid.UUID(chat_id), "user", "mensagem de teste")
