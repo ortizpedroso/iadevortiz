@@ -292,6 +292,10 @@ async def delete_chat_session(
     if not chat or chat.user_id != user.id:
         raise ValueError("Chat não encontrado")
     was_active = chat.is_active
+    await clear_messages(session, chat_id)
+    trees = await session.execute(select(TaskTree).where(TaskTree.session_id == chat_id))
+    for row in trees.scalars():
+        await session.delete(row)
     await session.delete(chat)
     await session.flush()
     if not was_active:

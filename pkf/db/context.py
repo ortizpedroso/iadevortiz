@@ -40,6 +40,11 @@ class DbContext:
     async def setup(self) -> None:
         if not self.enabled or self._ready:
             return
+        await self.refresh_active_session()
+
+    async def refresh_active_session(self) -> None:
+        if not self.enabled:
+            return
         await init_db()
         factory = get_session_factory()
         async with factory() as session:
