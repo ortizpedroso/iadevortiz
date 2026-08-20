@@ -86,7 +86,7 @@ def load_active_project(global_root: Path) -> str | None:
     except json.JSONDecodeError:
         return None
     slug = data.get("active_project")
-    return slug if slug else None
+    return slug or None
 
 
 def _load_active_project_legacy(global_root: Path) -> str | None:
@@ -98,7 +98,7 @@ def _load_active_project_legacy(global_root: Path) -> str | None:
     except json.JSONDecodeError:
         return None
     slug = data.get("active_project")
-    return slug if slug else None
+    return slug or None
 
 
 def save_active_project(global_root: Path, slug: str | None) -> None:

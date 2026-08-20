@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from pkf.provider_pool import ProviderPool, ProviderSlot
 from pkf.router import Router
 from pkf.workspace import Workspace
 
@@ -11,7 +12,18 @@ from pkf.workspace import Workspace
 @pytest.fixture
 def router(tmp_path):
     ws = Workspace(tmp_path)
-    return Router("mock", ws, ui_mode=True, client=MagicMock())
+    pool = ProviderPool(
+        slots=[
+            ProviderSlot(
+                slot_id="mock-1",
+                provider="mock",
+                api_key="test-key",
+                tier="free",
+                model="mock-model",
+            )
+        ],
+    )
+    return Router("mock", ws, ui_mode=True, client=MagicMock(), provider_pool=pool)
 
 
 def test_restore_chat_history_seeds_agents(router: Router):

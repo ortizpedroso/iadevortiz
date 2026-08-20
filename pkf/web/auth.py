@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 from fastapi import HTTPException, Request, WebSocket
 from starlette.middleware.base import BaseHTTPMiddleware
 

@@ -1,4 +1,9 @@
-from pkf.workflow.planner import group_tasks_into_phases, plan_build, plan_fix_tasks, BuildTask
+from pkf.workflow.planner import (
+    BuildTask,
+    group_tasks_into_phases,
+    plan_build,
+    plan_fix_tasks,
+)
 from pkf.workflow.review import parse_review_status
 
 

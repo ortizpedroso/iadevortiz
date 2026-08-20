@@ -1,10 +1,8 @@
-import asyncio
 from pathlib import Path
 
 import pytest
 
 from pkf.web.history import ChatHistory
-from pkf.workspace import Workspace
 
 
 @pytest.fixture

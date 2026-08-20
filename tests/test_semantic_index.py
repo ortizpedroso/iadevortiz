@@ -1,10 +1,9 @@
 import json
-import os
 from pathlib import Path
 
 import pytest
 
-from pkf.semantic_index import rebuild_index, semantic_search, update_file_index
+from pkf.semantic_index import rebuild_index, semantic_search
 from pkf.tools.impl import edit_file, write_file
 from pkf.workspace import Workspace
 

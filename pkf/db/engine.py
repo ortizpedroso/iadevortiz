@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from pkf.db.config import database_enabled, database_url
 from pkf.db.models import Base

@@ -4,7 +4,7 @@ import json
 import re
 from dataclasses import dataclass
 
-from openai import AsyncOpenAI
+from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
 from pkf.agents.prompts import DEVELOPER_AGENTS
 
@@ -163,7 +163,7 @@ async def classify_intent_llm(
             temperature=0,
         )
         raw = completion.choices[0].message.content or ""
-        match = re.search(r"\{.*\}", raw, re.S)
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
         if not match:
             return fallback
         data = json.loads(match.group(0))
@@ -174,5 +174,5 @@ async def classify_intent_llm(
         if kind not in VALID_KINDS:
             kind = fallback.kind
         return Intent(agent=agent, kind=kind, source="llm")
-    except Exception:
+    except (json.JSONDecodeError, KeyError, TypeError, AttributeError, APIConnectionError, APIStatusError, APITimeoutError):
         return fallback

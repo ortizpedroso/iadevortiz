@@ -6,15 +6,24 @@ Substituir por LangGraph real requer aprovação para adicionar `langgraph` ao r
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import TypedDict
 
 from pkf.tools.impl import verify_build as verify_build_tool
-from pkf.workflow.compose import MAX_BUILD_RETRIES, run_brainstorm, verify_ok
+from pkf.workflow.compose import (
+    MAX_BUILD_RETRIES,
+    MAX_REVIEW_FIX_CYCLES,
+    run_brainstorm,
+    verify_ok,
+)
 from pkf.workflow.orchestrator import failed_agents, run_build_phases
-from pkf.workflow.planner import group_tasks_into_phases, plan_build, plan_build_llm, plan_fix_tasks
+from pkf.workflow.planner import (
+    group_tasks_into_phases,
+    plan_build,
+    plan_build_llm,
+    plan_fix_tasks,
+)
 from pkf.workflow.review import load_latest_review, parse_review_status
 from pkf.workflow.tasks import TaskTracker
-from pkf.workflow.compose import MAX_REVIEW_FIX_CYCLES
 from pkf.workspace_index import begin_build_session
 
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from pkf.db.config import database_enabled
 from pkf.db.engine import get_session_factory, init_db
@@ -109,6 +108,7 @@ class DbContext:
             return None
         async with self.session() as db:
             from sqlalchemy import select
+
             from pkf.db.models import ChatSession
 
             result = await db.execute(select(ChatSession).where(ChatSession.id == self.session_id))

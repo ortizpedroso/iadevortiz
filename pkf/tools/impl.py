@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import contextlib
 import difflib
 import json
 import os
@@ -10,14 +11,19 @@ import subprocess
 from pathlib import Path
 
 from pkf.config import COMMAND_TIMEOUT, MAX_FILE_BYTES, MAX_SEARCH_MATCHES, pkf_dir
-from pkf.spec.document import parse_spec
 from pkf.graph.project import ProjectGraph
-from pkf.spec.store import save_spec_document
-from pkf.workspace import Workspace, WorkspaceError
-from pkf.workspace_index import build_code_index, query_code_index, record_change, verify_workspace_files
 from pkf.semantic_index import update_file_index
 from pkf.skills.search import skill_search_tool_output
+from pkf.spec.document import parse_spec
+from pkf.spec.store import save_spec_document
 from pkf.web_search import web_search
+from pkf.workspace import Workspace, WorkspaceError
+from pkf.workspace_index import (
+    build_code_index,
+    query_code_index,
+    record_change,
+    verify_workspace_files,
+)
 
 ALLOWED_COMMANDS = (
     "python",
@@ -104,7 +110,7 @@ def write_file(workspace: Workspace, path: str, content: str) -> str:
     if workspace.is_secret(target):
         return "Escrita bloqueada: arquivo de credenciais."
     rel = workspace.rel(target)
-    allowed_internal = rel.startswith(".pkf/specs/") or rel.startswith(".pkf/reviews/")
+    allowed_internal = rel.startswith((".pkf/specs/", ".pkf/reviews/"))
     if workspace.is_ignored(target) and not allowed_internal:
         return f"Escrita bloqueada em caminho ignorado: {path}"
     existed = target.exists()
@@ -120,10 +126,8 @@ def write_file(workspace: Workspace, path: str, content: str) -> str:
             target.unlink()
         return f"{syntax_error} Escrita revertida."
     record_change(workspace, rel, action, content[:300])
-    try:
+    with contextlib.suppress(OSError, ValueError, RuntimeError):
         update_file_index(workspace, rel)
-    except Exception:
-        pass
     return f"Arquivo gravado: {rel} ({len(content)} caracteres)"
 
 
@@ -138,7 +142,7 @@ def edit_file(
     if workspace.is_secret(target):
         return "Edição bloqueada: arquivo de credenciais."
     rel = workspace.rel(target)
-    allowed_internal = rel.startswith(".pkf/specs/") or rel.startswith(".pkf/reviews/")
+    allowed_internal = rel.startswith((".pkf/specs/", ".pkf/reviews/"))
     if workspace.is_ignored(target) and not allowed_internal:
         return f"Edição bloqueada em caminho ignorado: {path}"
     if not target.exists() or not target.is_file():
@@ -164,10 +168,8 @@ def edit_file(
     diff = _short_unified_diff(content, new_content, rel)
     audit = f"old={old_string[:120]!r} new={new_string[:120]!r}\n{diff}"
     record_change(workspace, rel, "edit", audit)
-    try:
+    with contextlib.suppress(OSError, ValueError, RuntimeError):
         update_file_index(workspace, rel)
-    except Exception:
-        pass
     return f"Editado {rel}: {count} substituição(ões)."
 
 
@@ -203,11 +205,7 @@ def _safe_subprocess_env() -> dict[str, str]:
     for key in list(env):
         upper = key.upper()
         if (
-            upper.endswith("_API_KEY")
-            or upper.endswith("_TOKEN")
-            or upper.endswith("_SECRET")
-            or upper == "DATABASE_URL"
-            or "SECRET" in upper
+            upper.endswith(("_API_KEY", "_TOKEN", "_SECRET")) or upper == "DATABASE_URL" or "SECRET" in upper
         ):
             blocked.append(key)
     for key in blocked:
@@ -238,8 +236,7 @@ def run_command(workspace: Workspace, command: str) -> str:
     if not parts:
         return "Comando vazio."
     binary = Path(parts[0]).name.lower()
-    if binary.endswith(".exe"):
-        binary = binary[:-4]
+    binary = binary.removesuffix(".exe")
     if binary not in ALLOWED_COMMANDS:
         return f"Comando não permitido: {binary}. Use as ferramentas de arquivo ou um comando da allowlist."
     if binary == "git":
@@ -255,6 +252,7 @@ def run_command(workspace: Workspace, command: str) -> str:
             text=True,
             timeout=COMMAND_TIMEOUT,
             env=_safe_subprocess_env(),
+            check=False,
         )
     except subprocess.TimeoutExpired:
         return f"Comando excedeu {COMMAND_TIMEOUT}s."
@@ -326,7 +324,7 @@ def graph_add_node(workspace: Workspace, node_id: str, parent: str, labels: list
         labels = [str(labels)]
     node = graph.maybe_cluster_labels(parent, [str(x) for x in labels])
     if not node:
-        return f"Necessários pelo menos 3 itens relacionados para criar nó dinâmico."
+        return "Necessários pelo menos 3 itens relacionados para criar nó dinâmico."
     return f"Nó dinâmico '{node.id}' criado sob '{parent}'."
 
 

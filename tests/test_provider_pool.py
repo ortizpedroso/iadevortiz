@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from pkf.config import provider_pool_names
 
 

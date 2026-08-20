@@ -52,7 +52,7 @@ class ProviderPool:
                     break
 
     @classmethod
-    def create(cls, start: str | None = None) -> "ProviderPool":
+    def create(cls, start: str | None = None) -> ProviderPool:
         return cls(_start=start)
 
     @property
@@ -95,10 +95,7 @@ class ProviderPool:
                 return True
 
         tiers = tier_order()
-        if current_tier in tiers:
-            start_tier = tiers.index(current_tier) + 1
-        else:
-            start_tier = 0
+        start_tier = tiers.index(current_tier) + 1 if current_tier in tiers else 0
         for tier in tiers[start_tier:]:
             for index, slot in enumerate(self.slots):
                 if slot.tier == tier and self._slot_available(slot, now):

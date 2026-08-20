@@ -114,7 +114,7 @@ def providers() -> dict[str, ProviderConfig]:
             supports_tools=os.getenv("DEEPSEEK_TOOLS", "0") == "1",
         ),
     }
-    configs = {k: v for k, v in configs.items() if v.api_key or k in ("ollama",)}
+    configs = {k: v for k, v in configs.items() if v.api_key or k == "ollama"}
     openai_key = os.getenv("OPENAI_API_KEY", "")
     if openai_key:
         configs["openai"] = ProviderConfig(

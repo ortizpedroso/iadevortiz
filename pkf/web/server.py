@@ -6,23 +6,25 @@ import webbrowser
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Body, FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from openai import APIConnectionError, APIStatusError, APITimeoutError
 
 from pkf.config import auth_token
 from pkf.db.config import database_enabled
 from pkf.db.engine import close_db, init_db
 from pkf.errors import explain_provider_error
-from pkf.providers import ping_provider
 from pkf.ninerouter import ninerouter_enabled, ninerouter_health
-from pkf.web_search import web_search_configured
+from pkf.providers import ping_provider
 from pkf.router import Router
-from pkf.spec.store import active_spec_preview, approve_spec, update_spec_stack
-from pkf.workflow.cycle import DevCycle
-from pkf.workflow.tasks import TaskTracker
-from pkf.workspace_index import build_file_tree, list_changes
-from pkf.web.auth import AuthMiddleware, SecurityHeadersMiddleware, check_ws_auth, _extract_token
+from pkf.spec.store import approve_spec, update_spec_stack
+from pkf.web.auth import (
+    AuthMiddleware,
+    SecurityHeadersMiddleware,
+    _extract_token,
+    check_ws_auth,
+)
 from pkf.web.history import ChatHistory
 from pkf.web.library import (
     activate_chat,
@@ -34,6 +36,10 @@ from pkf.web.library import (
     library_snapshot,
 )
 from pkf.web.preview import preview_info, redirect_preview_entry, serve_preview_file
+from pkf.web_search import web_search_configured
+from pkf.workflow.cycle import DevCycle
+from pkf.workflow.tasks import TaskTracker
+from pkf.workspace_index import build_file_tree, list_changes
 
 PKG_DIR = Path(__file__).resolve().parent
 LEGACY_STATIC = PKG_DIR / "static"
@@ -208,7 +214,8 @@ def create_app(router: Router) -> FastAPI:
         return {"ok": True, "library": await library_snapshot(router.workspace, history.db_context)}
 
     @app.post("/api/chats/{chat_id}/attach")
-    async def chats_attach(chat_id: str, payload: dict = Body(default_factory=dict)):
+    async def chats_attach(chat_id: str, payload: dict | None = None):
+        payload = payload or {}
         history: ChatHistory = app.state.history
         slug = payload.get("project_slug") or payload.get("slug")
         async with app.state.lock:
@@ -242,7 +249,8 @@ def create_app(router: Router) -> FastAPI:
         return {"ok": True, "session": router.snapshot(), "library": await library_snapshot(router.workspace, history.db_context)}
 
     @app.patch("/api/projects/{slug}")
-    async def projects_rename(slug: str, payload: dict = Body(default_factory=dict)):
+    async def projects_rename(slug: str, payload: dict | None = None):
+        payload = payload or {}
         history: ChatHistory = app.state.history
         name = (payload.get("name") or "").strip()
         if not name:
@@ -289,7 +297,7 @@ def create_app(router: Router) -> FastAPI:
                 await history.db_context.setup()
                 snapshot["tasks"] = await history.db_context.load_tasks()
             return {"session": snapshot, "messages": history.messages, "library": await library_snapshot(router.workspace, history.db_context)}
-        except Exception as exc:
+        except (OSError, RuntimeError, ValueError, TypeError, APIConnectionError, APIStatusError, APITimeoutError) as exc:
             return {
                 "session": {
                     "provider_ok": False,
@@ -309,7 +317,8 @@ def create_app(router: Router) -> FastAPI:
         return {"ok": True, "session": router.snapshot()}
 
     @app.post("/api/spec/approve")
-    async def spec_approve(payload: dict = Body(default_factory=dict)):
+    async def spec_approve(payload: dict | None = None):
+        payload = payload or {}
         name = payload.get("name") or router.cycle.active_spec
         if not name:
             return {"ok": False, "error": "Nenhuma spec ativa"}
@@ -349,7 +358,8 @@ def create_app(router: Router) -> FastAPI:
         return {"tasks": TaskTracker(router.workspace.root).to_list()}
 
     @app.post("/api/spec/stack")
-    async def spec_stack(payload: dict = Body(default_factory=dict)):
+    async def spec_stack(payload: dict | None = None):
+        payload = payload or {}
         name = payload.get("name") or router.cycle.active_spec
         if not name:
             return {"ok": False, "error": "Nenhuma spec ativa"}
@@ -390,7 +400,7 @@ def create_app(router: Router) -> FastAPI:
                     await history.append({"role": "user", "content": content})
                     try:
                         reply = await router.handle(content)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001 — surface any agent/provider failure to the client
                         await websocket.send_json(
                             {
                                 "type": "error",

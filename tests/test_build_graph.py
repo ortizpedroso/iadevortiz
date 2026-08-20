@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from pkf.workflow.build_graph import node_plan, run_build_graph
+from pkf.workflow.build_graph import node_plan
 from pkf.workflow.review import parse_review_status
 
 

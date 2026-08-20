@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pytest
-
 from pkf.graph.project import ProjectGraph
 from pkf.tools.impl import edit_file, write_file
 from pkf.workflow.planner import plan_build

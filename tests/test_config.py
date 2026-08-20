@@ -1,4 +1,4 @@
-from pkf.config import default_fallback, default_provider
+from pkf.config import default_provider
 
 
 def test_production_defaults_to_ninerouter_when_url_set(monkeypatch):

@@ -1,8 +1,11 @@
 """Tier de qualidade (Claude via gateway) — só architect e reviewer."""
 
-import pytest
 
-from pkf.config import QUALITY_TIER_AGENTS, agent_uses_quality_tier, quality_tier_provider
+from pkf.config import (
+    QUALITY_TIER_AGENTS,
+    agent_uses_quality_tier,
+    quality_tier_provider,
+)
 from pkf.provider_pool import ProviderPool
 from pkf.router_native import build_provider_slots
 
@@ -60,5 +63,5 @@ def test_without_quality_config_unchanged(monkeypatch):
 
 
 def test_quality_agents_set():
-    assert QUALITY_TIER_AGENTS == frozenset({"architect", "reviewer"})
+    assert frozenset({"architect", "reviewer"}) == QUALITY_TIER_AGENTS
     assert quality_tier_provider() is None or isinstance(quality_tier_provider(), str)

@@ -5,8 +5,6 @@ import os
 import urllib.error
 import urllib.request
 
-from pkf.config import API_TIMEOUT
-
 
 def ninerouter_enabled() -> bool:
     return bool(os.getenv("NINEROUTER_URL", "").strip())
@@ -52,7 +50,7 @@ def ninerouter_health() -> tuple[bool, str]:
             return True, "ok"
     except urllib.error.HTTPError as exc:
         return False, f"HTTP {exc.code}: {exc.reason}"
-    except Exception as exc:
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
         return False, str(exc)
 
 
@@ -62,9 +60,7 @@ def is_ninerouter_auth_error(detail: str) -> bool:
         return True
     if "api key required" in text:
         return True
-    if "ninerouter_key ausente" in text:
-        return True
-    return False
+    return "ninerouter_key ausente" in text
 
 
 def ninerouter_auth_warning(reason: str = "401") -> str:
@@ -117,7 +113,7 @@ def ninerouter_web_search(query: str, max_results: int = 5) -> str:
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
         return f"9Router search falhou (HTTP {exc.code}): {raw[:300]}"
-    except Exception as exc:
+    except (urllib.error.URLError, OSError, TimeoutError, json.JSONDecodeError) as exc:
         return f"9Router search indisponível: {exc}"
 
     if not isinstance(body, dict):

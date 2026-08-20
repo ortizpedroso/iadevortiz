@@ -28,7 +28,7 @@ class DevCycle:
     goal: str | None = None
 
     @classmethod
-    def load(cls, workspace_root: Path) -> "DevCycle":
+    def load(cls, workspace_root: Path) -> DevCycle:
         path = pkf_dir(workspace_root) / "session.json"
         if not path.exists():
             return cls()

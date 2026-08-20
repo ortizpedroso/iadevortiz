@@ -76,7 +76,7 @@ def _rtk_shrink(content: str, max_chars: int) -> str:
         return content
     head = max_chars // 2
     tail = max(240, max_chars // 4)
-    digest = hashlib.sha1(content.encode("utf-8", errors="ignore")).hexdigest()[:10]
+    digest = hashlib.sha1(content.encode("utf-8", errors="ignore"), usedforsecurity=False).hexdigest()[:10]
     lines = content.count("\n") + 1
     omitted = len(content) - head - tail
     return (
