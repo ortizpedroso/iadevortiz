@@ -471,6 +471,27 @@ async def delete_project(workspace: Workspace, slug: str, db: DbContext | None =
         save_active_project(global_root, None)
 
 
+async def delete_projects_bulk(
+    workspace: Workspace,
+    slugs: list[str] | None = None,
+    *,
+    delete_all: bool = False,
+    db: DbContext | None = None,
+) -> dict:
+    targets = list_projects(workspace.global_root) if delete_all else list(dict.fromkeys(slugs or []))
+    if not targets:
+        return {"deleted": [], "failed": {}}
+    deleted: list[str] = []
+    failed: dict[str, str] = {}
+    for slug in targets:
+        try:
+            await delete_project(workspace, slug, db)
+            deleted.append(slug)
+        except ValueError as exc:
+            failed[slug] = str(exc)
+    return {"deleted": deleted, "failed": failed}
+
+
 async def activate_project(workspace: Workspace, slug: str, db: DbContext | None = None) -> None:
     slug = _validate_slug(slug) if slug.strip() else ""
     if not slug:

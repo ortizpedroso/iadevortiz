@@ -289,6 +289,36 @@ export default function App() {
     }
   }
 
+  async function bulkDeleteProjects(slugs: string[], deleteAll = false) {
+    const res = await fetch("/api/projects/bulk-delete", {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(deleteAll ? { all: true } : { slugs }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setMessages((m) => [
+        ...m,
+        { role: "error", content: data?.error || "Não foi possível excluir os projetos." },
+      ]);
+      return;
+    }
+    applyLibrary(data.library);
+    if (data.session) applySession(data.session, true);
+    await loadLibrary();
+    loadChanges();
+    const failed = data.failed ? Object.keys(data.failed) : [];
+    if (failed.length) {
+      setMessages((m) => [
+        ...m,
+        {
+          role: "error",
+          content: `Alguns projetos não foram excluídos: ${failed.join(", ")}`,
+        },
+      ]);
+    }
+  }
+
   async function renameProject(slug: string, name: string) {
     const res = await fetch(`/api/projects/${slug}`, {
       method: "PATCH",
@@ -349,6 +379,7 @@ export default function App() {
         onAttachChat={attachChat}
         onSelectProject={selectProject}
         onDeleteProject={deleteProject}
+        onBulkDeleteProjects={bulkDeleteProjects}
         onRenameProject={renameProject}
         onPinProject={pinProject}
         onNewChat={newChat}

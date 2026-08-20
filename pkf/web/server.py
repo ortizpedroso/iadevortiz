@@ -34,6 +34,7 @@ from pkf.web.library import (
     create_chat,
     delete_chat,
     delete_project,
+    delete_projects_bulk,
     library_snapshot,
     pin_project,
 )
@@ -296,6 +297,33 @@ def create_app(router: Router) -> FastAPI:
             router.cycle = DevCycle.load(router.workspace.root)
             router._register_core_agents()
         return {"ok": True, "library": await library_snapshot(router.workspace, history.db_context)}
+
+    @app.post("/api/projects/bulk-delete")
+    async def projects_bulk_delete(payload: dict | None = None):
+        payload = payload or {}
+        history: ChatHistory = app.state.history
+        delete_all = bool(payload.get("all"))
+        slugs = payload.get("slugs") if isinstance(payload.get("slugs"), list) else []
+        if not delete_all and not slugs:
+            return JSONResponse({"ok": False, "error": "Informe slugs ou all=true"}, status_code=400)
+        async with app.state.lock:
+            result = await delete_projects_bulk(
+                router.workspace,
+                slugs=[str(s) for s in slugs],
+                delete_all=delete_all,
+                db=history.db_context,
+            )
+            router.cycle = DevCycle.load(router.workspace.root)
+            router._register_core_agents()
+        library = await library_snapshot(router.workspace, history.db_context)
+        ok = not result["failed"]
+        return {
+            "ok": ok,
+            "deleted": result["deleted"],
+            "failed": result["failed"],
+            "library": library,
+            "session": router.snapshot(),
+        }
 
     @app.post("/api/projects/{slug}/pin")
     async def projects_pin(slug: str, payload: dict | None = None):
