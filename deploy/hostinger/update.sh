@@ -62,5 +62,19 @@ docker compose --profile "$PROFILE" ps
 echo ""
 curl -s http://127.0.0.1:8765/api/health || true
 echo ""
-echo "PKF: http://SEU_IP:8765/?token=$(grep '^PKF_AUTH_TOKEN=' .env 2>/dev/null | head -n1 | cut -d= -f2- || echo 'SEU_PKF_AUTH_TOKEN')"
+
+PKF_HOST_DOMAIN="$(grep '^PKF_HOST_DOMAIN=' .env 2>/dev/null | head -n1 | cut -d= -f2- || true)"
+if [[ -n "$PKF_HOST_DOMAIN" ]]; then
+  echo "==> Integrar PKF ao Caddy compartilhado ($PKF_HOST_DOMAIN)"
+  export PKF_HOST_DOMAIN
+  bash deploy/hook-eventosbr-caddy.sh || echo "AVISO: hook-eventosbr-caddy falhou"
+else
+  echo "AVISO: PKF_HOST_DOMAIN não definida no .env — pulando integração com Caddy compartilhado"
+fi
+
+echo ""
+echo "PKF local: http://127.0.0.1:8765/?token=$(grep '^PKF_AUTH_TOKEN=' .env 2>/dev/null | head -n1 | cut -d= -f2- || echo 'SEU_PKF_AUTH_TOKEN')"
+if [[ -n "$PKF_HOST_DOMAIN" ]]; then
+  echo "PKF público: https://${PKF_HOST_DOMAIN}/?token=$(grep '^PKF_AUTH_TOKEN=' .env 2>/dev/null | head -n1 | cut -d= -f2- || echo 'SEU_PKF_AUTH_TOKEN')"
+fi
 echo "OmniRoute: configurado automaticamente (sem dashboard)"

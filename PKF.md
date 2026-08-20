@@ -45,7 +45,31 @@ python -m pkf --ui
 cd /opt/pkf && git pull && bash deploy/hostinger/update.sh
 ```
 
-Inclui PostgreSQL, PKF (`:8765`) e Nginx opcional (`:8080` — evita conflito com Caddy na :80).
+Inclui PostgreSQL, PKF (`127.0.0.1:8765` — só localhost; acesso público via Caddy compartilhado) e Nginx legado opcional (`:8080`, normalmente parado).
+
+## Caddy compartilhado (eventosbr)
+
+A VPS usa um Caddy compartilhado (`eventosbr-caddy-1`) nas portas 80/443, igual ao `sigep-forca`. O PKF entra nele via hook — **não** usa nginx/certbot próprio para TLS.
+
+### Configuração (manual na VPS)
+
+1. Defina no `.env` do PKF: `PKF_HOST_DOMAIN=SEU_SUBDOMINIO` (substitua pelo subdomínio real).
+2. Aponte o DNS desse subdomínio para o IP da VPS.
+3. Rode o deploy completo ou o hook uma vez:
+
+```bash
+cd /opt/pkf
+export PKF_HOST_DOMAIN=SEU_SUBDOMINIO   # ou já no .env
+bash deploy/hook-eventosbr-caddy.sh
+```
+
+O `deploy/hostinger/update.sh` chama o hook automaticamente **se** `PKF_HOST_DOMAIN` estiver no `.env`. Se não estiver, o deploy continua com aviso — PKF fica só em `127.0.0.1:8765`.
+
+### Limitação conhecida
+
+O hook **não** roda quando o `eventosbr` faz deploy — só quando o PKF faz deploy (`update.sh` ou `hook-eventosbr-caddy.sh` manual). Se o `eventosbr` resetar o Caddyfile compartilhado entre dois deploys do PKF, o bloco do PKF some até o próximo deploy do PKF (mesmo padrão herdado do `sigep-forca`).
+
+Variáveis opcionais do hook: `CADDY_CTR` (default `eventosbr-caddy-1`), `WEB_CTR` (default `pkf-pkf-1`).
 
 ## Deploy automático (GitHub Actions)
 

@@ -4,6 +4,39 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Integração PKF → Caddy compartilhado (eventosbr)
+
+**Data:** 2026-08-20
+
+### Por que mudou
+
+A VPS já tem Caddy (`eventosbr-caddy-1`) dono das portas 80/443, usado por `eventosbr` e `sigep-forca`. Subir nginx/certbot próprio no PKF conflita com essa infra. O PKF passa a usar o **mesmo padrão do sigep-forca**: hook que conecta o container do PKF à rede Docker do Caddy e acrescenta um bloco marcado no Caddyfile compartilhado.
+
+### Tarefas
+
+1. **`deploy/hook-eventosbr-caddy.sh`** — espelha o hook do sigep-forca; marcador `# PKF —`; `reverse_proxy pkf-pkf-1:8765`; exige `PKF_HOST_DOMAIN`.
+2. **Porta 8765** — bind `127.0.0.1:8765:8765` (não pública); removido `sed` que abria a porta no `update.sh`.
+3. **`update.sh`** — chama o hook após health check se `PKF_HOST_DOMAIN` estiver no `.env`; aviso e continua se ausente.
+4. **`/favicon.ico`** — rota pública no `AuthMiddleware` (corrige 401/500 sem token).
+
+### Limitação documentada
+
+O hook só roda no deploy do PKF. Se o `eventosbr` resetar o Caddyfile depois, o bloco do PKF some até o próximo deploy do PKF — limitação herdada do padrão sigep-forca, documentada em `PKF.md`.
+
+### Definition of Done
+
+- [x] `deploy/hook-eventosbr-caddy.sh` criado, marcador próprio `# PKF —`
+- [x] Porta 8765 não é mais pública
+- [x] `update.sh` chama hook condicionalmente
+- [x] Fix favicon aplicado
+- [x] Limitação documentada no `PKF.md`
+
+### Testes
+
+`python3 -m pytest tests/ -q` → **175 passed**
+
+---
+
 ## Fix: flicker sidebar + cadeia OpenAI
 
 **Data:** 2026-08-20
