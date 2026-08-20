@@ -254,11 +254,40 @@ def is_groq_client(base_url: str) -> bool:
     return "groq.com" in (base_url or "").lower()
 
 
+def is_openai_client(base_url: str) -> bool:
+    return "api.openai.com" in (base_url or "").lower()
+
+
+OPENAI_FALLBACK_MODELS: tuple[str, ...] = tuple(
+    part.strip()
+    for part in os.getenv("PKF_OPENAI_FALLBACK_MODELS", "gpt-4o,gpt-3.5-turbo").split(",")
+    if part.strip()
+)
+
+_OPENAI_MODEL_CHAIN: tuple[str, ...] = ("gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo")
+
+
 def fallback_model_on_rate_limit(current_model: str, base_url: str = "") -> str | None:
     if not is_groq_client(base_url):
         return None
     if current_model in _GROQ_HEAVY_MODELS:
         return GROQ_FALLBACK_MODEL
+    return None
+
+
+def fallback_model_on_not_found(current_model: str, base_url: str = "") -> str | None:
+    if not is_openai_client(base_url):
+        return None
+    chain = list(_OPENAI_MODEL_CHAIN)
+    for model in OPENAI_FALLBACK_MODELS:
+        if model not in chain:
+            chain.append(model)
+    try:
+        index = chain.index(current_model)
+    except ValueError:
+        return chain[0] if chain else None
+    if index + 1 < len(chain):
+        return chain[index + 1]
     return None
 
 

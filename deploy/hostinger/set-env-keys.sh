@@ -57,10 +57,15 @@ set_kv PKF_FALLBACK "${PKF_FALLBACK:-}"
 
 set_kv PKF_PROVIDER "${PKF_PROVIDER:-ninerouter}"
 set_kv PKF_PROVIDER_TIERS "${PKF_PROVIDER_TIERS:-subscription,cheap,free}"
-set_kv PKF_TIER_SUBSCRIPTION "${PKF_TIER_SUBSCRIPTION:-ninerouter,kimi,groq,deepseek,openai}"
+# OpenAI só entra no pool se explicitamente habilitado (evita 404 quando a chave não tem o modelo).
+_pool_default="ninerouter,kimi,groq,gemini,deepseek"
+if [ "${OPENAI_IN_POOL:-0}" = "1" ] && [ -n "${OPENAI_API_KEY:-}" ]; then
+  _pool_default="${_pool_default},openai"
+fi
+set_kv PKF_TIER_SUBSCRIPTION "${PKF_TIER_SUBSCRIPTION:-ninerouter,kimi,groq,deepseek}"
 set_kv PKF_TIER_CHEAP "${PKF_TIER_CHEAP:-gemini}"
 set_kv PKF_TIER_FREE "${PKF_TIER_FREE:-groq}"
-set_kv PKF_PROVIDER_POOL "${PKF_PROVIDER_POOL:-ninerouter,kimi,groq,gemini,deepseek,openai}"
+set_kv PKF_PROVIDER_POOL "${PKF_PROVIDER_POOL:-${_pool_default}}"
 
 set_kv DATABASE_URL "${DATABASE_URL:-postgresql+asyncpg://pkf:pkf@postgres:5432/pkf}"
 

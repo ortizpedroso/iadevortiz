@@ -9,8 +9,13 @@ import networkx as nx
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
 from pkf.agents.compact import compact_messages
-from pkf.config import NODE_LIMIT, fallback_model_on_rate_limit, tool_rounds_for_agent
-from pkf.provider_errors import should_rotate_provider
+from pkf.config import (
+    NODE_LIMIT,
+    fallback_model_on_not_found,
+    fallback_model_on_rate_limit,
+    tool_rounds_for_agent,
+)
+from pkf.provider_errors import is_model_not_found_error, should_rotate_provider
 from pkf.reasoning import (
     completion_params_for_model,
     is_reasoning_model,
@@ -93,10 +98,17 @@ class Agent:
             try:
                 completion = await self.client.chat.completions.create(**api_args)
             except APIStatusError as exc:
+                base_url = str(getattr(self.client, "base_url", ""))
                 if exc.status_code == 429:
-                    fb = fallback_model_on_rate_limit(self.model, str(getattr(self.client, "base_url", "")))
+                    fb = fallback_model_on_rate_limit(self.model, base_url)
                     if fb and fb != self.model:
                         print(f"[{self.name}] Rate limit em {self.model}; tentando {fb}")
+                        self.model = fb
+                        continue
+                if is_model_not_found_error(exc):
+                    fb = fallback_model_on_not_found(self.model, base_url)
+                    if fb and fb != self.model:
+                        print(f"[{self.name}] Modelo {self.model} indisponível; tentando {fb}")
                         self.model = fb
                         continue
                 if should_rotate_provider(self.router.provider_name, exc) and await self.router.try_rotate_provider(exc):

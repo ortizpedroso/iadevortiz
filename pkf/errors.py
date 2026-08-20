@@ -56,6 +56,16 @@ def explain_provider_error(provider: str, exc: Exception) -> str:
         return f"9Router: todos os provedores indisponíveis.{wait_hint} Verifique o dashboard do 9Router."
     if connection:
         return f"Não foi possível conectar ao provedor '{provider}'. {text}"
+    if "model_not_found" in lowered or "does not exist" in lowered or "404" in text:
+        return (
+            f"O modelo configurado para '{provider}' não está disponível na sua conta.\n\n"
+            "A PKF tentou alternar para outro modelo/provedor automaticamente. "
+            "Se o erro persistir:\n"
+            "1. Ajuste OPENAI_MODEL no .env (ex.: gpt-4o ou gpt-3.5-turbo)\n"
+            "2. Ou remova OPENAI_API_KEY e use Groq/Gemini/9Router\n"
+            "3. Na VPS: cd /opt/pkf && bash deploy/hostinger/set-env-keys.sh && bash deploy/hostinger/update.sh\n\n"
+            f"Detalhe: {text[:280]}"
+        )
     return f"Erro no provedor '{provider}': {text}"
 
 
