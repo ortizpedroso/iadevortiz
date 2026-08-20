@@ -275,7 +275,7 @@ def is_ninerouter_client(base_url: str) -> bool:
 
     origin = ninerouter_origin().lower()
     url = (base_url or "").lower().rstrip("/")
-    return origin in url or url.endswith(":20128") or "/v1" in url and "20128" in url
+    return origin in url or url.endswith(":20128") or ("/v1" in url and "20128" in url)
 
 
 def ninerouter_model_chain() -> tuple[str, ...]:
