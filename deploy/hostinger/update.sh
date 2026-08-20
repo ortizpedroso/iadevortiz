@@ -26,11 +26,6 @@ git pull origin main
 echo "==> Mesclar .env (preserva GROQ/GEMINI/NINEROUTER existentes)"
 bash deploy/hostinger/set-env-keys.sh
 
-echo "==> Porta 8765 exposta (acesso externo)"
-if grep -q '127.0.0.1:8765:8765' docker-compose.yml; then
-  sed -i 's/127.0.0.1:8765:8765/8765:8765/' docker-compose.yml
-fi
-
 echo "==> OmniRoute/9Router no .env (se ainda faltar URL)"
 grep -q '^NINEROUTER_URL=' .env || cat >> .env << 'EOF'
 
