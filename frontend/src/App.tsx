@@ -4,7 +4,7 @@ import { Composer } from "./components/Composer";
 import { MessageList } from "./components/MessageList";
 import { Sidebar } from "./components/Sidebar";
 import { SpecPanel } from "./components/SpecPanel";
-import { authHeaders, getToken, previewUrl, wsProtocols, wsUrl } from "./lib/api";
+import { authHeaders, getToken, previewUrl, wsUrl } from "./lib/api";
 import type { ChatItem, Message, ProjectItem, SessionSnapshot, SpecPreview, TaskNode, WsEvent } from "./types";
 
 const EMPTY_SESSION: SessionSnapshot = {};
@@ -34,7 +34,11 @@ export default function App() {
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
   const intentionalCloseRef = useRef(false);
+  const connectGenerationRef = useRef(0);
   const authRequiredRef = useRef(false);
+  const wsConnectedRef = useRef(false);
+  const useHttpFallbackRef = useRef(false);
+  const [useHttpFallback, setUseHttpFallback] = useState(false);
   const applySessionRef = useRef<(data: SessionSnapshot, replace?: boolean) => void>(() => {});
   const loadChangesRef = useRef<() => Promise<void>>(async () => {});
 
@@ -92,6 +96,7 @@ export default function App() {
   loadChangesRef.current = loadChanges;
 
   const connect = useCallback(() => {
+    if (useHttpFallbackRef.current) return;
     if (authRequiredRef.current && !getToken()) {
       setAuthOpen(true);
       setStatus("Token necessário");
@@ -103,13 +108,22 @@ export default function App() {
       window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
-    const ws = new WebSocket(wsUrl(), wsProtocols());
+    const generation = connectGenerationRef.current + 1;
+    connectGenerationRef.current = generation;
+    const ws = new WebSocket(wsUrl());
     socketRef.current = ws;
     ws.onopen = () => {
+      if (generation !== connectGenerationRef.current || ws !== socketRef.current) return;
+      wsConnectedRef.current = true;
+      useHttpFallbackRef.current = false;
+      setUseHttpFallback(false);
       reconnectAttemptsRef.current = 0;
       setStatus("Pronto");
     };
     ws.onclose = (ev) => {
+      if (generation !== connectGenerationRef.current) return;
+      if (ws !== socketRef.current && socketRef.current !== null) return;
+      wsConnectedRef.current = false;
       if (intentionalCloseRef.current) {
         socketRef.current = null;
         return;
@@ -131,16 +145,16 @@ export default function App() {
         socketRef.current = null;
         return;
       }
-      if (socketRef.current === ws) {
-        socketRef.current = null;
-      }
+      socketRef.current = null;
       reconnectAttemptsRef.current += 1;
-      if (reconnectAttemptsRef.current >= 8) {
-        setStatus("Servidor indisponível");
+      if (reconnectAttemptsRef.current >= 5) {
+        useHttpFallbackRef.current = true;
+        setUseHttpFallback(true);
+        setStatus("Modo HTTP (sem tempo real)");
         return;
       }
       setStatus(`Reconectando… (${ev.code})`);
-      reconnectTimerRef.current = window.setTimeout(connect, Math.min(1500 * reconnectAttemptsRef.current, 8000));
+      reconnectTimerRef.current = window.setTimeout(connect, Math.min(2000 * reconnectAttemptsRef.current, 10000));
     };
     ws.onerror = () => {
       if (ws.readyState !== WebSocket.OPEN) {
@@ -281,13 +295,16 @@ export default function App() {
 
   useEffect(() => {
     if (!sessionReady) return;
-    if (authRequired && !getToken()) return;
+    if (authRequiredRef.current && !getToken()) return;
 
     intentionalCloseRef.current = false;
     reconnectAttemptsRef.current = 0;
+    useHttpFallbackRef.current = false;
+    setUseHttpFallback(false);
     connect();
 
     return () => {
+      connectGenerationRef.current += 1;
       intentionalCloseRef.current = true;
       if (reconnectTimerRef.current) {
         window.clearTimeout(reconnectTimerRef.current);
@@ -298,8 +315,49 @@ export default function App() {
         ws.close(1000, "reconnect");
       }
       socketRef.current = null;
+      wsConnectedRef.current = false;
     };
-  }, [sessionReady, authRequired, connect]);
+  }, [sessionReady, connect]);
+
+  function retryWebSocket() {
+    useHttpFallbackRef.current = false;
+    setUseHttpFallback(false);
+    reconnectAttemptsRef.current = 0;
+    connectGenerationRef.current += 1;
+    connect();
+  }
+
+  async function sendMessageHttp(text: string) {
+    setMessages((m) => [...m, { role: "user", content: text }]);
+    setThinking(true);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/message", {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ content: text }),
+      });
+      const event = await res.json();
+      if (event.type === "error") {
+        setMessages((m) => [...m, { role: "error", content: event.content || "Erro" }]);
+      } else if (event.type === "done") {
+        setMessages((m) => [
+          ...m,
+          { role: "assistant", content: event.content || "", agent: event.agent as string },
+        ]);
+        applySessionRef.current(event as SessionSnapshot);
+        loadChangesRef.current();
+      }
+    } catch {
+      setMessages((m) => [...m, { role: "error", content: "Falha ao enviar mensagem via HTTP." }]);
+    } finally {
+      setThinking(false);
+      setBusy(false);
+      setProgress("");
+      setActiveAgent(null);
+      setActiveProvider(null);
+    }
+  }
 
   function handleAuth(token: string) {
     sessionStorage.setItem("pkf_token", token);
@@ -309,19 +367,22 @@ export default function App() {
   }
 
   function sendMessage(text: string) {
+    if (useHttpFallbackRef.current || useHttpFallback) {
+      void sendMessageHttp(text);
+      return;
+    }
     const ws = socketRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      const hint =
-        status === "Token necessário" || (authRequired && !getToken())
-          ? "Informe o token de acesso para continuar."
-          : status === "Servidor indisponível"
-            ? "Servidor indisponível. Verifique se o PKF está rodando (docker compose ps)."
-            : "Ainda conectando… tente de novo em instantes.";
-      setMessages((m) => [...m, { role: "error", content: hint }]);
-      if (authRequired && !getToken()) {
+      if (authRequiredRef.current && !getToken()) {
         setAuthOpen(true);
+        setMessages((m) => [...m, { role: "error", content: "Informe o token de acesso para continuar." }]);
         return;
       }
+      if (sessionReady) {
+        void sendMessageHttp(text);
+        return;
+      }
+      setMessages((m) => [...m, { role: "error", content: "Ainda conectando… tente de novo em instantes." }]);
       reconnectAttemptsRef.current = 0;
       connect();
       return;
@@ -534,7 +595,13 @@ export default function App() {
             <div className="flex items-center gap-2">
               <span
                 className={`h-2 w-2 shrink-0 rounded-full ${
-                  busy ? "bg-[var(--pkf-accent)]" : status === "Pronto" ? "bg-emerald-500" : "bg-[var(--pkf-text-dim)]"
+                  busy
+                    ? "bg-[var(--pkf-accent)]"
+                    : status === "Pronto"
+                      ? "bg-emerald-500"
+                      : useHttpFallback
+                        ? "bg-amber-500"
+                        : "bg-[var(--pkf-text-dim)]"
                 }`}
               />
               <span className="text-[var(--pkf-muted)]">{busy ? "Trabalhando…" : status}</span>
@@ -585,7 +652,7 @@ export default function App() {
             {session.provider_error}
           </div>
         ) : null}
-        {authRequired && status !== "Pronto" && !authOpen ? (
+        {authRequired && status !== "Pronto" && !authOpen && !useHttpFallback ? (
           <div className="mx-4 mt-3 rounded-xl border border-[var(--pkf-border)] bg-[var(--pkf-bg-panel)] p-3 text-sm text-[var(--pkf-muted)]">
             {status === "Token necessário" || status === "Token inválido" || !getToken() ? (
               <>
@@ -603,6 +670,14 @@ export default function App() {
             ) : (
               <>Conectando ao servidor… ({status})</>
             )}
+          </div>
+        ) : null}
+        {useHttpFallback ? (
+          <div className="mx-4 mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+            Chat via HTTP (WebSocket bloqueado neste navegador). Progresso em tempo real só após reconectar.{" "}
+            <button type="button" className="font-medium underline" onClick={retryWebSocket}>
+              Reconectar WebSocket
+            </button>
           </div>
         ) : null}
         {progress ? (
