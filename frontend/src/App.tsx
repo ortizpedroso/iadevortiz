@@ -33,6 +33,11 @@ export default function App() {
   const sessionBootstrappedRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const authRequiredRef = useRef(false);
+  const applySessionRef = useRef(applySession);
+  const loadChangesRef = useRef(loadChanges);
+
+  applySessionRef.current = applySession;
+  loadChangesRef.current = loadChanges;
 
   const applyLibrary = useCallback((library?: { chats?: ChatItem[]; projects?: ProjectItem[] }) => {
     if (!library) return;
@@ -123,7 +128,7 @@ export default function App() {
         socketRef.current = null;
         return;
       }
-      setStatus("Reconectando…");
+      setStatus(`Reconectando… (${ev.code})`);
       window.setTimeout(connect, Math.min(1500 * reconnectAttemptsRef.current, 8000));
     };
     ws.onerror = () => {
@@ -135,7 +140,7 @@ export default function App() {
       const event: WsEvent = JSON.parse(ev.data);
       if (event.type === "session") {
         sessionBootstrappedRef.current = true;
-        applySession(event as SessionSnapshot, true);
+        applySessionRef.current(event as SessionSnapshot, true);
         return;
       }
       if (event.type === "spec_preview" && event.spec) {
@@ -174,13 +179,15 @@ export default function App() {
           ...m,
           { role: "assistant", content: event.content || "", agent: event.agent as string },
         ]);
-        applySession(event as SessionSnapshot);
-        loadChanges();
+        applySessionRef.current(event as SessionSnapshot);
+        loadChangesRef.current();
       }
     };
-  }, [applySession, loadChanges]);
+  }, []);
 
   useEffect(() => {
+    let active = true;
+
     async function boot() {
       let serverOk = false;
       try {
@@ -220,6 +227,12 @@ export default function App() {
           setMessages(data.messages || []);
           applyLibrary(data.library);
           sessionBootstrappedRef.current = true;
+          const token = getToken();
+          if (token && !new URLSearchParams(window.location.search).get("token")) {
+            const url = new URL(window.location.href);
+            url.searchParams.set("token", token);
+            window.history.replaceState({}, "", url.toString());
+          }
         }
       } catch {
         if (authRequiredRef.current) {
@@ -238,17 +251,23 @@ export default function App() {
         await loadLibrary();
       }
       await loadChanges();
+      if (!active) return;
       setSessionReady(true);
       connect();
     }
     boot();
-    return () => socketRef.current?.close();
-  }, [applySession, applyLibrary, connect, loadChanges, loadLibrary]);
+    return () => {
+      active = false;
+      socketRef.current?.close();
+      socketRef.current = null;
+    };
+  }, [connect, applyLibrary, loadChanges, loadLibrary]);
 
   function handleAuth(token: string) {
     sessionStorage.setItem("pkf_token", token);
-    setAuthOpen(false);
-    location.reload();
+    const url = new URL(window.location.href);
+    url.searchParams.set("token", token);
+    window.location.replace(url.toString());
   }
 
   function sendMessage(text: string) {
