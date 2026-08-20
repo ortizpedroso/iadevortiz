@@ -92,6 +92,9 @@ def ninerouter_should_skip() -> tuple[bool, str]:
     if not ninerouter_enabled():
         return False, ""
     if not ninerouter_api_key():
+        ok, _detail = ninerouter_health()
+        if ok:
+            return False, ""
         return True, "NINEROUTER_KEY ausente"
     ok, detail = ninerouter_health()
     if not ok and is_ninerouter_auth_error(detail):
