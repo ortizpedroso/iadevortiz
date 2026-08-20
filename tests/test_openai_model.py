@@ -19,6 +19,7 @@ def test_set_env_keys_migrates_retired_openai_models(tmp_path: Path):
     script = Path(__file__).resolve().parents[1] / "deploy" / "hostinger" / "set-env-keys.sh"
     text = script.read_text(encoding="utf-8")
     assert "migrate_openai_model" in text
+    assert "migrate_provider_pool" in text
     assert 'gpt-4.1-mini|gpt-4.1-mini-*' in text or "gpt-4.1-mini" in text
     assert "gpt-4o-mini" in text
     assert "OPENAI_IN_POOL" in text

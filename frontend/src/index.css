@@ -7,20 +7,21 @@
 }
 
 :root {
-  --pkf-bg-sidebar: #1a1917;
-  --pkf-bg-primary: #262624;
-  --pkf-bg-panel: #30302e;
-  --pkf-bg-elevated: #383836;
-  --pkf-bg-hover: #3d3d3a;
-  --pkf-bg-rail: #141413;
-  --pkf-border: #4a4a46;
-  --pkf-border-soft: #3a3a37;
-  --pkf-muted: #b5b3ad;
-  --pkf-text-dim: #8a8882;
-  --pkf-text: #eceae4;
+  /* Claude-inspired warm light palette */
+  --pkf-bg-sidebar: #f0eee6;
+  --pkf-bg-primary: #faf9f5;
+  --pkf-bg-panel: #ffffff;
+  --pkf-bg-elevated: #ffffff;
+  --pkf-bg-hover: #eceae3;
+  --pkf-bg-rail: #e8e6df;
+  --pkf-border: #d4d1c8;
+  --pkf-border-soft: #e5e2da;
+  --pkf-muted: #5c5850;
+  --pkf-text-dim: #8a847a;
+  --pkf-text: #1f1e1c;
   --pkf-accent: #d97757;
-  --pkf-accent-hover: #e88b6b;
-  --pkf-user-bubble: #3d3d39;
+  --pkf-accent-hover: #c4684a;
+  --pkf-user-bubble: #ebe9e3;
 }
 
 html,
@@ -55,7 +56,7 @@ body {
 }
 
 .pkf-input {
-  @apply rounded-lg border border-[var(--pkf-border-soft)] bg-[var(--pkf-bg-primary)] px-2 py-1 outline-none focus:border-[var(--pkf-accent)] focus:ring-2 focus:ring-[var(--pkf-accent)]/25;
+  @apply rounded-lg border border-[var(--pkf-border-soft)] bg-white px-2 py-1 outline-none focus:border-[var(--pkf-accent)] focus:ring-2 focus:ring-[var(--pkf-accent)]/25;
 }
 
 .pkf-markdown h1,
@@ -80,11 +81,10 @@ body {
   @apply mt-3;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
+.pkf-markdown a {
+  @apply text-[var(--pkf-accent)] underline-offset-2 hover:underline;
+}
+
+.pkf-markdown blockquote {
+  @apply border-l-2 border-[var(--pkf-accent)]/40 pl-4 text-[var(--pkf-muted)];
 }
