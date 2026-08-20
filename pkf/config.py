@@ -98,7 +98,7 @@ def providers() -> dict[str, ProviderConfig]:
                 "https://generativelanguage.googleapis.com/v1beta/openai/",
             ),
             api_key=os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", "")),
-            model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
+            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         ),
         "mimo": ProviderConfig(
             name="mimo",
@@ -258,6 +258,11 @@ def is_openai_client(base_url: str) -> bool:
     return "api.openai.com" in (base_url or "").lower()
 
 
+def is_gemini_client(base_url: str) -> bool:
+    url = (base_url or "").lower()
+    return "generativelanguage.googleapis.com" in url or "googleapis.com" in url
+
+
 OPENAI_FALLBACK_MODELS: tuple[str, ...] = tuple(
     part.strip()
     for part in os.getenv("PKF_OPENAI_FALLBACK_MODELS", "gpt-4o,gpt-3.5-turbo").split(",")
@@ -265,6 +270,14 @@ OPENAI_FALLBACK_MODELS: tuple[str, ...] = tuple(
 )
 
 _OPENAI_MODEL_CHAIN: tuple[str, ...] = ("gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo")
+
+GEMINI_FALLBACK_MODELS: tuple[str, ...] = tuple(
+    part.strip()
+    for part in os.getenv("PKF_GEMINI_FALLBACK_MODELS", "gemini-3.6-flash,gemini-3.5-flash-lite").split(",")
+    if part.strip()
+)
+
+_GEMINI_MODEL_CHAIN: tuple[str, ...] = ("gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite")
 
 
 def fallback_model_on_rate_limit(current_model: str, base_url: str = "") -> str | None:
@@ -276,12 +289,18 @@ def fallback_model_on_rate_limit(current_model: str, base_url: str = "") -> str 
 
 
 def fallback_model_on_not_found(current_model: str, base_url: str = "") -> str | None:
-    if not is_openai_client(base_url):
+    if is_openai_client(base_url):
+        chain = list(_OPENAI_MODEL_CHAIN)
+        for model in OPENAI_FALLBACK_MODELS:
+            if model not in chain:
+                chain.append(model)
+    elif is_gemini_client(base_url):
+        chain = list(_GEMINI_MODEL_CHAIN)
+        for model in GEMINI_FALLBACK_MODELS:
+            if model not in chain:
+                chain.append(model)
+    else:
         return None
-    chain = list(_OPENAI_MODEL_CHAIN)
-    for model in OPENAI_FALLBACK_MODELS:
-        if model not in chain:
-            chain.append(model)
     try:
         index = chain.index(current_model)
     except ValueError:
@@ -368,6 +387,8 @@ COMPACTION_BUDGETS: dict[str, dict[str, int]] = {
     "llama-3.1-8b-instant": {"max_messages": 12, "tool_chars": 2500, "keep_recent": 6},
     "llama-3.3-70b": {"max_messages": 14, "tool_chars": 2800, "keep_recent": 7},
     "gemini-2.0-flash": {"max_messages": 20, "tool_chars": 4000, "keep_recent": 10},
+    "gemini-2.5-flash": {"max_messages": 20, "tool_chars": 4000, "keep_recent": 10},
+    "gemini-3.6-flash": {"max_messages": 20, "tool_chars": 4000, "keep_recent": 10},
     "mimo": {"max_messages": 18, "tool_chars": 3500, "keep_recent": 8},
     "deepseek-reasoner": {"max_messages": 12, "tool_chars": 2500, "keep_recent": 6},
     "deepseek-r1": {"max_messages": 12, "tool_chars": 2500, "keep_recent": 6},
