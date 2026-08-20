@@ -30,10 +30,15 @@ jobs:
             bash deploy/hostinger/update.sh
 
       - name: Verify deployment health
-        if: ${{ secrets.VPS_HEALTHCHECK_URL != '' }}
+        env:
+          HEALTHCHECK_URL: ${{ secrets.VPS_HEALTHCHECK_URL }}
         run: |
           set -euo pipefail
-          url="${{ secrets.VPS_HEALTHCHECK_URL }}"
+          url="${HEALTHCHECK_URL}"
+          if [ -z "$url" ]; then
+            echo "VPS_HEALTHCHECK_URL não definido, pulando health check."
+            exit 0
+          fi
           for attempt in 1 2 3; do
             echo "Health check attempt ${attempt}/3: ${url}"
             if curl -fsS --max-time 30 "${url}"; then
