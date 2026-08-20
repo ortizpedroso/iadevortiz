@@ -1,10 +1,12 @@
 """Tests for HTTP chat fallback (/api/message)."""
 
+from pathlib import Path
+
 from pkf.web.server import process_user_message
 
 
 def test_post_message_route_registered():
-    source = open("pkf/web/server.py", encoding="utf-8").read()
+    source = Path("pkf/web/server.py").read_text(encoding="utf-8")
     assert '"/api/message"' in source
     assert "async def post_message" in source
 
