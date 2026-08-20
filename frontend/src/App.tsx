@@ -31,6 +31,8 @@ export default function App() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const socketRef = useRef<WebSocket | null>(null);
   const sessionBootstrappedRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+  const authRequiredRef = useRef(false);
 
   const applyLibrary = useCallback((library?: { chats?: ChatItem[]; projects?: ProjectItem[] }) => {
     if (!library) return;
@@ -84,12 +86,33 @@ export default function App() {
 
   const connect = useCallback(() => {
     if (socketRef.current?.readyState === WebSocket.OPEN) return;
+    if (socketRef.current?.readyState === WebSocket.CONNECTING) return;
     const ws = new WebSocket(wsUrl());
     socketRef.current = ws;
-    ws.onopen = () => setStatus("Pronto");
-    ws.onclose = () => {
+    ws.onopen = () => {
+      reconnectAttemptsRef.current = 0;
+      setStatus("Pronto");
+    };
+    ws.onclose = (ev) => {
+      if (ev.code === 4401 || (authRequiredRef.current && !getToken())) {
+        setAuthOpen(true);
+        setStatus("Token necessário");
+        socketRef.current = null;
+        return;
+      }
+      reconnectAttemptsRef.current += 1;
+      if (reconnectAttemptsRef.current >= 8) {
+        setStatus("Servidor indisponível");
+        socketRef.current = null;
+        return;
+      }
       setStatus("Reconectando…");
-      setTimeout(connect, 1500);
+      window.setTimeout(connect, Math.min(1500 * reconnectAttemptsRef.current, 8000));
+    };
+    ws.onerror = () => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        setStatus("Erro de conexão…");
+      }
     };
     ws.onmessage = (ev) => {
       const event: WsEvent = JSON.parse(ev.data);
@@ -142,14 +165,27 @@ export default function App() {
 
   useEffect(() => {
     async function boot() {
-      const healthRes = await fetch("/api/health");
-      if (healthRes.ok) {
-        const info = await healthRes.json();
-        setAuthRequired(!!info.auth_required);
-        if (info.auth_required && !getToken()) {
-          setAuthOpen(true);
-          return;
+      let serverOk = false;
+      try {
+        const healthRes = await fetch("/api/health");
+        if (healthRes.ok) {
+          serverOk = true;
+          const info = await healthRes.json();
+          setAuthRequired(!!info.auth_required);
+          authRequiredRef.current = !!info.auth_required;
+          if (info.auth_required && !getToken()) {
+            setAuthOpen(true);
+            setStatus("Token necessário");
+            return;
+          }
         }
+      } catch {
+        setStatus("Servidor indisponível");
+        return;
+      }
+      if (!serverOk) {
+        setStatus("Servidor indisponível");
+        return;
       }
       try {
         const res = await fetch("/api/session", { headers: authHeaders() });
@@ -189,7 +225,18 @@ export default function App() {
   function sendMessage(text: string) {
     const ws = socketRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      setMessages((m) => [...m, { role: "error", content: "Ainda conectando… tente de novo." }]);
+      const hint =
+        status === "Token necessário" || (authRequired && !getToken())
+          ? "Informe o token de acesso para continuar."
+          : status === "Servidor indisponível"
+            ? "Servidor indisponível. Verifique se o PKF está rodando (docker compose ps)."
+            : "Ainda conectando… tente de novo em instantes.";
+      setMessages((m) => [...m, { role: "error", content: hint }]);
+      if (authRequired && !getToken()) {
+        setAuthOpen(true);
+        return;
+      }
+      reconnectAttemptsRef.current = 0;
       connect();
       return;
     }

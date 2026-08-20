@@ -323,7 +323,7 @@ def provider_pool_names() -> list[str]:
 
     available = providers()
     if router_only_mode():
-        if not ninerouter_enabled() or ninerouter_should_skip()[0]:
+        if not ninerouter_enabled():
             return []
         return ["ninerouter"]
 

@@ -440,8 +440,18 @@ def create_app(router: Router) -> FastAPI:
             return
         await websocket.accept()
         history: ChatHistory = app.state.history
-        await history.load()
-        await websocket.send_json({"type": "session", **await build_session_snapshot(router, history)})
+        try:
+            await history.load()
+            await websocket.send_json({"type": "session", **await build_session_snapshot(router, history)})
+        except Exception as exc:  # noqa: BLE001 — surface DB/bootstrap failures to the client
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "content": f"Falha ao iniciar sessão: {exc}",
+                }
+            )
+            await websocket.close(code=1011, reason="session bootstrap failed")
+            return
 
         async def on_event(event: dict) -> None:
             await websocket.send_json(event)

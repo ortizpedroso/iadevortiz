@@ -92,6 +92,7 @@ def _model_for_tier(provider: str, tier: str) -> str | None:
 
 
 def _ninerouter_slot() -> dict | None:
+    from pkf.config import router_only_mode
     from pkf.ninerouter import (
         ninerouter_api_key,
         ninerouter_chat_model,
@@ -102,7 +103,7 @@ def _ninerouter_slot() -> dict | None:
     if not ninerouter_enabled():
         return None
     skip, _reason = ninerouter_should_skip()
-    if skip:
+    if skip and not router_only_mode():
         return None
     return {
         "slot_id": "ninerouter#0",

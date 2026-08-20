@@ -54,7 +54,13 @@ def test_router_only_no_groq_fallback_on_missing_key(monkeypatch):
     monkeypatch.delenv("NINEROUTER_KEY", raising=False)
     monkeypatch.delenv("PKF_PROVIDER", raising=False)
     assert default_provider() == "ninerouter"
-    assert provider_pool_names() == []
+    assert provider_pool_names() == ["ninerouter"]
+    slots = build_provider_slots()
+    assert slots and slots[0]["provider"] == "ninerouter"
+    from pkf.provider_pool import ProviderPool
+
+    pool = ProviderPool.create(start="ninerouter")
+    assert pool.current_name == "ninerouter"
 
 
 def test_router_only_auth_warning(monkeypatch):
