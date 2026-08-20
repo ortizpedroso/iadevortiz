@@ -262,7 +262,6 @@ export default function App() {
           const data = await res.json();
           applySession(data.session, true);
           setMessages(data.messages || []);
-          applyLibrary(data.library);
           sessionBootstrappedRef.current = true;
           const token = getToken();
           if (token && !new URLSearchParams(window.location.search).get("token")) {
@@ -282,11 +281,7 @@ export default function App() {
         setStatus("Token necessário");
         return;
       }
-      if (!sessionBootstrappedRef.current) {
-        await loadLibrary();
-      } else {
-        await loadLibrary();
-      }
+      await loadLibrary();
       await loadChanges();
       if (!active) return;
       setSessionReady(true);
