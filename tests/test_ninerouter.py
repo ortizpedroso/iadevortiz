@@ -96,7 +96,6 @@ def test_ninerouter_auth_warning_format():
     text = ninerouter_auth_warning("HTTP 401: Unauthorized")
     assert "[9Router]" in text
     assert "fix-ninerouter-key.sh" in text
-    assert "Gemini/Groq" in text
 
 
 def test_is_ninerouter_auth_error():
@@ -124,7 +123,7 @@ def test_ninerouter_provider_registered(monkeypatch):
 def test_ninerouter_model_default(monkeypatch):
     monkeypatch.delenv("NINEROUTER_MODEL", raising=False)
     monkeypatch.delenv("PKF_NINEROUTER_MODEL", raising=False)
-    assert ninerouter_chat_model() == "oc/big-pickle"
+    assert ninerouter_chat_model() == "auto/free"
 
 
 def test_web_search_configured_with_ninerouter(monkeypatch):

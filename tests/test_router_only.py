@@ -67,8 +67,18 @@ def test_router_only_auth_warning(monkeypatch):
     monkeypatch.setenv("PKF_ROUTER_ONLY", "1")
     text = ninerouter_auth_warning("401")
     assert "OmniRoute" in text
-    assert "router-only" in text
+    assert "update.sh" in text
     assert "Gemini/Groq" not in text
+
+
+def test_router_only_multiple_ninerouter_slots(monkeypatch):
+    monkeypatch.setenv("PKF_ROUTER_ONLY", "1")
+    monkeypatch.setenv("NINEROUTER_URL", "http://127.0.0.1:20128")
+    monkeypatch.setenv("NINEROUTER_KEY", "sk-test")
+    _mock_ninerouter_ok(monkeypatch)
+    slots = build_provider_slots()
+    assert len(slots) >= 2
+    assert all(slot["provider"] == "ninerouter" for slot in slots)
 
 
 def test_judge_uses_ninerouter_in_router_only(monkeypatch):

@@ -222,9 +222,7 @@ if [ -z "$KEY" ]; then
     echo "==> OmniRoute aceita /v1 sem auth (REQUIRE_API_KEY=false)"
     echo "==> Usando chave local gerada: ${KEY:0:18}..."
   else
-    echo "Alternativa manual (PC com túnel SSH):"
-    echo "  ssh -i ~/.ssh/pkf_hostinger -L 20128:127.0.0.1:20128 root@187.77.240.125"
-    echo "  http://localhost:20128/dashboard/endpoint"
+    echo "Execute na VPS: bash deploy/hostinger/update.sh"
     exit 1
   fi
 fi

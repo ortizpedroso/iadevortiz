@@ -151,7 +151,7 @@ set_kv DATABASE_URL "${DATABASE_URL:-postgresql+asyncpg://pkf:pkf@postgres:5432/
 
 # --- 9Router ---
 set_kv NINEROUTER_URL "${NINEROUTER_URL:-http://ninerouter:20128}"
-set_kv NINEROUTER_MODEL "${NINEROUTER_MODEL:-oc/big-pickle}"
+set_kv NINEROUTER_MODEL "${NINEROUTER_MODEL:-auto/free}"
 set_kv_default NINEROUTER_DASHBOARD_NEW_PASSWORD "${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}"
 if [ -n "${NINEROUTER_KEY:-}" ]; then
   set_kv NINEROUTER_KEY "$NINEROUTER_KEY"
@@ -191,4 +191,17 @@ set_kv_default OPENAI_MODEL "gpt-4o-mini"
 set_kv NVIDIA_BASE_URL "${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}"
 set_kv NVIDIA_MODEL "${NVIDIA_MODEL:-meta/llama-3.3-70b-instruct}"
 
-echo "==> .env mesclado ($(wc -l < .env) linhas)"
+strip_direct_keys_router_only() {
+  if [ "${PKF_ROUTER_ONLY:-1}" != "1" ]; then
+    return 0
+  fi
+  local key
+  for key in GROQ_API_KEY GROQ_API_KEY_2 GEMINI_API_KEY GOOGLE_API_KEY MOONSHOT_API_KEY OPENAI_API_KEY DEEPSEEK_API_KEY MIMO_API_KEY NVIDIA_API_KEY; do
+    if grep -q "^${key}=" .env 2>/dev/null; then
+      sed -i "s|^${key}=|# ${key}= (desativado em PKF_ROUTER_ONLY=1)|" .env
+    fi
+  done
+  echo "==> Chaves diretas comentadas (router-only usa só OmniRoute)"
+}
+
+strip_direct_keys_router_only
