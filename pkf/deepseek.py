@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import UTC, datetime
 
 DEEPSEEK_CHAT_MODEL = "deepseek-chat"
 DEEPSEEK_REASONER_MODEL = "deepseek-reasoner"
@@ -94,6 +94,6 @@ def format_search_results(query: str, results: list[dict], language: str = "pt")
             f"[webpage {index} end]"
         )
     search_results = "\n\n".join(blocks) if blocks else "(nenhum resultado)"
-    cur_date = date.today().isoformat()
+    cur_date = datetime.now(UTC).date().isoformat()
     template = SEARCH_ANSWER_PT if language.lower().startswith("pt") else SEARCH_ANSWER_EN
     return template.format(search_results=search_results, cur_date=cur_date, question=query)

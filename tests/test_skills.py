@@ -1,4 +1,4 @@
-from pkf.skills.search import search_skills, resolve_skills
+from pkf.skills.search import resolve_skills, search_skills
 
 
 def test_search_skills_frontend():

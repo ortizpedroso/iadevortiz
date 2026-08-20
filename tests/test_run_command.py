@@ -3,9 +3,6 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
-from pkf.config import COMMAND_TIMEOUT
 from pkf.tools.impl import run_command
 from pkf.workspace import Workspace
 
@@ -36,9 +33,11 @@ def test_run_command_strips_secrets_from_env(tmp_path: Path):
 
         return Result()
 
-    with patch.dict(os.environ, {"GROQ_API_KEY": "secret", "PATH": "C:\\Windows"}, clear=False):
-        with patch("pkf.tools.impl.subprocess.run", side_effect=fake_run):
-            run_command(ws, "git status")
+    with (
+        patch.dict(os.environ, {"GROQ_API_KEY": "secret", "PATH": "C:\\Windows"}, clear=False),
+        patch("pkf.tools.impl.subprocess.run", side_effect=fake_run),
+    ):
+        run_command(ws, "git status")
     assert "GROQ_API_KEY" not in captured.get("env", {})
     assert "PATH" in captured.get("env", {})
 

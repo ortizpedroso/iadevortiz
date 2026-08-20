@@ -8,28 +8,51 @@ from pkf.agents.base import Agent
 from pkf.agents.developer import DeveloperAgent
 from pkf.agents.prompts import AGENT_PROMPTS, DEVELOPER_AGENTS
 from pkf.classifier import Intent, classify_intent, classify_intent_llm
-from pkf.config import RELEVANCE_THRESHOLD, agent_provider_override, agent_uses_quality_tier, model_for_task, rate_limit_cooldown_seconds
+from pkf.config import (
+    RELEVANCE_THRESHOLD,
+    agent_provider_override,
+    agent_uses_quality_tier,
+    model_for_task,
+    rate_limit_cooldown_seconds,
+)
 from pkf.graph.project import ProjectGraph
 from pkf.judge import evaluate_build_goal
-from pkf.memory.persistent import append_memory_note, read_memory_context, write_checkpoint
+from pkf.memory.persistent import (
+    append_memory_note,
+    read_memory_context,
+    write_checkpoint,
+)
 from pkf.memory.store import MemoryStore, export_graph
+from pkf.projects.manager import slug_from_request
 from pkf.provider_errors import should_rotate_provider
 from pkf.provider_pool import ProviderPool
-from pkf.spec.store import active_spec_preview, approve_spec, load_spec, update_spec_stack
 from pkf.skills.loader import load_skills_for_project
+from pkf.spec.store import (
+    active_spec_preview,
+    load_spec,
+)
 from pkf.spec.updater import append_build_changelog, save_platform_spec
 from pkf.tools.impl import verify_build as verify_build_tool
-from pkf.workspace_index import begin_build_session
 from pkf.tools.registry import ToolRegistry, tools_for_agent
-from pkf.workflow.compose import MAX_BUILD_RETRIES, MAX_REVIEW_FIX_CYCLES, run_brainstorm, verify_ok
+from pkf.web.preview import preview_info
+from pkf.workflow.compose import (
+    MAX_BUILD_RETRIES,
+    MAX_REVIEW_FIX_CYCLES,
+    run_brainstorm,
+    verify_ok,
+)
 from pkf.workflow.cycle import DevCycle, parse_command
 from pkf.workflow.orchestrator import failed_agents, run_build_phases
-from pkf.workflow.planner import group_tasks_into_phases, plan_build, plan_build_llm, plan_fix_tasks
+from pkf.workflow.planner import (
+    group_tasks_into_phases,
+    plan_build,
+    plan_build_llm,
+    plan_fix_tasks,
+)
 from pkf.workflow.review import load_latest_review, parse_review_status
 from pkf.workflow.tasks import TaskTracker
-from pkf.projects.manager import slug_from_request
-from pkf.web.preview import preview_info
 from pkf.workspace import Workspace
+from pkf.workspace_index import begin_build_session
 
 
 class Router:
@@ -69,7 +92,11 @@ class Router:
         save_platform_spec(workspace.root)
 
     def _warn_ninerouter_auth_if_needed(self) -> None:
-        from pkf.ninerouter import ninerouter_auth_warning, ninerouter_enabled, ninerouter_should_skip
+        from pkf.ninerouter import (
+            ninerouter_auth_warning,
+            ninerouter_enabled,
+            ninerouter_should_skip,
+        )
 
         if not ninerouter_enabled():
             return

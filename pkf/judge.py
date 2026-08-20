@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from openai import AsyncOpenAI
+from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
 from pkf.config import GROQ_FALLBACK_MODEL, judge_model_for, providers
 from pkf.providers import get_ai_client
@@ -14,7 +14,7 @@ def _judge_client(active_provider: str) -> tuple[AsyncOpenAI, str]:
         cfg = available.get(name)
         if cfg and cfg.api_key:
             client, config = get_ai_client(name)
-            model = judge_model if judge_model else config.model
+            model = judge_model or config.model
             return client, model
     client, config = get_ai_client(active_provider)
     return client, judge_model or config.model or GROQ_FALLBACK_MODEL
@@ -52,10 +52,10 @@ Aprovar apenas se houver evidência concreta de implementação. Se faltar index
         import json
         import re
 
-        match = re.search(r"\{.*\}", raw, re.S)
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
         if match:
             data = json.loads(match.group())
             return bool(data.get("approved")), str(data.get("summary", raw))[:500]
         return False, "Juiz não retornou JSON válido."
-    except Exception as exc:
+    except (json.JSONDecodeError, KeyError, TypeError, AttributeError, APIConnectionError, APIStatusError, APITimeoutError) as exc:
         return False, f"Juiz indisponível: {exc}"

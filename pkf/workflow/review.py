@@ -7,13 +7,13 @@ from pkf.config import pkf_dir
 
 _APPROVED = re.compile(
     r"(?:^|\n)\s*(?:status|resultado)\s*:?\s*\n?\s*(?:aprovado|approved|ok|pass)\s*(?:$|\n)|(?:^|\n)\s*aprovado\s*(?:$|\n)",
-    re.I | re.M,
+    re.IGNORECASE | re.MULTILINE,
 )
 _REJECTED = re.compile(
     r"(?:^|\n)\s*(?:status|resultado)\s*:?\s*\n?\s*(?:reprovado|rejected|failed|fail|pendente)\s*(?:$|\n)|(?:^|\n)\s*reprovado\s*(?:$|\n)",
-    re.I | re.M,
+    re.IGNORECASE | re.MULTILINE,
 )
-_ISSUE_LINE = re.compile(r"^\s*[-*]\s+(?:\[.\]\s+)?(.+)$", re.M)
+_ISSUE_LINE = re.compile(r"^\s*[-*]\s+(?:\[.\]\s+)?(.+)$", re.MULTILINE)
 
 
 def latest_review_path(workspace_root: Path, spec_name: str | None) -> Path | None:

@@ -249,7 +249,7 @@ class ToolRegistry:
         workspace: Workspace,
         tool_names: list[str],
         optional: list[str] | None = None,
-        router: "Router | None" = None,
+        router: Router | None = None,
     ):
         self.workspace = workspace
         self.router = router

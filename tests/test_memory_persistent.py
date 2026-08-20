@@ -1,4 +1,8 @@
-from pkf.memory.persistent import ensure_memory_files, read_memory_context, write_checkpoint
+from pkf.memory.persistent import (
+    ensure_memory_files,
+    read_memory_context,
+    write_checkpoint,
+)
 
 
 def test_memory_files_and_checkpoint(tmp_path):

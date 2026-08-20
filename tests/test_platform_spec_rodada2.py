@@ -45,7 +45,7 @@ def test_ninerouter_skip_implemented():
 
 
 def test_quality_tier_scoped_to_architect_reviewer():
-    assert QUALITY_TIER_AGENTS == frozenset({"architect", "reviewer"})
+    assert frozenset({"architect", "reviewer"}) == QUALITY_TIER_AGENTS
     assert not agent_uses_quality_tier("frontend")
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -63,7 +63,7 @@ class TaskTracker:
 
             try:
                 loop = asyncio.get_running_loop()
-                loop.create_task(self.db.save_tasks([self.tree.to_dict()]))
+                loop.create_task(self.db.save_tasks([self.tree.to_dict()]))  # noqa: RUF006
             except RuntimeError:
                 pass
 

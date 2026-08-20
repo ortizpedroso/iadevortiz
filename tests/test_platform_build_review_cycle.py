@@ -62,7 +62,7 @@ Status: {"APROVADO" if approved else "REPROVADO"}
 """
     if gaps:
         review += "\nPendencias:\n" + "\n".join(f"- {g}" for g in gaps)
-    ok, issues = parse_review_status(review)
+    ok, _issues = parse_review_status(review)
     return cycles, ok and approved, gaps, review
 
 

@@ -3,8 +3,8 @@ from __future__ import annotations
 import os
 import re
 
-THINKING_BLOCK = re.compile(r"<\s*think\s*>(.*?)<\s*/\s*think\s*>", re.S | re.I)
-EMPTY_THINKING = re.compile(r"<\s*think\s*>\s*<\s*/\s*think\s*>", re.S | re.I)
+THINKING_BLOCK = re.compile(r"<\s*think\s*>(.*?)<\s*/\s*think\s*>", re.DOTALL | re.IGNORECASE)
+EMPTY_THINKING = re.compile(r"<\s*think\s*>\s*<\s*/\s*think\s*>", re.DOTALL | re.IGNORECASE)
 
 _REASONING_MODEL_HINTS = ("reasoner", "deepseek-r1", "r1-distill", "qwq")
 

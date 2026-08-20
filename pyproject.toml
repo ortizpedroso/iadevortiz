@@ -30,3 +30,22 @@ include = ["pkf*"]
 
 [tool.setuptools.package-data]
 "pkf.web" = ["static/*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["F", "I", "UP", "B", "SIM", "RUF", "FURB", "BLE", "S", "DTZ", "PLW", "PIE"]
+ignore = ["RUF005"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+"pkf/deepseek.py" = ["RUF001"]
+"pkf/db/engine.py" = ["PLW0603"]
+"pkf/semantic_index.py" = ["PLW0603"]
+"pkf/ninerouter.py" = ["S310"]
+"pkf/web_search.py" = ["S310"]
+"pkf/tools/impl.py" = ["S603"]
+"pkf/web/server.py" = ["S104"]
+"pkf/tools/registry.py" = ["RUF001"]

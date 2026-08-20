@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from openai import AsyncOpenAI
+from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
 from pkf.graph.project import ProjectGraph
 from pkf.spec.store import load_spec
@@ -133,7 +133,7 @@ Stack: {json.dumps(stack, ensure_ascii=False)}
             temperature=0,
         )
         raw = (completion.choices[0].message.content or "").strip()
-        match = re.search(r"\{.*\}", raw, re.S)
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
         if not match:
             return None
         data = json.loads(match.group())
@@ -160,7 +160,7 @@ Stack: {json.dumps(stack, ensure_ascii=False)}
                     )
                 )
         return tasks or None
-    except Exception:
+    except (json.JSONDecodeError, KeyError, TypeError, AttributeError, APIConnectionError, APIStatusError, APITimeoutError):
         return None
 
 

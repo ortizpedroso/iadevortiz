@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from openai import AsyncOpenAI
+from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
 from pkf.config import API_TIMEOUT, ProviderConfig, headroom_proxy_url, providers
 
@@ -51,5 +51,5 @@ async def ping_provider(client: AsyncOpenAI) -> tuple[bool, str]:
 
         await asyncio.wait_for(client.models.list(), timeout=8.0)
         return True, "ok"
-    except Exception as exc:
+    except (TimeoutError, APIConnectionError, APIStatusError, APITimeoutError) as exc:
         return False, str(exc)

@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pytest
-
 from pkf.tools.impl import edit_file, write_file
 from pkf.workspace import Workspace
 from pkf.workspace_index import list_changes

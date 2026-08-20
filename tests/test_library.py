@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from pkf.projects.manager import ensure_project
 from pkf.web.history import ChatHistory
 from pkf.web.library import (
     activate_chat,
@@ -14,7 +15,6 @@ from pkf.web.library import (
     persist_file_messages,
     rename_project,
 )
-from pkf.projects.manager import ensure_project
 from pkf.workspace import Workspace
 
 
@@ -115,7 +115,7 @@ async def test_library_rejects_invalid_chat_id(ws: Workspace):
 @pytest.mark.asyncio
 async def test_delete_active_chat_realigns_workspace(ws: Workspace):
     first = await library_snapshot(ws)
-    chat_a = first["chats"][0]["id"]
+    first["chats"][0]["id"]
     created = await create_chat(ws)
     chat_b = created["chat_id"]
     await attach_chat(ws, chat_b, "proj-b", active_chat_id=chat_b)

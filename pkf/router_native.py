@@ -109,8 +109,8 @@ def _ninerouter_slot() -> dict | None:
 
 
 def _quality_slot() -> dict | None:
-    from pkf.config import quality_tier_model, quality_tier_provider
     from pkf.config import providers as provider_catalog
+    from pkf.config import quality_tier_model, quality_tier_provider
 
     provider = quality_tier_provider()
     if not provider:

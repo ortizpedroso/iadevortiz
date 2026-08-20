@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _PKG_ROOT = Path(__file__).resolve().parent.parent
-_TOKEN = re.compile(r"[a-z0-9áàâãéêíóôõúüç]+", re.I)
+_TOKEN = re.compile(r"[a-z0-9áàâãéêíóôõúüç]+", re.IGNORECASE)
 AUTO_LOAD_THRESHOLD = 3.5
 
 

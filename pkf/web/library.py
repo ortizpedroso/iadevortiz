@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import shutil
@@ -10,7 +11,7 @@ from pathlib import Path
 from pkf.config import pkf_dir
 from pkf.db.config import database_enabled
 from pkf.db.context import DbContext
-from pkf.db.engine import get_session_factory, init_db
+from pkf.db.engine import get_session_factory
 from pkf.db.repository import (
     activate_chat_session,
     attach_chat_to_project,
@@ -144,10 +145,8 @@ def _migrate_legacy_chat(workspace_root: Path) -> None:
     )
     _save_index(workspace_root, data)
     backup = legacy.with_suffix(".json.bak")
-    try:
+    with contextlib.suppress(OSError):
         legacy.rename(backup)
-    except OSError:
-        pass
 
 
 def _ensure_file_chat(workspace_root: Path) -> dict:

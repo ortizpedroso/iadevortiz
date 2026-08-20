@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+from openai import APIConnectionError, APIStatusError, APITimeoutError
+
 from pkf.workflow.planner import BuildTask
 from pkf.workflow.tasks import TaskTracker
 
@@ -84,7 +86,7 @@ async def run_build_phases(
                 await router.emit("parallel_done", agent=task.agent, node=task.node_id)
                 await router.emit_task_tree(tracker)
                 return task.agent, reply or "(sem resposta)"
-            except Exception as exc:
+            except (APIConnectionError, APIStatusError, APITimeoutError, RuntimeError, ValueError) as exc:
                 tracker.set_child_status(task.agent, "failed")
                 await router.emit("parallel_error", agent=task.agent, error=str(exc))
                 await router.emit_task_tree(tracker)

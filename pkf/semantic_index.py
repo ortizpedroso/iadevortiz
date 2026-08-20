@@ -12,7 +12,7 @@ from pkf.config import pkf_dir
 from pkf.workspace import Workspace
 
 _INDEX_NAME = "semantic.json"
-_TOKEN = re.compile(r"[a-z0-9_]+", re.I)
+_TOKEN = re.compile(r"[a-z0-9_]+", re.IGNORECASE)
 _MODEL: object | None = None
 _EMBED_DIM = 384
 
@@ -48,7 +48,7 @@ def _get_model():
         from sentence_transformers import SentenceTransformer
 
         _MODEL = SentenceTransformer("all-MiniLM-L6-v2")
-    except Exception:
+    except (ImportError, OSError, RuntimeError):
         _MODEL = "test"
     return _MODEL
 
@@ -66,7 +66,7 @@ def _embed_texts(texts: list[str]) -> list[list[float]]:
 def _cosine(a: list[float], b: list[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0
-    return sum(x * y for x, y in zip(a, b))
+    return sum(x * y for x, y in zip(a, b, strict=False))
 
 
 def _chunk_python(content: str, rel_path: str) -> list[dict]:
@@ -153,7 +153,7 @@ def update_file_index(workspace: Workspace, rel_path: str) -> None:
             new_chunks = chunk_file(content, rel)
             texts = [c["text"] for c in new_chunks]
             embeddings = _embed_texts(texts)
-            for chunk, embedding in zip(new_chunks, embeddings):
+            for chunk, embedding in zip(new_chunks, embeddings, strict=False):
                 chunk["embedding"] = embedding
             chunks.extend(new_chunks)
     _save_index(workspace.root, chunks)
@@ -171,7 +171,7 @@ def rebuild_index(workspace: Workspace, limit: int = 200) -> str:
         file_chunks = chunk_file(content, rel)
         texts = [c["text"] for c in file_chunks]
         embeddings = _embed_texts(texts)
-        for chunk, embedding in zip(file_chunks, embeddings):
+        for chunk, embedding in zip(file_chunks, embeddings, strict=False):
             chunk["embedding"] = embedding
         chunks.extend(file_chunks)
         count += 1

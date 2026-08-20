@@ -12,7 +12,6 @@ from pkf.agents.compact import compact_messages
 from pkf.config import NODE_LIMIT, fallback_model_on_rate_limit, tool_rounds_for_agent
 from pkf.provider_errors import should_rotate_provider
 from pkf.reasoning import (
-    agent_uses_reasoning,
     completion_params_for_model,
     is_reasoning_model,
     parse_thinking,
@@ -23,11 +22,11 @@ from pkf.tools.registry import ToolRegistry
 if TYPE_CHECKING:
     from pkf.router import Router
 
-TOOL_BLOCK = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.S)
-TOOL_FENCE = re.compile(r"```(?:tool|tool_call)\s*(\{.*?\})\s*```", re.S)
+TOOL_BLOCK = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
+TOOL_FENCE = re.compile(r"```(?:tool|tool_call)\s*(\{.*?\})\s*```", re.DOTALL)
 TOOL_FUNCTION = re.compile(
     r"<function=([a-z_]+)>\s*(\{.*?\})\s*</function>",
-    re.S | re.I,
+    re.DOTALL | re.IGNORECASE,
 )
 
 
@@ -38,7 +37,7 @@ class Agent:
         client: AsyncOpenAI,
         model: str,
         system_prompt: str,
-        router: "Router",
+        router: Router,
         tools: ToolRegistry | None = None,
         supports_tools: bool = True,
         max_tool_rounds: int | None = None,

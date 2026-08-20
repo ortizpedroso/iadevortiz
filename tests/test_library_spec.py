@@ -2,12 +2,9 @@
 
 from pathlib import Path
 
-import pytest
-
 from pkf.spec.updater import save_platform_spec
 from pkf.web import server as web_server
 from pkf.workflow.review import parse_review_status
-
 
 REQUIRED_ENDPOINTS = (
     "/api/library",

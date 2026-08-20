@@ -6,9 +6,16 @@ from pathlib import Path
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pkf.db.models import ChatSession, FileChange, Message, Project, SpecRecord, TaskTree, User
+from pkf.db.models import (
+    ChatSession,
+    FileChange,
+    Message,
+    Project,
+    SpecRecord,
+    TaskTree,
+    User,
+)
 from pkf.workflow.cycle import DevCycle
-
 
 DEFAULT_USER_EMAIL = "owner@pkf.local"
 

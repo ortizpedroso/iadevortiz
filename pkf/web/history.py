@@ -56,7 +56,7 @@ class ChatHistory:
             await self.db.setup()
             if self.db.session_id:
                 from pkf.db.engine import get_session_factory
-                from pkf.db.repository import clear_messages, ensure_default_user
+                from pkf.db.repository import clear_messages
 
                 factory = get_session_factory()
                 async with factory() as session:
