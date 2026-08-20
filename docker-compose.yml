@@ -52,7 +52,9 @@ services:
 
       PKF_APP_ROOT: /app
 
-      PKF_PROVIDER: ${PKF_PROVIDER:-groq}
+      PKF_PROVIDER: ${PKF_PROVIDER:-ninerouter}
+
+      PKF_ROUTER_ONLY: ${PKF_ROUTER_ONLY:-1}
 
       DATABASE_URL: postgresql+asyncpg://pkf:pkf@postgres:5432/pkf
 
@@ -118,13 +120,19 @@ services:
 
   ninerouter:
 
-    image: ${ROUTER_IMAGE:-decolua/9router:latest}
+    image: ${ROUTER_IMAGE:-diegosouzapw/omniroute:latest}
 
     profiles: ["router"]
 
     restart: unless-stopped
 
+    stop_grace_period: 40s
+
     environment:
+
+      PORT: "20128"
+
+      DATA_DIR: /app/data
 
       REQUIRE_API_KEY: "false"
 
@@ -136,7 +144,19 @@ services:
 
     volumes:
 
-      - ninerouter-data:/root/.9router
+      - omniroute-data:/app/data
+
+    healthcheck:
+
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:20128/v1/models',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+
+      interval: 15s
+
+      timeout: 8s
+
+      start_period: 45s
+
+      retries: 5
 
 
 
@@ -145,6 +165,8 @@ volumes:
   pkf-workspace:
 
   pkf-postgres:
+
+  omniroute-data:
 
   ninerouter-data:
 

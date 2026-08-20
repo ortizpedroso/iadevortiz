@@ -15,6 +15,8 @@ SPEC_CHECKS = (
     ("CSS vars", "--pkf-accent"),
     ("Headroom", "PKF_HEADROOM_PROXY_URL"),
     ("9Router skip 401", "401"),
+    ("Router-only", "PKF_ROUTER_ONLY"),
+    ("OmniRoute", "OmniRoute"),
     ("Tier qualidade", "PKF_TIER_QUALITY"),
     ("Build graph", "PKF_USE_LANGGRAPH_BUILD"),
     ("Benchmark", "benchmark"),

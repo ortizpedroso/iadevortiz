@@ -65,8 +65,9 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - UI Vite + React 19 + Tailwind 4: rail, painel spec, preview, indicador agente/provider
 - **Biblioteca lateral**: listagem de chats e projetos — criar, ativar, excluir (individual ou em massa), anexar chat↔projeto
 - Modal de autenticação (`PKF_AUTH_TOKEN`); health público reduzido
-- Pool híbrido: **9Router primário por padrão** (quando `NINEROUTER_URL` definida) + **router nativo fallback**
-- Skip proativo 9Router em **401/chave ausente** — aviso no boot, fallback Groq/Gemini
+- **OmniRoute router-only** (`PKF_ROUTER_ONLY=1`): gateway único — tokens só do dashboard OmniRoute/9Router, sem `GROQ_API_KEY`/`GEMINI_API_KEY` no pool
+- Pool híbrido opcional (`PKF_ROUTER_ONLY=0`): **9Router/OmniRoute primário** + router nativo fallback
+- Skip proativo 9Router/OmniRoute em **401/chave ausente** — aviso no boot; em router-only não há fallback Groq/Gemini
 - **Headroom proxy** opt-in (`PKF_HEADROOM_PROXY_URL`) — compressão de contexto via proxy OpenAI-compatible
 - **Tier de qualidade** (`PKF_TIER_QUALITY`) — Claude via 9Router/gateway só para `architect` e `reviewer`
 - **Build grafo piloto** (`PKF_USE_LANGGRAPH_BUILD=1`) — pipeline /build alternativo em `build_graph.py`
@@ -113,9 +114,11 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 
 | Variável | Função |
 |---|---|
+| `PKF_ROUTER_ONLY` | `1` = só OmniRoute/9Router (pool `ninerouter`); `0` = híbrido com chaves diretas |
+| `ROUTER_IMAGE` | Imagem Docker do gateway (padrão `diegosouzapw/omniroute:latest`) |
 | `PKF_HEADROOM_PROXY_URL` | Proxy Headroom (opt-in) |
-| `NINEROUTER_URL` | 9Router como primário automático |
-| `NINEROUTER_KEY` | Chave sk-... do dashboard 9Router |
+| `NINEROUTER_URL` | OmniRoute/9Router como primário automático |
+| `NINEROUTER_KEY` | Chave sk-... do dashboard OmniRoute |
 | `PKF_TIER_QUALITY` | Provedor tier qualidade (ex.: `ninerouter`) |
 | `PKF_QUALITY_MODEL` | Modelo Claude (ex.: `kr/claude-sonnet-4.5`) |
 | `PKF_USE_LANGGRAPH_BUILD` | `1` = pipeline /build via grafo piloto |
@@ -131,7 +134,7 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - frontend: React + Vite + Tailwind
 - backend: Python FastAPI + WebSocket
 - database: PostgreSQL
-- deploy: Docker Compose (:8765) + 9Router (:20128 localhost)
+- deploy: Docker Compose (:8765) + OmniRoute (:20128 localhost, volume `/app/data`)
 """
     doc = SpecDocument(
         title="PKF Platform",

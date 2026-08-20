@@ -6,9 +6,9 @@ APP_DIR="${APP_DIR:-/opt/pkf}"
 cd "$APP_DIR"
 
 if ! docker compose --profile router ps ninerouter --status running -q 2>/dev/null | grep -q .; then
-  echo "==> Subindo 9Router"
+  echo "==> Subindo OmniRoute/9Router"
   docker compose --profile router up -d ninerouter
-  sleep 3
+  sleep 5
 fi
 
 DASH_PASS="${NINEROUTER_DASHBOARD_PASSWORD:-123456}"

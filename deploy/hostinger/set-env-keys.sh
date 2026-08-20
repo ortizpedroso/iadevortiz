@@ -59,6 +59,20 @@ migrate_provider_pool() {
   if grep -q "^PKF_PROVIDER_POOL=" .env; then
     current="$(grep "^PKF_PROVIDER_POOL=" .env | head -n1 | cut -d= -f2-)"
   fi
+  if [ "${PKF_ROUTER_ONLY:-1}" = "1" ]; then
+    case "$current" in
+      ninerouter|"") ;;
+      *)
+        set_kv PKF_PROVIDER_POOL "ninerouter"
+        set_kv PKF_PROVIDER "ninerouter"
+        set_kv PKF_TIER_SUBSCRIPTION "ninerouter"
+        set_kv PKF_TIER_CHEAP "ninerouter"
+        set_kv PKF_TIER_FREE "ninerouter"
+        echo "==> Pool migrado para router-only (OmniRoute): ninerouter"
+        ;;
+    esac
+    return 0
+  fi
   case "$current" in
     gemini-only|gemini)
       set_kv PKF_PROVIDER_POOL "ninerouter,kimi,groq,gemini,deepseek"
@@ -93,15 +107,27 @@ set_kv PKF_AUTH_TOKEN "${PKF_AUTH_TOKEN:-teste123}"
 set_kv PKF_FALLBACK "${PKF_FALLBACK:-}"
 
 set_kv PKF_PROVIDER "${PKF_PROVIDER:-ninerouter}"
+set_kv PKF_ROUTER_ONLY "${PKF_ROUTER_ONLY:-1}"
+set_kv ROUTER_IMAGE "${ROUTER_IMAGE:-diegosouzapw/omniroute:latest}"
 set_kv PKF_PROVIDER_TIERS "${PKF_PROVIDER_TIERS:-subscription,cheap,free}"
-# OpenAI só entra no pool se explicitamente habilitado (evita 404 quando a chave não tem o modelo).
-_pool_default="ninerouter,kimi,groq,gemini,deepseek"
-if [ "${OPENAI_IN_POOL:-0}" = "1" ] && [ -n "${OPENAI_API_KEY:-}" ]; then
-  _pool_default="${_pool_default},openai"
+# Modo router-only: só OmniRoute/9Router — provedores configurados no dashboard do gateway.
+if [ "${PKF_ROUTER_ONLY:-1}" = "1" ]; then
+  _pool_default="ninerouter"
+  _tier_sub="ninerouter"
+  _tier_cheap="ninerouter"
+  _tier_free="ninerouter"
+else
+  _pool_default="ninerouter,kimi,groq,gemini,deepseek"
+  if [ "${OPENAI_IN_POOL:-0}" = "1" ] && [ -n "${OPENAI_API_KEY:-}" ]; then
+    _pool_default="${_pool_default},openai"
+  fi
+  _tier_sub="ninerouter,kimi,groq,deepseek"
+  _tier_cheap="gemini"
+  _tier_free="groq"
 fi
-set_kv PKF_TIER_SUBSCRIPTION "${PKF_TIER_SUBSCRIPTION:-ninerouter,kimi,groq,deepseek}"
-set_kv PKF_TIER_CHEAP "${PKF_TIER_CHEAP:-gemini}"
-set_kv PKF_TIER_FREE "${PKF_TIER_FREE:-groq}"
+set_kv PKF_TIER_SUBSCRIPTION "${PKF_TIER_SUBSCRIPTION:-${_tier_sub}}"
+set_kv PKF_TIER_CHEAP "${PKF_TIER_CHEAP:-${_tier_cheap}}"
+set_kv PKF_TIER_FREE "${PKF_TIER_FREE:-${_tier_free}}"
 set_kv PKF_PROVIDER_POOL "${PKF_PROVIDER_POOL:-${_pool_default}}"
 migrate_provider_pool
 
