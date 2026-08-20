@@ -58,6 +58,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/api/health",
             "/",
             "/ws",
+            "/favicon.ico",
         }:
             return await call_next(request)
         token = _extract_token(request)
