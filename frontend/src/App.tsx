@@ -234,17 +234,19 @@ export default function App() {
   async function deleteChat(id: string) {
     if (!confirm("Excluir este chat?")) return;
     const res = await fetch(`/api/chats/${id}`, { method: "DELETE", headers: authHeaders() });
-    if (!res.ok) return;
-    const data = await res.json();
-    applyLibrary(data.library);
-    await loadLibrary();
-    const sessionRes = await fetch("/api/session", { headers: authHeaders() });
-    if (sessionRes.ok) {
-      const payload = await sessionRes.json();
-      setMessages(payload.messages || []);
-      applySession(payload.session, true);
-      loadChanges();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setMessages((m) => [
+        ...m,
+        { role: "error", content: data?.error || "Não foi possível excluir o chat." },
+      ]);
+      return;
     }
+    applyLibrary(data.library);
+    setMessages(data.messages || []);
+    if (data.session) applySession(data.session, true);
+    await loadLibrary();
+    loadChanges();
   }
 
   async function attachChat(chatId: string, projectSlug: string | null) {

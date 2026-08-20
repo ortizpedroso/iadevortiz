@@ -216,23 +216,31 @@ def create_app(router: Router) -> FastAPI:
     @app.delete("/api/chats/{chat_id}")
     async def chats_delete(chat_id: str):
         history: ChatHistory = app.state.history
-        async with app.state.lock:
-            await delete_chat(router.workspace, chat_id, history.db_context)
-            if database_enabled():
-                await history.db_context.setup()
-                history.active_chat_id = (
-                    str(history.db_context.session_id) if history.db_context.session_id else None
-                )
-                history.messages = await history.db_context.get_messages()
-                router.cycle = await history.db_context.load_dev_cycle() or DevCycle()
-            else:
-                from pkf.web.library import load_file_messages
+        try:
+            async with app.state.lock:
+                await delete_chat(router.workspace, chat_id, history.db_context)
+                if database_enabled():
+                    await history.db_context.refresh_active_session()
+                    history.active_chat_id = (
+                        str(history.db_context.session_id) if history.db_context.session_id else None
+                    )
+                    history.messages = await history.db_context.get_messages()
+                    router.cycle = await history.db_context.load_dev_cycle() or DevCycle()
+                else:
+                    from pkf.web.library import load_file_messages
 
-                history.active_chat_id, history.messages = load_file_messages(router.workspace.global_root)
-                router.cycle = DevCycle.load(router.workspace.root)
-            router._register_core_agents()
-            router.restore_chat_history(history.messages)
-        return {"ok": True, "library": await library_snapshot(router.workspace, history.db_context)}
+                    history.active_chat_id, history.messages = load_file_messages(router.workspace.global_root)
+                    router.cycle = DevCycle.load(router.workspace.root)
+                router._register_core_agents()
+                router.restore_chat_history(history.messages)
+        except ValueError as exc:
+            return JSONResponse(status_code=404, content={"ok": False, "error": str(exc)})
+        return {
+            "ok": True,
+            "library": await library_snapshot(router.workspace, history.db_context),
+            "session": router.snapshot(),
+            "messages": history.messages,
+        }
 
     @app.post("/api/chats/{chat_id}/attach")
     async def chats_attach(chat_id: str, payload: dict | None = None):
