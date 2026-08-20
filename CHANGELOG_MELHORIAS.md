@@ -4,6 +4,174 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Leva OmniRoute / WebSocket / CI — auditoria retroativa
+
+**Período:** 2026-08-19 → 2026-08-20  
+**Baseline:** `8dceda9` (`ci: deploy automatico na VPS via GitHub Actions em push na main`)  
+**HEAD auditado:** `8ad1fb7` (`feat: OmniRoute 100% automático — usuário não vê provedores`)  
+**Escopo:** `git log --oneline 8dceda9..HEAD` → **41 commits** (inclui merges de PRs #2–#14)  
+**Diff total:** `git diff --stat 8dceda9..HEAD` → **98 arquivos**, **+2620 / −730 linhas**  
+**Testes (Fase 1 e Fase 4):** `python3 -m pytest tests/ -q` → **175 passed in ~5–7s**
+
+> Esta seção é **somente documentação**. Nenhum arquivo de código foi alterado nesta auditoria.
+
+### Resumo da leva
+
+Três eixos principais convergem nesta faixa de commits:
+
+1. **OmniRoute router-only e automático** — produção passa a usar só o gateway (`PKF_ROUTER_ONLY=1`, pool `["ninerouter"]`); provedores free são registrados via script no deploy, sem dashboard manual; rotação de modelos no 429 via `ninerouter_model_chain()`.
+2. **Estabilidade WebSocket + auth + fallback HTTP** — série de correções no lifecycle React (`App.tsx`), handshake de token, separação boot HTTP vs conexão WS, e `POST /api/message` quando o navegador não sustenta WebSocket.
+3. **CI paralelo ao deploy** — novo `.github/workflows/ci.yml` (ruff + pytest + build frontend) roda em push/PR na `main`; `deploy.yml` continua responsável só pelo SSH + `update.sh` na VPS.
+
+Commits intermediários (PRs #6–#10) trouxeram correções de modelo OpenAI/Gemini, UI estilo Claude, bulk delete de projetos e delete de chat — fora do escopo OmniRoute/WS, mas dentro dos 41 commits.
+
+---
+
+### Commits agrupados por tema
+
+#### A — OmniRoute router-only e automático
+
+| Commit | Mensagem |
+|--------|----------|
+| `6790742` | feat: OmniRoute router-only mode with efficient gateway defaults |
+| `fbcb5d4` | fix: keep PKF online in router-only without gateway key |
+| `4dd89b6` | fix: OmniRoute first-run onboarding and PKF WebSocket auth UX |
+| `d5130fa` | fix: OmniRoute key bootstrap with cookie jar and anonymous fallback |
+| `b3e320c` | feat: OmniRoute router-only mode e correções de UI/WebSocket |
+| `31d71f1` | feat: OmniRoute 100% automático — sem dashboard para o usuário |
+| `c4a1ad1` | fix: parênteses em is_ninerouter_client (ruff RUF021) |
+| `9b47339` | Fix Gemini retired model and auto-configure 9Router on deploy |
+
+**Arquivos centrais:** `pkf/config.py`, `pkf/ninerouter.py`, `pkf/router_native.py`, `pkf/provider_errors.py`, `pkf/errors.py`, `deploy/hostinger/setup-omniroute-providers.sh` (novo), `deploy/hostinger/set-env-keys.sh`, `deploy/hostinger/fix-ninerouter-key.sh`, `deploy/hostinger/update.sh`, `.env.production.example`, `docker-compose.yml`
+
+#### B — WebSocket, autenticação e fallback HTTP
+
+| Commit | Mensagem |
+|--------|----------|
+| `6685f1a` | fix: WebSocket auth handshake and stop reconnect without valid session |
+| `00f00c0` | fix: stop auth login loop and normalize Bearer token input |
+| `6703c98` | fix: stabilize WebSocket connection on UI boot |
+| `d4b2045` | fix(frontend): corrige tela em branco por ReferenceError nos refs |
+| `f147581` | fix: estabiliza WebSocket no navegador (1006/reconexão) |
+| `58849b5` | fix: fallback HTTP quando WebSocket falha no navegador |
+| `be33ece` | fix: fallback HTTP quando WebSocket falha no navegador |
+| `4a3ac31` | fix: reconexão WebSocket mais estável e retry automático |
+| `8545263` | fix: reconexão WebSocket estável + retry automático |
+| `5583d2a` | fix: restaura rota / e favicon 204 |
+
+**Arquivos centrais:** `frontend/src/App.tsx`, `frontend/src/lib/api.ts`, `frontend/src/main.tsx`, `pkf/web/server.py`, `pkf/web/auth.py`
+
+#### C — CI e qualidade
+
+| Commit | Mensagem |
+|--------|----------|
+| `571a49e` | Fix audit issues: tests, lint, CI, and version alignment |
+| `3cfd42c` | fix(tests): corrige lint ruff para passar no CI |
+| `ae9c378` | fix(tests): usa Path.read_text para passar ruff SIM115 |
+| `e90e5f2` | fix: corrige if: invalido no workflow de deploy (secrets em if) |
+
+**Arquivo novo:** `.github/workflows/ci.yml`
+
+#### D — UI, modelos e biblioteca (PRs #6–#10, mesma faixa)
+
+| PR / commit | Tema |
+|-------------|------|
+| `#6` `cd82093` / `d820678` | Default OpenAI `gpt-4o-mini`; rotação em 404 |
+| `#7` `7cf2587` | Sidebar estilo Claude; fix flash de sessão no reload |
+| `#8` `0ef7e80` | UI clara VPS; menus de chat; migração provider pool |
+| `#9` `9b47339` | Gemini descontinuado; auto-config 9Router no deploy |
+| `#10` `3b8a8fc` | Delete de chat com limpeza DB e erro visível na UI |
+
+---
+
+### OmniRoute automático — como funciona hoje
+
+**Experiência do usuário**
+
+- Em produção com `PKF_ROUTER_ONLY=1`, o usuário **não configura nem vê** provedores Groq/Gemini/Kimi no `.env` — o pool é só `ninerouter`.
+- Mensagens de erro em `pkf/errors.py` usam texto genérico (“gateway de IA”, “limite momentâneo”) quando `router_only_mode()` ou `provider == "ninerouter"`, em vez de pedir chaves diretas.
+- O deploy (`update.sh`) executa automaticamente `fix-ninerouter-key.sh` e `setup-omniroute-providers.sh`, que registra provedores free (`open-code`, `pollinations`, `cloudflare-ai`) via API interna do OmniRoute — **sem abrir o dashboard**.
+
+**Lógica de fallback entre provedores**
+
+1. **`router_only_mode()`** (`PKF_ROUTER_ONLY=1`): `provider_pool_names()` retorna `["ninerouter"]` — sem fallback para Groq/Gemini nativos.
+2. **`default_provider()`**: prioridade — alias `PKF_PROVIDER=omniroute|9router` → `ninerouter`; se router-only e gateway habilitado → `ninerouter`; senão explícito → 9Router com skip proativo → Groq → Gemini → Kimi → OpenAI → DeepSeek → Ollama. O gate `PKF_ENV == "production"` **permanece removido** (fix da rodada 2); a novidade é a **prioridade do gateway** antes das chaves diretas.
+3. **Rotação de modelos no 429**: `fallback_model_on_rate_limit()` usa `ninerouter_model_chain()` quando o client aponta para o gateway — cadeia padrão `auto/free,auto,auto/coding,oc/big-pickle` (override via `PKF_NINEROUTER_MODEL_CHAIN`); `NINEROUTER_MODEL` default em produção: `auto/free`.
+4. **Rotação de provider**: `pkf/provider_errors.py` — `should_rotate_provider()` trata 429/5xx e, no `ninerouter`, também 401/403; em router-only não há segundo provedor no pool.
+5. **Imagem Docker**: `ROUTER_IMAGE` default `diegosouzapw/omniroute:latest` (substitui `decolua/9router:latest`).
+
+---
+
+### Estabilidade de conexão — bugs corrigidos e causas
+
+| Bug | Causa raiz (evidência no diff/commit) | Correção |
+|-----|----------------------------------------|----------|
+| **Tela branca** | `useRef(applySession)` avaliado **antes** de `applySession` existir → `ReferenceError` no bundle (`d4b2045`) | Refs inicializados vazios; `applySessionRef.current = applySession` **após** `useCallback` |
+| **Loop de login / auth** | WS reconectava sem token válido; Bearer mal normalizado; modal não abria em falha provável (`6685f1a`, `00f00c0`) | `connect()` aborta se `authRequired && !getToken()`; boot HTTP completa `/api/session` antes de abrir WS; token persistido em `?token=` na URL |
+| **WebSocket 1006 / reconexão infinita** | Cleanup do `useEffect` de boot fechava WS recém-aberto; race entre gerações de socket (`f147581`, `6703c98`) | Lifecycle WS **separado** do boot (`sessionReady`); `activeSocketIdRef` invalida handlers stale; close intencional com código 1000 |
+| **"Servidor indisponível" com backend OK** | Handshake WS fechava antes de enviar erro legível; StrictMode duplicava efeitos (`main.tsx`) | Servidor aceita WS antes de checar auth (`server.py`); mensagem JSON no socket; **StrictMode removido** em `main.tsx` |
+| **Chat sem tempo real no navegador** | WS falha intermitente (proxy/NAT) após 8 tentativas (`58849b5`, `8545263`) | Fallback **`POST /api/message`** compartilhando handler com WS; banner "Modo HTTP"; retry WS a cada 30s |
+
+**Boot atual (`App.tsx`)** — sequência verificada no código:
+
+1. `GET /api/health` → define `authRequired`.
+2. Se auth obrigatório e sem token → modal, **sem** WS.
+3. `GET /api/session` → `applySession`, `applyLibrary(data.library)`, marca `sessionBootstrappedRef`.
+4. Sincroniza token na query string (`?token=`).
+5. **`loadLibrary()`** sempre roda em seguida (mesmo após passo 3).
+6. `setSessionReady(true)` → segundo `useEffect` abre WebSocket após 100ms.
+
+---
+
+### CI (`ci.yml`) vs deploy (`deploy.yml`)
+
+| Workflow | Disparo | O que faz | Relação |
+|----------|---------|-----------|---------|
+| **`ci.yml`** (novo) | push e PR na `main` | Job `backend`: ruff + pytest; job `frontend`: `npm ci` + `npm run build`; jobs **paralelos**; concurrency cancela run anterior | **Verificação** — não deploya |
+| **`deploy.yml`** (existente) | push na `main` | SSH → `git pull` + `update.sh`; health check opcional | **Deploy** — independente do CI |
+
+O CI **não substitui** nenhuma etapa do deploy. Ambos podem rodar no mesmo push na `main` (CI valida, deploy publica). Correção em `e90e5f2`: expressão `if:` inválida com secrets no deploy (health check).
+
+---
+
+### Docker / infra — mudanças de ambiente
+
+| Arquivo | Mudança |
+|---------|---------|
+| `docker-compose.yml` | `PKF_PROVIDER` default `ninerouter`; `PKF_ROUTER_ONLY` default `1`; `PKF_AUTH_TOKEN` exposto; imagem router `ROUTER_IMAGE` |
+| `.env.example` | Documentação OmniRoute/router-only; `OPENAI_MODEL=gpt-4o-mini`; Headroom porta 8788 |
+| `.env.production.example` | Modo router-only como **padrão**; chaves Groq/Gemini comentadas; `NINEROUTER_MODEL=auto/free` |
+
+---
+
+### Status dos itens da rodada anterior
+
+| Item | Status | Evidência |
+|------|--------|-----------|
+| Menu ⋯ em Projetos (`Sidebar.tsx`) | **Válido** | Botões `⋯` com Fixar / Renomear / Excluir presentes (~L139–191); bulk delete adicionado depois |
+| Fix flicker sidebar no boot (`App.tsx`) | **Alterado** | Rodada 2: boot **não** chamava `applyLibrary` de `/api/session`. **Hoje** linha ~265 chama `applyLibrary(data.library)` **e** `loadLibrary()` — fix original **sobreposto** pela leva WebSocket |
+| Fix modelo `gpt-5.4-mini` | **Alterado** | `f998b20` definiu `gpt-5.4-mini`; `cd82093` corrigiu (“não existe”); **default atual** em `pkf/config.py`: **`gpt-4o-mini`**; `set-env-keys.sh` migra `gpt-5.4-mini` → `gpt-4o-mini` |
+| `default_provider()` sem gate `PKF_ENV` | **Válido (lógica base) + expandido** | Gate `PKF_ENV == "production"` **continua ausente**; adicionadas prioridades `router_only_mode()`, alias `omniroute`, e skip proativo 9Router |
+
+---
+
+### Definition of Done (auditoria)
+
+- [x] Todos os commits da leva listados e agrupados por tema
+- [x] Cada tema com explicação causa/efeito (não só lista de arquivos)
+- [x] Status de cada item da rodada anterior confirmado (válido / alterado / não determinado)
+- [x] Nenhum arquivo de código alterado nesta tarefa — **somente** `CHANGELOG_MELHORIAS.md`
+
+### Testes (revalidação Fase 4)
+
+```
+175 passed in 5.30s
+```
+
+Comando: `python3 -m pytest tests/ -q`
+
+---
+
 ## CI/CD — Deploy automático via GitHub Actions
 
 **Data:** 2026-08-17
