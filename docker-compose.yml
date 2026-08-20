@@ -118,7 +118,7 @@ services:
 
   ninerouter:
 
-    image: decolua/9router:latest
+    image: ${ROUTER_IMAGE:-decolua/9router:latest}
 
     profiles: ["router"]
 

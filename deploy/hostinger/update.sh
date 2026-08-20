@@ -54,6 +54,14 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 
+echo "==> Auto-configurar 9Router/OmniRoute (se 401 ou chave ausente)"
+if curl -sf http://127.0.0.1:8765/api/health 2>/dev/null | grep -q '"ninerouter_ok": true'; then
+  echo "9Router OK"
+else
+  echo "9Router com problema — executando fix-ninerouter-key.sh..."
+  bash deploy/hostinger/fix-ninerouter-key.sh || echo "AVISO: configure NINEROUTER_KEY manualmente ou use ROUTER_IMAGE=diegosouzapw/omniroute"
+fi
+
 echo "==> Status"
 docker compose --profile "$PROFILE" ps
 echo ""

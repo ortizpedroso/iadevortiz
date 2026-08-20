@@ -41,12 +41,30 @@ migrate_openai_model() {
   esac
 }
 
+migrate_gemini_model() {
+  local current=""
+  if grep -q "^GEMINI_MODEL=" .env; then
+    current="$(grep "^GEMINI_MODEL=" .env | head -n1 | cut -d= -f2-)"
+  fi
+  case "$current" in
+    gemini-2.0-flash|gemini-2.0-flash-*|gemini-1.5-*|"")
+      set_kv GEMINI_MODEL "gemini-2.5-flash"
+      echo "==> GEMINI_MODEL migrado para gemini-2.5-flash (gemini-2.0-flash descontinuado)"
+      ;;
+  esac
+}
+
 migrate_provider_pool() {
   local current=""
   if grep -q "^PKF_PROVIDER_POOL=" .env; then
     current="$(grep "^PKF_PROVIDER_POOL=" .env | head -n1 | cut -d= -f2-)"
   fi
   case "$current" in
+    gemini-only|gemini)
+      set_kv PKF_PROVIDER_POOL "ninerouter,kimi,groq,gemini,deepseek"
+      set_kv PKF_PROVIDER "ninerouter"
+      echo "==> Pool migrado de '${current}' para incluir 9Router/Groq"
+      ;;
     openai,gemini|openai|openai,*|*,openai)
       if [ "${OPENAI_IN_POOL:-0}" != "1" ]; then
         set_kv PKF_PROVIDER_POOL "ninerouter,kimi,groq,gemini,deepseek"
@@ -109,7 +127,8 @@ set_kv PKF_GROQ_FALLBACK_MODEL "${PKF_GROQ_FALLBACK_MODEL:-llama-3.1-8b-instant}
 if [ -n "${GEMINI_API_KEY:-}" ]; then
   set_kv GEMINI_API_KEY "$GEMINI_API_KEY"
 fi
-set_kv GEMINI_MODEL "${GEMINI_MODEL:-gemini-2.0-flash}"
+set_kv GEMINI_MODEL "${GEMINI_MODEL:-gemini-2.5-flash}"
+migrate_gemini_model
 
 [ -n "${DEEPSEEK_API_KEY:-}" ] && set_kv DEEPSEEK_API_KEY "$DEEPSEEK_API_KEY"
 set_kv DEEPSEEK_MODEL "${DEEPSEEK_MODEL:-deepseek-chat}"

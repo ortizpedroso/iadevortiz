@@ -34,6 +34,15 @@ def explain_provider_error(provider: str, exc: Exception) -> str:
             "Falha no Groq. Crie uma chave grátis em https://console.groq.com/keys "
             "e configure GROQ_API_KEY no .env."
         )
+    if provider == "gemini" and ("model_not_found" in lowered or "no longer available" in lowered or "404" in text):
+        return (
+            "O modelo Gemini configurado foi descontinuado pela Google.\n\n"
+            "A PKF tenta alternar automaticamente. Se o erro persistir:\n"
+            "1. No .env: GEMINI_MODEL=gemini-3.6-flash\n"
+            "2. Ou use 9Router/OmniRoute (roteamento automático): bash deploy/hostinger/fix-ninerouter-key.sh\n"
+            "3. Ou configure GROQ_API_KEY (grátis) em deploy/hostinger/secrets.env\n\n"
+            f"Detalhe: {text[:280]}"
+        )
     if provider == "gemini" and ("api" in lowered or "401" in lowered or "key" in lowered):
         return (
             "Falha no Gemini. Crie uma chave grátis em https://aistudio.google.com/apikey "
