@@ -64,6 +64,36 @@ async def build_session_snapshot(router: Router, history: ChatHistory) -> dict:
     return snapshot
 
 
+async def process_user_message(
+    router: Router,
+    history: ChatHistory,
+    content: str,
+    *,
+    lock: asyncio.Lock,
+) -> dict:
+    """Processa mensagem do usuário (compartilhado entre WebSocket e HTTP)."""
+    text = content.strip()
+    if not text:
+        return {"type": "error", "content": "Mensagem vazia."}
+    if lock.locked():
+        return {"type": "error", "content": "Aguarde a resposta anterior terminar."}
+    async with lock:
+        await history.append({"role": "user", "content": text})
+        try:
+            reply = await router.handle(text)
+        except Exception as exc:  # noqa: BLE001 — surface any agent/provider failure to the client
+            return {
+                "type": "error",
+                "content": explain_provider_error(router.provider_name, exc),
+            }
+        agent = "pkf" if router.ui_mode else (router.cycle.last_agent or "sistema")
+        message = {"role": "assistant", "content": reply or "", "agent": agent}
+        await history.append(message)
+        if database_enabled():
+            await history.db_context.persist_cycle(router.cycle)
+        return {"type": "done", **message, **router.snapshot()}
+
+
 def _frontend_dist_candidates() -> list[Path]:
     roots = []
     if app_root := os.getenv("PKF_APP_ROOT", "").strip():
@@ -123,7 +153,9 @@ def create_app(router: Router) -> FastAPI:
 
     @app.get("/")
     async def index():
-        return FileResponse(static_root / "index.html")
+        response = FileResponse(static_root / "index.html")
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return response
 
     @app.get("/api/health")
     async def health(request: Request):
@@ -433,15 +465,20 @@ def create_app(router: Router) -> FastAPI:
         preview["name"] = name
         return {"ok": True, "spec": preview}
 
+    @app.post("/api/message")
+    async def post_message(payload: dict | None = None):
+        payload = payload or {}
+        content = (payload.get("content") or "").strip()
+        if not content:
+            return JSONResponse({"type": "error", "content": "Mensagem vazia."}, status_code=400)
+        history: ChatHistory = app.state.history
+        result = await process_user_message(router, history, content, lock=app.state.lock)
+        status = 409 if result.get("type") == "error" and "Aguarde" in str(result.get("content", "")) else 200
+        return JSONResponse(result, status_code=status)
+
     @app.websocket("/ws")
     async def chat_socket(websocket: WebSocket):
-        expected = auth_token()
-        subprotocol: str | None = None
-        if expected:
-            offered = websocket.headers.get("sec-websocket-protocol", "")
-            if offered.startswith("pkf-token."):
-                subprotocol = offered.split(",")[0].strip()
-        await websocket.accept(subprotocol=subprotocol)
+        await websocket.accept()
         if not check_ws_auth(websocket):
             await websocket.send_json(
                 {
@@ -477,30 +514,10 @@ def create_app(router: Router) -> FastAPI:
                 content = (data.get("content") or "").strip()
                 if not content:
                     continue
-                if app.state.lock.locked():
-                    await websocket.send_json(
-                        {"type": "error", "content": "Aguarde a resposta anterior terminar."}
-                    )
+                result = await process_user_message(router, history, content, lock=app.state.lock)
+                await websocket.send_json(result)
+                if result.get("type") == "done":
                     continue
-                async with app.state.lock:
-                    await history.append({"role": "user", "content": content})
-                    try:
-                        reply = await router.handle(content)
-                    except Exception as exc:  # noqa: BLE001 — surface any agent/provider failure to the client
-                        await websocket.send_json(
-                            {
-                                "type": "error",
-                                "content": explain_provider_error(router.provider_name, exc),
-                            }
-                        )
-                        continue
-                    agent = "pkf" if router.ui_mode else (router.cycle.last_agent or "sistema")
-                    message = {"role": "assistant", "content": reply or "", "agent": agent}
-                    await history.append(message)
-                    if database_enabled():
-                        await history.db_context.persist_cycle(router.cycle)
-                    payload = {"type": "done", **message, **router.snapshot()}
-                    await websocket.send_json(payload)
         except WebSocketDisconnect:
             pass
         finally:

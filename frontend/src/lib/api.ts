@@ -21,11 +21,6 @@ export function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export function wsProtocols(): string[] | undefined {
-  const token = getToken();
-  return token ? [`pkf-token.${token}`] : undefined;
-}
-
 export function wsUrl(): string {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const token = getToken();
