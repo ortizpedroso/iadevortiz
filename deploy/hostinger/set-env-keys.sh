@@ -23,6 +23,24 @@ set_kv() {
   fi
 }
 
+set_kv_default() {
+  local key="$1"
+  local value="$2"
+  grep -q "^${key}=" .env || set_kv "$key" "$value"
+}
+
+migrate_openai_model() {
+  local current=""
+  if grep -q "^OPENAI_MODEL=" .env; then
+    current="$(grep "^OPENAI_MODEL=" .env | head -n1 | cut -d= -f2-)"
+  fi
+  case "$current" in
+    gpt-5.4-mini|gpt-4.1-mini|gpt-4.1-mini-*|"")
+      set_kv OPENAI_MODEL "gpt-4o-mini"
+      ;;
+  esac
+}
+
 # Carrega secrets locais (não versionados)
 if [ -f "$SECRETS_FILE" ]; then
   # shellcheck disable=SC1090
@@ -77,7 +95,8 @@ set_kv PKF_REASONING_TEMPERATURE "${PKF_REASONING_TEMPERATURE:-0.6}"
 set_kv PKF_WEB_SEARCH_FORMAT "${PKF_WEB_SEARCH_FORMAT:-deepseek}"
 
 [ -n "${OPENAI_API_KEY:-}" ] && set_kv OPENAI_API_KEY "$OPENAI_API_KEY"
-set_kv OPENAI_MODEL "${OPENAI_MODEL:-gpt-4.1-mini}"
+migrate_openai_model
+set_kv_default OPENAI_MODEL "gpt-4o-mini"
 
 [ -n "${TAVILY_API_KEY:-}" ] && set_kv TAVILY_API_KEY "$TAVILY_API_KEY"
 

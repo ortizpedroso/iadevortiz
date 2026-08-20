@@ -10,12 +10,15 @@ export function MessageList({
 }) {
   if (!messages.length && !thinking) {
     return (
-      <div className="mx-auto max-w-2xl px-4 pt-[12vh] text-center">
+      <div className="mx-auto max-w-2xl px-4 pt-[10vh] text-center">
+        <div className="mx-auto mb-6 grid h-14 w-14 place-items-center rounded-2xl bg-[var(--pkf-accent)] text-xl font-bold text-[#1a1917]">
+          P
+        </div>
         <h1 className="font-serif text-4xl font-semibold tracking-tight text-[var(--pkf-text)] md:text-5xl">
-          O que vamos construir?
+          Como posso ajudar?
         </h1>
         <p className="mt-4 text-[var(--pkf-muted)]">
-          Descreva seu app ou funcionalidade. A PKF especifica, implementa e revisa por você.
+          Descreva o que você quer construir. Eu especifico, implemento e reviso o código.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-2 text-xs text-[var(--pkf-text-dim)]">
           <span className="rounded-full border border-[var(--pkf-border)] px-3 py-1">/spec</span>
@@ -44,10 +47,10 @@ export function MessageList({
             <div
               className={`text-[15px] leading-relaxed ${
                 isUser
-                  ? "max-w-[85%] rounded-2xl rounded-br-md bg-[var(--pkf-border)] px-4 py-3 text-[var(--pkf-text)]"
+                  ? "max-w-[85%] rounded-3xl rounded-br-md bg-[var(--pkf-user-bubble)] px-4 py-3 text-[var(--pkf-text)] ring-1 ring-[var(--pkf-border-soft)]"
                   : isError
                     ? "rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-red-200"
-                    : "pkf-markdown text-[#d4d4d4]"
+                    : "pkf-markdown text-[var(--pkf-text)]"
               }`}
               {...(!isUser && !isError
                 ? { dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) } }
