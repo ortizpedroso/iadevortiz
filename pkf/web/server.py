@@ -34,6 +34,7 @@ from pkf.web.library import (
     delete_chat,
     delete_project,
     library_snapshot,
+    pin_project,
 )
 from pkf.web.preview import preview_info, redirect_preview_entry, serve_preview_file
 from pkf.web_search import web_search_configured
@@ -43,6 +44,22 @@ from pkf.workspace_index import build_file_tree, list_changes
 
 PKG_DIR = Path(__file__).resolve().parent
 LEGACY_STATIC = PKG_DIR / "static"
+
+
+async def build_session_snapshot(router: Router, history: ChatHistory) -> dict:
+    """Snapshot consistente entre HTTP e WebSocket (DB tasks/cycle têm prioridade)."""
+    snapshot = router.snapshot()
+    if database_enabled():
+        await history.db_context.setup()
+        snapshot["tasks"] = await history.db_context.load_tasks()
+        cycle = await history.db_context.load_dev_cycle()
+        if cycle:
+            snapshot["phase"] = cycle.phase
+            snapshot["active_spec"] = cycle.active_spec
+            snapshot["spec_status"] = cycle.spec_status
+            snapshot["goal"] = cycle.goal
+            snapshot["last_agent"] = cycle.last_agent or snapshot.get("last_agent")
+    return snapshot
 
 
 def _frontend_dist_candidates() -> list[Path]:
@@ -277,12 +294,23 @@ def create_app(router: Router) -> FastAPI:
             router._register_core_agents()
         return {"ok": True, "library": await library_snapshot(router.workspace, history.db_context)}
 
+    @app.post("/api/projects/{slug}/pin")
+    async def projects_pin(slug: str, payload: dict | None = None):
+        payload = payload or {}
+        pinned = bool(payload.get("pinned"))
+        history: ChatHistory = app.state.history
+        try:
+            await pin_project(router.workspace, slug, pinned)
+        except ValueError as exc:
+            return JSONResponse(status_code=404, content={"ok": False, "error": str(exc)})
+        return {"ok": True, "library": await library_snapshot(router.workspace, history.db_context)}
+
     @app.get("/api/session")
     async def session():
         history: ChatHistory = app.state.history
         try:
             healthy, detail = await ping_provider(router.client)
-            snapshot = router.snapshot()
+            snapshot = await build_session_snapshot(router, history)
             snapshot["provider_ok"] = healthy
             snapshot["database"] = database_enabled()
             project_preview = snapshot.get("project_preview") or preview_info(router.workspace)
@@ -293,9 +321,6 @@ def create_app(router: Router) -> FastAPI:
                 snapshot["provider_error"] = explain_provider_error(
                     router.provider_name, Exception(detail)
                 )
-            if database_enabled():
-                await history.db_context.setup()
-                snapshot["tasks"] = await history.db_context.load_tasks()
             return {"session": snapshot, "messages": history.messages, "library": await library_snapshot(router.workspace, history.db_context)}
         except (OSError, RuntimeError, ValueError, TypeError, APIConnectionError, APIStatusError, APITimeoutError) as exc:
             return {
@@ -377,7 +402,7 @@ def create_app(router: Router) -> FastAPI:
         await websocket.accept()
         history: ChatHistory = app.state.history
         await history.load()
-        await websocket.send_json({"type": "session", **router.snapshot()})
+        await websocket.send_json({"type": "session", **await build_session_snapshot(router, history)})
 
         async def on_event(event: dict) -> None:
             await websocket.send_json(event)

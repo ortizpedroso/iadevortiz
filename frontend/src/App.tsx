@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthModal } from "./components/AuthModal";
 import { Composer } from "./components/Composer";
-import { IconRail } from "./components/IconRail";
 import { MessageList } from "./components/MessageList";
 import { Sidebar } from "./components/Sidebar";
 import { SpecPanel } from "./components/SpecPanel";
 import { authHeaders, getToken, previewUrl, wsUrl } from "./lib/api";
 import type { ChatItem, Message, ProjectItem, SessionSnapshot, SpecPreview, TaskNode, WsEvent } from "./types";
 
+const EMPTY_SESSION: SessionSnapshot = {};
+
 export default function App() {
   const [authRequired, setAuthRequired] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [panel, setPanel] = useState<"project" | "spec" | null>("project");
+  const [sessionReady, setSessionReady] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [session, setSession] = useState<SessionSnapshot>({});
+  const [session, setSession] = useState<SessionSnapshot>(EMPTY_SESSION);
   const [specPreview, setSpecPreview] = useState<SpecPreview | null>(null);
   const [tasks, setTasks] = useState<TaskNode[]>([]);
   const [changes, setChanges] = useState<{ path: string; action: string }[]>([]);
@@ -28,6 +30,7 @@ export default function App() {
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const socketRef = useRef<WebSocket | null>(null);
+  const sessionBootstrappedRef = useRef(false);
 
   const applyLibrary = useCallback((library?: { chats?: ChatItem[]; projects?: ProjectItem[] }) => {
     if (!library) return;
@@ -60,24 +63,24 @@ export default function App() {
     }
   }, []);
 
-  const applySession = useCallback((data: SessionSnapshot, replaceSpec = false) => {
-    setSession((s) => ({ ...s, ...data }));
-    if (data.tasks) setTasks(data.tasks);
+  const applySession = useCallback((data: SessionSnapshot, replace = false) => {
+    setSession(replace ? data : (current) => ({ ...current, ...data }));
+    if ("tasks" in data) setTasks(data.tasks || []);
     if (data.spec_preview) {
       setSpecPreview(data.spec_preview);
       if (data.spec_preview.status === "pending_approval") setPanel("spec");
-    } else if (replaceSpec) {
+    } else if (replace) {
       setSpecPreview(null);
-      setPanel("project");
+      if (panel === "spec") setPanel("project");
     }
     if (data.project_preview?.available && data.project_preview.path) {
       setPreviewSrc(previewUrl(data.project_preview.path));
-    } else if (replaceSpec) {
+    } else if (replace) {
       setPreviewSrc("");
       setPreviewOpen(false);
     }
     if (data.active_agent) setActiveAgent(data.active_agent);
-  }, []);
+  }, [panel]);
 
   const connect = useCallback(() => {
     if (socketRef.current?.readyState === WebSocket.OPEN) return;
@@ -91,7 +94,8 @@ export default function App() {
     ws.onmessage = (ev) => {
       const event: WsEvent = JSON.parse(ev.data);
       if (event.type === "session") {
-        applySession(event as SessionSnapshot);
+        if (!sessionBootstrappedRef.current) return;
+        applySession(event as SessionSnapshot, true);
         return;
       }
       if (event.type === "spec_preview" && event.spec) {
@@ -155,14 +159,21 @@ export default function App() {
         }
         if (res.ok) {
           const data = await res.json();
-          applySession(data.session);
+          applySession(data.session, true);
           setMessages(data.messages || []);
+          applyLibrary(data.library);
+          sessionBootstrappedRef.current = true;
         }
       } catch {
         /* offline bootstrap */
       }
-      await loadLibrary();
-      loadChanges();
+      if (!sessionBootstrappedRef.current) {
+        await loadLibrary();
+      } else {
+        await loadLibrary();
+      }
+      await loadChanges();
+      setSessionReady(true);
       connect();
     }
     boot();
@@ -194,7 +205,7 @@ export default function App() {
     setMessages([]);
     setPreviewOpen(false);
     setSpecPreview(null);
-    setSession({});
+    setSession(EMPTY_SESSION);
     setTasks([]);
     loadChanges();
     loadLibrary();
@@ -207,7 +218,7 @@ export default function App() {
     setMessages([]);
     setSpecPreview(null);
     applyLibrary(data.library);
-    if (data.session) applySession(data.session);
+    if (data.session) applySession(data.session, true);
   }
 
   async function selectChat(id: string) {
@@ -290,16 +301,26 @@ export default function App() {
     if (data.session) applySession(data.session, true);
   }
 
+  async function pinProject(slug: string, pinned: boolean) {
+    const res = await fetch(`/api/projects/${slug}/pin`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ pinned }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    applyLibrary(data.library);
+  }
+
   const projectName =
     session.project_name && session.project_name !== "(sem projeto ativo)"
       ? session.project_name
       : "Nenhum ainda";
 
-  const showSpecPanel =
-    panel === "spec" && specPreview && specPreview.status !== "approved";
+  const showSpecPanel = panel === "spec" && specPreview && specPreview.status !== "approved";
 
   return (
-    <div className="flex h-full min-h-dvh">
+    <div className="flex h-full min-h-dvh bg-[var(--pkf-bg-primary)]">
       <AuthModal open={authOpen && authRequired} onSubmit={handleAuth} />
 
       <a
@@ -309,16 +330,9 @@ export default function App() {
         Ir ao chat
       </a>
 
-      <IconRail
-        panel={panel}
-        onPanel={setPanel}
-        hasSpec={!!specPreview && specPreview.status !== "approved"}
-        previewAvailable={!!session.project_preview?.available}
-        onPreview={() => setPreviewOpen(true)}
-      />
-
       <Sidebar
         open={panel === "project"}
+        ready={sessionReady}
         onClose={() => setPanel(null)}
         projectName={projectName}
         tasks={tasks}
@@ -327,6 +341,7 @@ export default function App() {
         database={!!session.database}
         phase={session.phase}
         model={session.model}
+        busy={busy}
         chats={chats}
         projects={projects}
         onSelectChat={selectChat}
@@ -335,6 +350,7 @@ export default function App() {
         onSelectProject={selectProject}
         onDeleteProject={deleteProject}
         onRenameProject={renameProject}
+        onPinProject={pinProject}
         onNewChat={newChat}
       />
 
@@ -366,25 +382,36 @@ export default function App() {
               </span>
             ) : null}
           </div>
-          {session.project_preview?.available ? (
-            <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex gap-2">
+            {specPreview && specPreview.status !== "approved" ? (
               <button
                 type="button"
-                className="hidden min-h-9 rounded-lg border border-[#2e2e2e] px-3 text-xs font-medium hover:border-[#d97757]/50 sm:inline-flex sm:items-center"
-                onClick={() => setPreviewOpen((v) => !v)}
+                className="hidden min-h-9 rounded-lg border border-[var(--pkf-border)] px-3 text-xs font-medium hover:border-[var(--pkf-accent)]/50 sm:inline-flex sm:items-center"
+                onClick={() => setPanel(panel === "spec" ? null : "spec")}
               >
-                {previewOpen ? "Ocultar preview" : "Preview"}
+                Spec
               </button>
-              <a
-                href={previewSrc}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-9 items-center rounded-lg border border-[#2e2e2e] px-3 text-xs font-medium hover:border-[#d97757]/50"
-              >
-                Abrir ↗
-              </a>
-            </div>
-          ) : null}
+            ) : null}
+            {session.project_preview?.available ? (
+              <>
+                <button
+                  type="button"
+                  className="hidden min-h-9 rounded-lg border border-[var(--pkf-border)] px-3 text-xs font-medium hover:border-[var(--pkf-accent)]/50 sm:inline-flex sm:items-center"
+                  onClick={() => setPreviewOpen((v) => !v)}
+                >
+                  {previewOpen ? "Ocultar preview" : "Preview"}
+                </button>
+                <a
+                  href={previewSrc}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-9 items-center rounded-lg border border-[var(--pkf-border)] px-3 text-xs font-medium hover:border-[var(--pkf-accent)]/50"
+                >
+                  Abrir ↗
+                </a>
+              </>
+            ) : null}
+          </div>
         </header>
 
         {session.provider_error ? (
@@ -393,7 +420,7 @@ export default function App() {
           </div>
         ) : null}
         {progress ? (
-          <div className="mx-4 mt-3 rounded-xl bg-[#d97757]/10 px-4 py-2 text-sm text-[#d97757]" aria-live="polite">
+          <div className="mx-4 mt-3 rounded-xl bg-[var(--pkf-accent)]/10 px-4 py-2 text-sm text-[var(--pkf-accent)]" aria-live="polite">
             {progress}
           </div>
         ) : null}
@@ -415,8 +442,8 @@ export default function App() {
           ) : null}
 
           {previewOpen && previewSrc ? (
-            <aside className="flex min-h-[40vh] flex-1 flex-col border-t border-[#2e2e2e] lg:max-w-[50%] lg:border-l lg:border-t-0">
-              <header className="flex items-center justify-between border-b border-[#2e2e2e] px-4 py-2 text-sm">
+            <aside className="flex min-h-[40vh] flex-1 flex-col border-t border-[var(--pkf-border)] lg:max-w-[50%] lg:border-l lg:border-t-0">
+              <header className="flex items-center justify-between border-b border-[var(--pkf-border)] px-4 py-2 text-sm">
                 <strong>Preview</strong>
                 <button type="button" aria-label="Fechar preview" className="h-10 w-10" onClick={() => setPreviewOpen(false)}>
                   ✕
