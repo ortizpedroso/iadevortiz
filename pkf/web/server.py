@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 
+from pkf import __version__
 from pkf.config import auth_token
 from pkf.db.config import database_enabled
 from pkf.db.engine import close_db, init_db
@@ -132,6 +133,7 @@ def create_app(router: Router) -> FastAPI:
             "auth_required": bool(auth_token()),
             "database": database_enabled(),
             "ui": "vite" if use_vite else "legacy",
+            "version": __version__,
         }
         if authed:
             payload["web_search"] = web_search_configured()

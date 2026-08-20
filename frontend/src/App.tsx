@@ -354,8 +354,8 @@ export default function App() {
         onNewChat={newChat}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-12 items-center gap-3 border-b border-[var(--pkf-border)] px-4">
+      <div className="flex min-w-0 flex-1 flex-col bg-[var(--pkf-bg-primary)]">
+        <header className="flex min-h-12 items-center gap-3 border-b border-[var(--pkf-border-soft)] bg-[var(--pkf-bg-primary)] px-4">
           <button
             type="button"
             className="pkf-btn-icon grid h-10 w-10 place-items-center rounded-lg md:hidden"

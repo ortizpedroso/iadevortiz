@@ -31,16 +31,16 @@ export function Composer({ busy, onSend }: Props) {
   }
 
   return (
-    <footer className="border-t border-[var(--pkf-border)] bg-[var(--pkf-bg-primary)]/95 px-4 py-4 backdrop-blur">
-      <div className="mx-auto max-w-2xl">
+    <footer className="border-t border-[var(--pkf-border-soft)] bg-[var(--pkf-bg-primary)]/95 px-4 py-5 backdrop-blur">
+      <div className="mx-auto max-w-3xl">
         {!busy ? (
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="mb-3 flex flex-wrap justify-center gap-2">
             {SUGGESTIONS.map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => onSend(s)}
-                className="rounded-full border border-[var(--pkf-border)] bg-[var(--pkf-bg-panel)] px-3 py-1.5 text-xs text-[var(--pkf-muted)] transition hover:border-[var(--pkf-accent)]/40 hover:text-[var(--pkf-text)] pkf-focus-ring"
+                className="rounded-full border border-[var(--pkf-border-soft)] bg-[var(--pkf-bg-panel)] px-3 py-1.5 text-xs text-[var(--pkf-muted)] transition hover:border-[var(--pkf-accent)]/40 hover:text-[var(--pkf-text)] pkf-focus-ring"
               >
                 {s.split(" ").slice(0, 3).join(" ")}…
               </button>
@@ -49,7 +49,7 @@ export function Composer({ busy, onSend }: Props) {
         ) : null}
         <form
           onSubmit={submit}
-          className="flex items-end gap-2 rounded-2xl border border-[var(--pkf-border)] bg-[var(--pkf-bg-panel)] p-2 shadow-lg focus-within:border-[var(--pkf-accent)]/50"
+          className="flex items-end gap-2 rounded-[1.75rem] border border-[var(--pkf-border-soft)] bg-[var(--pkf-bg-panel)] p-2 shadow-[0_8px_30px_rgba(0,0,0,0.25)] focus-within:border-[var(--pkf-accent)]/50"
         >
           <label htmlFor="prompt" className="sr-only">
             Mensagem para a PKF
@@ -75,7 +75,7 @@ export function Composer({ busy, onSend }: Props) {
             type="submit"
             disabled={busy || !text.trim()}
             aria-label="Enviar"
-            className="mb-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--pkf-accent)] text-[var(--pkf-bg-primary)] transition hover:brightness-110 disabled:opacity-30 pkf-focus-ring"
+            className="mb-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--pkf-accent)] text-[#1a1917] transition hover:bg-[var(--pkf-accent-hover)] disabled:opacity-30 pkf-focus-ring"
           >
             ↑
           </button>

@@ -84,10 +84,10 @@ function ProjectRow({
   return (
     <li className="group relative">
       <div
-        className={`flex items-center gap-1 rounded-xl px-2 py-2 transition ${
+        className={`flex items-center gap-2 rounded-xl px-2.5 py-2.5 transition ${
           project.is_active
-            ? "bg-[var(--pkf-bg-hover)] text-[var(--pkf-text)]"
-            : "text-[var(--pkf-muted)] hover:bg-[var(--pkf-bg-hover)] hover:text-[var(--pkf-text)]"
+            ? "bg-[var(--pkf-bg-panel)] text-[var(--pkf-text)] ring-1 ring-[var(--pkf-border-soft)]"
+            : "text-[var(--pkf-muted)] hover:bg-[var(--pkf-bg-panel)]/70 hover:text-[var(--pkf-text)]"
         }`}
       >
         {project.pinned ? (
@@ -126,7 +126,7 @@ function ProjectRow({
             aria-label={`Ações do projeto ${label}`}
             aria-expanded={menuOpen}
             aria-haspopup="menu"
-            className="grid h-8 w-8 place-items-center rounded-lg text-[var(--pkf-muted)] opacity-0 transition group-hover:opacity-100 hover:bg-[var(--pkf-border)]/60 focus:opacity-100"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--pkf-border-soft)] bg-[var(--pkf-bg-panel)] text-base leading-none text-[var(--pkf-muted)] hover:border-[var(--pkf-border)] hover:text-[var(--pkf-text)]"
             onClick={() => setMenuOpen((open) => !open)}
           >
             ⋯
@@ -219,20 +219,23 @@ export function Sidebar({
         aria-label="Fechar painel"
         onClick={onClose}
       />
-      <aside className="fixed inset-y-0 left-0 z-30 flex w-[17.5rem] flex-col border-r border-[var(--pkf-border)] bg-[var(--pkf-bg-sidebar)] md:static md:z-0">
-        <div className="flex items-center justify-between border-b border-[var(--pkf-border)] px-4 py-4">
-          <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--pkf-accent)]/15 text-sm font-bold text-[var(--pkf-accent)]">
+      <aside className="fixed inset-y-0 left-0 z-30 flex w-[18rem] flex-col border-r border-[var(--pkf-border-soft)] bg-[var(--pkf-bg-sidebar)] md:static md:z-0">
+        <div className="flex items-center justify-between border-b border-[var(--pkf-border-soft)] px-4 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--pkf-accent)] text-sm font-bold text-[#1a1917]">
               P
             </div>
-            <span className="text-sm font-medium text-[var(--pkf-text)]">PKF</span>
+            <div>
+              <span className="block text-sm font-semibold text-[var(--pkf-text)]">PKF</span>
+              <span className="block text-[10px] text-[var(--pkf-text-dim)]">Assistente de código</span>
+            </div>
           </div>
           <button
             type="button"
             onClick={onNewChat}
-            className="rounded-lg border border-[var(--pkf-border)] px-3 py-1.5 text-xs font-medium text-[var(--pkf-text)] transition hover:bg-[var(--pkf-bg-hover)]"
+            className="rounded-xl bg-[var(--pkf-bg-panel)] px-3 py-2 text-xs font-medium text-[var(--pkf-text)] ring-1 ring-[var(--pkf-border-soft)] transition hover:bg-[var(--pkf-bg-hover)]"
           >
-            Novo chat
+            + Chat
           </button>
         </div>
 
