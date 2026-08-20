@@ -34,7 +34,7 @@ export default function App() {
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
   const intentionalCloseRef = useRef(false);
-  const connectGenerationRef = useRef(0);
+  const activeSocketIdRef = useRef(0);
   const authRequiredRef = useRef(false);
   const wsConnectedRef = useRef(false);
   const useHttpFallbackRef = useRef(false);
@@ -95,8 +95,12 @@ export default function App() {
   applySessionRef.current = applySession;
   loadChangesRef.current = loadChanges;
 
-  const connect = useCallback(() => {
-    if (useHttpFallbackRef.current) return;
+  const invalidateSocket = useCallback(() => {
+    activeSocketIdRef.current += 1;
+  }, []);
+
+  const connect = useCallback((force = false) => {
+    if (!force && useHttpFallbackRef.current) return;
     if (authRequiredRef.current && !getToken()) {
       setAuthOpen(true);
       setStatus("Token necessário");
@@ -108,12 +112,17 @@ export default function App() {
       window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
-    const generation = connectGenerationRef.current + 1;
-    connectGenerationRef.current = generation;
+    const token = getToken();
+    if (token && !new URLSearchParams(window.location.search).get("token")) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("token", token);
+      window.history.replaceState({}, "", url.toString());
+    }
+    const socketId = activeSocketIdRef.current;
     const ws = new WebSocket(wsUrl());
     socketRef.current = ws;
     ws.onopen = () => {
-      if (generation !== connectGenerationRef.current || ws !== socketRef.current) return;
+      if (socketId !== activeSocketIdRef.current || ws !== socketRef.current) return;
       wsConnectedRef.current = true;
       useHttpFallbackRef.current = false;
       setUseHttpFallback(false);
@@ -121,13 +130,11 @@ export default function App() {
       setStatus("Pronto");
     };
     ws.onclose = (ev) => {
-      if (generation !== connectGenerationRef.current) return;
-      if (ws !== socketRef.current && socketRef.current !== null) return;
+      if (socketId !== activeSocketIdRef.current) return;
+      if (ws !== socketRef.current) return;
       wsConnectedRef.current = false;
-      if (intentionalCloseRef.current) {
-        socketRef.current = null;
-        return;
-      }
+      socketRef.current = null;
+      if (intentionalCloseRef.current || ev.code === 1000) return;
       const likelyAuthFailure =
         ev.code === 1008 ||
         (authRequiredRef.current && !getToken());
@@ -137,24 +144,21 @@ export default function App() {
         }
         setAuthOpen(true);
         setStatus(ev.code === 1008 ? "Token inválido" : "Token necessário");
-        socketRef.current = null;
         return;
       }
       if (ev.code === 1011) {
         setStatus("Erro de sessão");
-        socketRef.current = null;
         return;
       }
-      socketRef.current = null;
       reconnectAttemptsRef.current += 1;
-      if (reconnectAttemptsRef.current >= 5) {
+      if (reconnectAttemptsRef.current >= 8) {
         useHttpFallbackRef.current = true;
         setUseHttpFallback(true);
         setStatus("Modo HTTP (sem tempo real)");
         return;
       }
       setStatus(`Reconectando… (${ev.code})`);
-      reconnectTimerRef.current = window.setTimeout(connect, Math.min(2000 * reconnectAttemptsRef.current, 10000));
+      reconnectTimerRef.current = window.setTimeout(() => connect(false), Math.min(2000 * reconnectAttemptsRef.current, 10000));
     };
     ws.onerror = () => {
       if (ws.readyState !== WebSocket.OPEN) {
@@ -301,10 +305,11 @@ export default function App() {
     reconnectAttemptsRef.current = 0;
     useHttpFallbackRef.current = false;
     setUseHttpFallback(false);
-    connect();
+    const timer = window.setTimeout(() => connect(false), 100);
 
     return () => {
-      connectGenerationRef.current += 1;
+      window.clearTimeout(timer);
+      invalidateSocket();
       intentionalCloseRef.current = true;
       if (reconnectTimerRef.current) {
         window.clearTimeout(reconnectTimerRef.current);
@@ -317,14 +322,37 @@ export default function App() {
       socketRef.current = null;
       wsConnectedRef.current = false;
     };
-  }, [sessionReady, connect]);
+  }, [sessionReady, connect, invalidateSocket]);
+
+  useEffect(() => {
+    if (!useHttpFallback) return;
+    const timer = window.setInterval(() => {
+      if (wsConnectedRef.current) return;
+      useHttpFallbackRef.current = false;
+      reconnectAttemptsRef.current = 0;
+      connect(true);
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [useHttpFallback, connect]);
 
   function retryWebSocket() {
     useHttpFallbackRef.current = false;
     setUseHttpFallback(false);
     reconnectAttemptsRef.current = 0;
-    connectGenerationRef.current += 1;
-    connect();
+    invalidateSocket();
+    intentionalCloseRef.current = true;
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    const ws = socketRef.current;
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      ws.close(1000, "retry");
+    }
+    socketRef.current = null;
+    wsConnectedRef.current = false;
+    intentionalCloseRef.current = false;
+    connect(true);
   }
 
   async function sendMessageHttp(text: string) {
@@ -384,7 +412,7 @@ export default function App() {
       }
       setMessages((m) => [...m, { role: "error", content: "Ainda conectando… tente de novo em instantes." }]);
       reconnectAttemptsRef.current = 0;
-      connect();
+      connect(false);
       return;
     }
     setMessages((m) => [...m, { role: "user", content: text }]);

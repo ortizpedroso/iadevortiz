@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 
@@ -151,8 +151,9 @@ def create_app(router: Router) -> FastAPI:
     else:
         app.mount("/assets", StaticFiles(directory=LEGACY_STATIC), name="assets")
 
-    @app.get("/")
-    async def index():
+    @app.get("/favicon.ico")
+    async def favicon():
+        return JSONResponse(content={}, status_code=204)
         response = FileResponse(static_root / "index.html")
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         return response
@@ -537,4 +538,11 @@ def run_ui(router: Router, host: str = "127.0.0.1", port: int = 8765) -> None:
         print("PostgreSQL: ativo")
     if host in {"127.0.0.1", "localhost"} and os.getenv("PKF_NO_BROWSER") != "1":
         webbrowser.open(url)
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        log_level="info",
+        ws_ping_interval=20.0,
+        ws_ping_timeout=20.0,
+    )
