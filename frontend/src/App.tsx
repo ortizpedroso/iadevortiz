@@ -85,6 +85,11 @@ export default function App() {
   }, [panel]);
 
   const connect = useCallback(() => {
+    if (authRequiredRef.current && !getToken()) {
+      setAuthOpen(true);
+      setStatus("Token necessário");
+      return;
+    }
     if (socketRef.current?.readyState === WebSocket.OPEN) return;
     if (socketRef.current?.readyState === WebSocket.CONNECTING) return;
     const ws = new WebSocket(wsUrl());
@@ -94,10 +99,15 @@ export default function App() {
       setStatus("Pronto");
     };
     ws.onclose = (ev) => {
-      if (ev.code === 4401 || (authRequiredRef.current && !getToken())) {
+      const likelyAuthFailure =
+        ev.code === 4401 ||
+        ev.code === 1008 ||
+        (authRequiredRef.current && !getToken()) ||
+        (authRequiredRef.current && ev.code === 1006 && reconnectAttemptsRef.current >= 1);
+      if (likelyAuthFailure) {
         sessionStorage.removeItem("pkf_token");
         setAuthOpen(true);
-        setStatus("Token necessário");
+        setStatus(ev.code === 4401 || ev.code === 1008 ? "Token inválido" : "Token necessário");
         socketRef.current = null;
         return;
       }
@@ -123,7 +133,7 @@ export default function App() {
     ws.onmessage = (ev) => {
       const event: WsEvent = JSON.parse(ev.data);
       if (event.type === "session") {
-        if (!sessionBootstrappedRef.current) return;
+        sessionBootstrappedRef.current = true;
         applySession(event as SessionSnapshot, true);
         return;
       }
@@ -193,6 +203,7 @@ export default function App() {
         setStatus("Servidor indisponível");
         return;
       }
+      let sessionOk = false;
       try {
         const res = await fetch("/api/session", { headers: authHeaders() });
         if (res.status === 401) {
@@ -202,6 +213,7 @@ export default function App() {
           return;
         }
         if (res.ok) {
+          sessionOk = true;
           const data = await res.json();
           applySession(data.session, true);
           setMessages(data.messages || []);
@@ -209,7 +221,15 @@ export default function App() {
           sessionBootstrappedRef.current = true;
         }
       } catch {
-        /* offline bootstrap */
+        if (authRequiredRef.current) {
+          setStatus("Servidor indisponível");
+          return;
+        }
+      }
+      if (!sessionOk && authRequiredRef.current) {
+        setAuthOpen(true);
+        setStatus("Token necessário");
+        return;
       }
       if (!sessionBootstrappedRef.current) {
         await loadLibrary();
@@ -505,6 +525,26 @@ export default function App() {
         {session.provider_error ? (
           <div className="mx-4 mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
             {session.provider_error}
+          </div>
+        ) : null}
+        {authRequired && status !== "Pronto" && !authOpen ? (
+          <div className="mx-4 mt-3 rounded-xl border border-[var(--pkf-border)] bg-[var(--pkf-bg-panel)] p-3 text-sm text-[var(--pkf-muted)]">
+            {status === "Token necessário" || status === "Token inválido" || !getToken() ? (
+              <>
+                Autenticação necessária. Abra a PKF com{" "}
+                <code className="rounded bg-black/5 px-1">?token=SEU_PKF_AUTH_TOKEN</code> na URL ou{" "}
+                <button
+                  type="button"
+                  className="font-medium text-[var(--pkf-accent)] underline"
+                  onClick={() => setAuthOpen(true)}
+                >
+                  informe o token
+                </button>
+                .
+              </>
+            ) : (
+              <>Conectando ao servidor… ({status})</>
+            )}
           </div>
         ) : null}
         {progress ? (
