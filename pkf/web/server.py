@@ -134,6 +134,7 @@ def create_app(router: Router) -> FastAPI:
             "database": database_enabled(),
             "ui": "vite" if use_vite else "legacy",
             "version": __version__,
+            "git_sha": os.getenv("PKF_GIT_SHA", "").strip() or None,
         }
         if authed:
             payload["web_search"] = web_search_configured()

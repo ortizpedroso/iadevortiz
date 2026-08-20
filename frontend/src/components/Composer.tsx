@@ -49,7 +49,7 @@ export function Composer({ busy, onSend }: Props) {
         ) : null}
         <form
           onSubmit={submit}
-          className="flex items-end gap-2 rounded-[1.75rem] border border-[var(--pkf-border-soft)] bg-[var(--pkf-bg-panel)] p-2 shadow-[0_8px_30px_rgba(0,0,0,0.25)] focus-within:border-[var(--pkf-accent)]/50"
+          className="flex items-end gap-2 rounded-[1.75rem] border border-[var(--pkf-border-soft)] bg-white p-2 shadow-[0_4px_24px_rgba(31,30,28,0.08)] focus-within:border-[var(--pkf-accent)]/50"
         >
           <label htmlFor="prompt" className="sr-only">
             Mensagem para a PKF

@@ -41,6 +41,25 @@ migrate_openai_model() {
   esac
 }
 
+migrate_provider_pool() {
+  local current=""
+  if grep -q "^PKF_PROVIDER_POOL=" .env; then
+    current="$(grep "^PKF_PROVIDER_POOL=" .env | head -n1 | cut -d= -f2-)"
+  fi
+  case "$current" in
+    openai,gemini|openai|openai,*|*,openai)
+      if [ "${OPENAI_IN_POOL:-0}" != "1" ]; then
+        set_kv PKF_PROVIDER_POOL "ninerouter,kimi,groq,gemini,deepseek"
+        echo "==> Pool migrado de '${current}' (OpenAI removido; use OPENAI_IN_POOL=1 para reativar)"
+      fi
+      ;;
+  esac
+  if grep -q "^PKF_PROVIDER=openai" .env && [ "${PKF_PROVIDER:-}" != "openai" ]; then
+    set_kv PKF_PROVIDER "ninerouter"
+    echo "==> PKF_PROVIDER migrado de openai para ninerouter"
+  fi
+}
+
 # Carrega secrets locais (não versionados)
 if [ -f "$SECRETS_FILE" ]; then
   # shellcheck disable=SC1090
@@ -66,6 +85,7 @@ set_kv PKF_TIER_SUBSCRIPTION "${PKF_TIER_SUBSCRIPTION:-ninerouter,kimi,groq,deep
 set_kv PKF_TIER_CHEAP "${PKF_TIER_CHEAP:-gemini}"
 set_kv PKF_TIER_FREE "${PKF_TIER_FREE:-groq}"
 set_kv PKF_PROVIDER_POOL "${PKF_PROVIDER_POOL:-${_pool_default}}"
+migrate_provider_pool
 
 set_kv DATABASE_URL "${DATABASE_URL:-postgresql+asyncpg://pkf:pkf@postgres:5432/pkf}"
 

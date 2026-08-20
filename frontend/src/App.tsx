@@ -415,7 +415,7 @@ export default function App() {
         </header>
 
         {session.provider_error ? (
-          <div className="mx-4 mt-3 rounded-xl border border-amber-600/40 bg-amber-950/20 p-3 text-sm text-amber-100">
+          <div className="mx-4 mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
             {session.provider_error}
           </div>
         ) : null}

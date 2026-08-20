@@ -49,7 +49,7 @@ export function MessageList({
                 isUser
                   ? "max-w-[85%] rounded-3xl rounded-br-md bg-[var(--pkf-user-bubble)] px-4 py-3 text-[var(--pkf-text)] ring-1 ring-[var(--pkf-border-soft)]"
                   : isError
-                    ? "rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-red-200"
+                    ? "rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-red-800"
                     : "pkf-markdown text-[var(--pkf-text)]"
               }`}
               {...(!isUser && !isError

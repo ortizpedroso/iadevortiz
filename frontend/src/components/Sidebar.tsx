@@ -161,13 +161,125 @@ function ProjectRow({
               <button
                 type="button"
                 role="menuitem"
-                className="pkf-menu-item block w-full px-3 py-2 text-left text-sm text-red-300 hover:bg-red-950/30"
+                className="pkf-menu-item block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
                 onClick={() => {
                   setMenuOpen(false);
                   onDelete(project);
                 }}
               >
                 Excluir
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function ChatRow({
+  chat,
+  projects,
+  onSelect,
+  onDelete,
+  onAttach,
+}: {
+  chat: ChatItem;
+  projects: ProjectItem[];
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  onAttach: (chatId: string, projectSlug: string | null) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const label = chat.title || "Chat";
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
+
+  return (
+    <li className="group relative">
+      <div
+        className={`flex items-center gap-2 rounded-xl px-2.5 py-2.5 transition ${
+          chat.is_active
+            ? "bg-[var(--pkf-bg-panel)] text-[var(--pkf-text)] ring-1 ring-[var(--pkf-border-soft)] shadow-sm"
+            : "text-[var(--pkf-muted)] hover:bg-[var(--pkf-bg-panel)]/80 hover:text-[var(--pkf-text)]"
+        }`}
+      >
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate text-left text-sm"
+          onClick={() => onSelect(chat.id)}
+        >
+          <span className="line-clamp-2">{label}</span>
+        </button>
+        <div ref={menuRef} className="relative shrink-0">
+          <button
+            type="button"
+            aria-label={`Ações do chat ${label}`}
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--pkf-border-soft)] bg-white text-base leading-none text-[var(--pkf-muted)] shadow-sm hover:border-[var(--pkf-border)] hover:text-[var(--pkf-text)]"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen((open) => !open);
+            }}
+          >
+            ⋯
+          </button>
+          {menuOpen ? (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-40 mt-1 min-w-[10.5rem] rounded-xl border border-[var(--pkf-border)] bg-white py-1 shadow-lg"
+            >
+              {projects.length ? (
+                <div className="border-b border-[var(--pkf-border-soft)] px-3 py-2">
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[var(--pkf-text-dim)]">
+                    Vincular projeto
+                  </label>
+                  <select
+                    className="pkf-input w-full text-xs"
+                    value={chat.project_slug || ""}
+                    onChange={(e) => {
+                      onAttach(chat.id, e.target.value || null);
+                      setMenuOpen(false);
+                    }}
+                    aria-label="Vincular projeto"
+                  >
+                    <option value="">Sem projeto</option>
+                    {projects.map((p) => (
+                      <option key={p.slug} value={p.slug}>
+                        {p.name || p.slug}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                role="menuitem"
+                className="pkf-menu-item block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDelete(chat.id);
+                }}
+              >
+                Excluir chat
               </button>
             </div>
           ) : null}
@@ -215,7 +327,7 @@ export function Sidebar({
     <>
       <button
         type="button"
-        className="fixed inset-0 z-20 bg-black/60 md:hidden"
+        className="fixed inset-0 z-20 bg-black/30 md:hidden"
         aria-label="Fechar painel"
         onClick={onClose}
       />
@@ -274,43 +386,14 @@ export function Sidebar({
             <ul className="space-y-0.5">
               {ready && chats.length ? (
                 chats.map((chat) => (
-                  <li key={chat.id}>
-                    <button
-                      type="button"
-                      className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
-                        chat.is_active
-                          ? "bg-[var(--pkf-bg-hover)] text-[var(--pkf-text)]"
-                          : "text-[var(--pkf-muted)] hover:bg-[var(--pkf-bg-hover)] hover:text-[var(--pkf-text)]"
-                      }`}
-                      onClick={() => onSelectChat(chat.id)}
-                    >
-                      <span className="line-clamp-2">{chat.title || "Chat"}</span>
-                    </button>
-                    {chat.is_active ? (
-                      <div className="mt-1 flex gap-1 px-2">
-                        <select
-                          className="min-w-0 flex-1 rounded-lg border border-[var(--pkf-border)] bg-[var(--pkf-bg-primary)] px-2 py-1 text-[10px] text-[var(--pkf-muted)]"
-                          value={chat.project_slug || ""}
-                          onChange={(e) => onAttachChat(chat.id, e.target.value || null)}
-                          aria-label="Vincular projeto"
-                        >
-                          <option value="">Sem projeto</option>
-                          {projects.map((p) => (
-                            <option key={p.slug} value={p.slug}>
-                              {p.name || p.slug}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          className="rounded-lg px-2 text-[10px] text-[var(--pkf-text-dim)] hover:text-red-300"
-                          onClick={() => onDeleteChat(chat.id)}
-                        >
-                          Excluir
-                        </button>
-                      </div>
-                    ) : null}
-                  </li>
+                  <ChatRow
+                    key={chat.id}
+                    chat={chat}
+                    projects={projects}
+                    onSelect={onSelectChat}
+                    onDelete={onDeleteChat}
+                    onAttach={onAttachChat}
+                  />
                 ))
               ) : (
                 <li className="px-2 text-sm text-[var(--pkf-text-dim)]">{ready ? "Nenhuma conversa" : "Carregando…"}</li>
