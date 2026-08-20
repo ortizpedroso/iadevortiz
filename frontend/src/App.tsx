@@ -33,11 +33,8 @@ export default function App() {
   const sessionBootstrappedRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const authRequiredRef = useRef(false);
-  const applySessionRef = useRef(applySession);
-  const loadChangesRef = useRef(loadChanges);
-
-  applySessionRef.current = applySession;
-  loadChangesRef.current = loadChanges;
+  const applySessionRef = useRef<(data: SessionSnapshot, replace?: boolean) => void>(() => {});
+  const loadChangesRef = useRef<() => Promise<void>>(async () => {});
 
   const applyLibrary = useCallback((library?: { chats?: ChatItem[]; projects?: ProjectItem[] }) => {
     if (!library) return;
@@ -88,6 +85,9 @@ export default function App() {
     }
     if (data.active_agent) setActiveAgent(data.active_agent);
   }, [panel]);
+
+  applySessionRef.current = applySession;
+  loadChangesRef.current = loadChanges;
 
   const connect = useCallback(() => {
     if (authRequiredRef.current && !getToken()) {
