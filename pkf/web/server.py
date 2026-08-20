@@ -435,7 +435,13 @@ def create_app(router: Router) -> FastAPI:
 
     @app.websocket("/ws")
     async def chat_socket(websocket: WebSocket):
-        await websocket.accept()
+        expected = auth_token()
+        subprotocol: str | None = None
+        if expected:
+            offered = websocket.headers.get("sec-websocket-protocol", "")
+            if offered.startswith("pkf-token."):
+                subprotocol = offered.split(",")[0].strip()
+        await websocket.accept(subprotocol=subprotocol)
         if not check_ws_auth(websocket):
             await websocket.send_json(
                 {
@@ -443,7 +449,7 @@ def create_app(router: Router) -> FastAPI:
                     "content": "Token inválido ou ausente. Acesse a PKF com ?token=SEU_PKF_AUTH_TOKEN na URL.",
                 }
             )
-            await websocket.close(code=4401, reason="Token inválido")
+            await websocket.close(code=1008, reason="Token inválido")
             return
         history: ChatHistory = app.state.history
         try:

@@ -4,7 +4,7 @@ import { Composer } from "./components/Composer";
 import { MessageList } from "./components/MessageList";
 import { Sidebar } from "./components/Sidebar";
 import { SpecPanel } from "./components/SpecPanel";
-import { authHeaders, getToken, previewUrl, wsUrl } from "./lib/api";
+import { authHeaders, getToken, previewUrl, wsProtocols, wsUrl } from "./lib/api";
 import type { ChatItem, Message, ProjectItem, SessionSnapshot, SpecPreview, TaskNode, WsEvent } from "./types";
 
 const EMPTY_SESSION: SessionSnapshot = {};
@@ -32,6 +32,8 @@ export default function App() {
   const socketRef = useRef<WebSocket | null>(null);
   const sessionBootstrappedRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const intentionalCloseRef = useRef(false);
   const authRequiredRef = useRef(false);
   const applySessionRef = useRef<(data: SessionSnapshot, replace?: boolean) => void>(() => {});
   const loadChangesRef = useRef<() => Promise<void>>(async () => {});
@@ -97,23 +99,30 @@ export default function App() {
     }
     if (socketRef.current?.readyState === WebSocket.OPEN) return;
     if (socketRef.current?.readyState === WebSocket.CONNECTING) return;
-    const ws = new WebSocket(wsUrl());
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    const ws = new WebSocket(wsUrl(), wsProtocols());
     socketRef.current = ws;
     ws.onopen = () => {
       reconnectAttemptsRef.current = 0;
       setStatus("Pronto");
     };
     ws.onclose = (ev) => {
+      if (intentionalCloseRef.current) {
+        socketRef.current = null;
+        return;
+      }
       const likelyAuthFailure =
-        ev.code === 4401 ||
         ev.code === 1008 ||
         (authRequiredRef.current && !getToken());
       if (likelyAuthFailure) {
-        if (ev.code === 4401 || ev.code === 1008) {
+        if (ev.code === 1008) {
           sessionStorage.removeItem("pkf_token");
         }
         setAuthOpen(true);
-        setStatus(ev.code === 4401 || ev.code === 1008 ? "Token inválido" : "Token necessário");
+        setStatus(ev.code === 1008 ? "Token inválido" : "Token necessário");
         socketRef.current = null;
         return;
       }
@@ -122,14 +131,16 @@ export default function App() {
         socketRef.current = null;
         return;
       }
+      if (socketRef.current === ws) {
+        socketRef.current = null;
+      }
       reconnectAttemptsRef.current += 1;
       if (reconnectAttemptsRef.current >= 8) {
         setStatus("Servidor indisponível");
-        socketRef.current = null;
         return;
       }
       setStatus(`Reconectando… (${ev.code})`);
-      window.setTimeout(connect, Math.min(1500 * reconnectAttemptsRef.current, 8000));
+      reconnectTimerRef.current = window.setTimeout(connect, Math.min(1500 * reconnectAttemptsRef.current, 8000));
     };
     ws.onerror = () => {
       if (ws.readyState !== WebSocket.OPEN) {
@@ -166,7 +177,15 @@ export default function App() {
         setBusy(false);
         setThinking(false);
         setProgress("");
-        setMessages((m) => [...m, { role: "error", content: event.content || "Erro" }]);
+        const content = event.content || "Erro";
+        setMessages((m) => [...m, { role: "error", content }]);
+        if (content.toLowerCase().includes("token")) {
+          sessionStorage.removeItem("pkf_token");
+          setAuthOpen(true);
+          setStatus("Token inválido");
+          intentionalCloseRef.current = true;
+          ws.close(1000, "auth");
+        }
         return;
       }
       if (event.type === "done") {
@@ -253,15 +272,34 @@ export default function App() {
       await loadChanges();
       if (!active) return;
       setSessionReady(true);
-      connect();
     }
     boot();
     return () => {
       active = false;
-      socketRef.current?.close();
+    };
+  }, [applyLibrary, loadChanges, loadLibrary]);
+
+  useEffect(() => {
+    if (!sessionReady) return;
+    if (authRequired && !getToken()) return;
+
+    intentionalCloseRef.current = false;
+    reconnectAttemptsRef.current = 0;
+    connect();
+
+    return () => {
+      intentionalCloseRef.current = true;
+      if (reconnectTimerRef.current) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      const ws = socketRef.current;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        ws.close(1000, "reconnect");
+      }
       socketRef.current = null;
     };
-  }, [connect, applyLibrary, loadChanges, loadLibrary]);
+  }, [sessionReady, authRequired, connect]);
 
   function handleAuth(token: string) {
     sessionStorage.setItem("pkf_token", token);
