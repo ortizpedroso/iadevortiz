@@ -37,3 +37,11 @@ Notion/
 Qwen/
 Misc/
 assets/
+
+# Estado local de ferramentas (não compartilhar)
+.claude/settings.local.json
+.claude/.headroom_wrap_marker.json
+.tokensave/
+.serena/
+deploy_key
+deploy_key.pub

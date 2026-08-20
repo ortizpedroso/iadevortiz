@@ -250,7 +250,7 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 |---------|-----------|
 | Criação de client (`get_ai_client` × 200) sem proxy | ~instantâneo (< 500 ms total) |
 | Criação de client com `PKF_HEADROOM_PROXY_URL` | delta < 200 ms vs. sem proxy |
-| Chamada real via proxy Headroom | **não medida** — Headroom não estava rodando neste ambiente; medir manualmente após `headroom proxy --port 8787` |
+| Chamada real via proxy Headroom | **não medida** — Headroom não estava rodando neste ambiente; medir manualmente após `headroom proxy --port 8788` |
 
 ### Observações fora de escopo (Fase 1)
 

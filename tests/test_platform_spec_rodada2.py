@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from pkf.config import (
     QUALITY_TIER_AGENTS,
     agent_uses_quality_tier,
@@ -34,9 +32,9 @@ def test_spec_file_contains_rodada2_features(tmp_path: Path):
 
 def test_headroom_implemented(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "k")
-    monkeypatch.setenv("PKF_HEADROOM_PROXY_URL", "http://127.0.0.1:8787/v1")
+    monkeypatch.setenv("PKF_HEADROOM_PROXY_URL", "http://127.0.0.1:8788/v1")
     client, _ = get_ai_client("groq")
-    assert "8787" in str(client.base_url)
+    assert "8788" in str(client.base_url)
     monkeypatch.delenv("PKF_HEADROOM_PROXY_URL", raising=False)
     assert headroom_proxy_url() is None
 

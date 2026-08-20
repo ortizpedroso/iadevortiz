@@ -166,7 +166,7 @@ O [Headroom](https://github.com/headroomlabs-ai/headroom) comprime tool outputs,
 
 ```bash
 pip install "headroom-ai[proxy]"
-headroom proxy --port 8787
+headroom proxy --port 8788
 ```
 
 Configure o upstream real no ambiente do Headroom (Groq, OpenAI, etc.) conforme a [documentação do Headroom](https://headroomlabs-ai.github.io/headroom/quickstart/).
@@ -174,7 +174,7 @@ Configure o upstream real no ambiente do Headroom (Groq, OpenAI, etc.) conforme 
 **Apontar a PKF:**
 
 ```env
-PKF_HEADROOM_PROXY_URL=http://127.0.0.1:8787/v1
+PKF_HEADROOM_PROXY_URL=http://127.0.0.1:8788/v1 # Deve corresponder à porta do comando `headroom proxy`
 ```
 
 Com a variável definida, `get_ai_client()` usa essa URL como `base_url` (o provedor/modelo/chave continuam os de sempre). Sem a variável, comportamento idêntico ao anterior.
