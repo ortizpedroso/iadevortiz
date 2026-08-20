@@ -61,6 +61,11 @@ def _providers_with_keys() -> list[str]:
 
 
 def _tier_provider_names(tier: str) -> list[str]:
+    from pkf.config import router_only_mode
+
+    if router_only_mode():
+        return []
+
     explicit = os.getenv(f"PKF_TIER_{tier.upper()}", "").strip()
     if explicit:
         return [part.strip() for part in explicit.split(",") if part.strip()]
@@ -87,6 +92,7 @@ def _model_for_tier(provider: str, tier: str) -> str | None:
 
 
 def _ninerouter_slot() -> dict | None:
+    from pkf.config import router_only_mode
     from pkf.ninerouter import (
         ninerouter_api_key,
         ninerouter_chat_model,
@@ -97,7 +103,7 @@ def _ninerouter_slot() -> dict | None:
     if not ninerouter_enabled():
         return None
     skip, _reason = ninerouter_should_skip()
-    if skip:
+    if skip and not router_only_mode():
         return None
     return {
         "slot_id": "ninerouter#0",
@@ -148,7 +154,17 @@ def _quality_slot() -> dict | None:
 
 
 def build_provider_slots() -> list[dict]:
-    from pkf.config import provider_pool_names, providers
+    from pkf.config import provider_pool_names, providers, router_only_mode
+
+    if router_only_mode():
+        slots: list[dict] = []
+        gateway = _ninerouter_slot()
+        if gateway:
+            slots.append(gateway)
+        quality = _quality_slot()
+        if quality:
+            slots.append(quality)
+        return _dedupe_slots(slots) if slots else []
 
     catalog = providers()
     slots: list[dict] = []

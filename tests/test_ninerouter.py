@@ -55,6 +55,7 @@ def test_ninerouter_skipped_on_missing_key(monkeypatch):
     monkeypatch.delenv("NINEROUTER_KEY", raising=False)
     monkeypatch.delenv("NINEROUTER_API_KEY", raising=False)
     monkeypatch.delenv("PKF_PROVIDER", raising=False)
+    monkeypatch.setattr("pkf.ninerouter.ninerouter_health", lambda: (False, "HTTP 401: Unauthorized"))
     skip, reason = ninerouter_should_skip()
     assert skip is True
     assert "ausente" in reason.lower()
@@ -62,6 +63,15 @@ def test_ninerouter_skipped_on_missing_key(monkeypatch):
     slots = build_provider_slots()
     assert all(slot["provider"] != "ninerouter" for slot in slots)
     assert any(slot["provider"] == "groq" for slot in slots)
+
+
+def test_ninerouter_not_skipped_when_gateway_allows_anonymous(monkeypatch):
+    monkeypatch.setenv("NINEROUTER_URL", "http://127.0.0.1:20128")
+    monkeypatch.delenv("NINEROUTER_KEY", raising=False)
+    monkeypatch.setattr("pkf.ninerouter.ninerouter_health", lambda: (True, "ok"))
+    skip, reason = ninerouter_should_skip()
+    assert skip is False
+    assert reason == ""
 
 
 def test_ninerouter_skipped_on_http_401(monkeypatch):

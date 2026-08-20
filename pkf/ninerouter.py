@@ -64,9 +64,20 @@ def is_ninerouter_auth_error(detail: str) -> bool:
 
 
 def ninerouter_auth_warning(reason: str = "401") -> str:
+    from pkf.config import router_only_mode
+
     label = reason.strip() or "401"
     if "ausente" in label.lower():
         label = "401"
+    if router_only_mode():
+        return (
+            f"[OmniRoute] Chave inválida ou ausente ({label}). PKF em modo router-only — "
+            "sem fallback Groq/Gemini.\n"
+            "Para corrigir na VPS: cd /opt/pkf && bash deploy/hostinger/fix-ninerouter-key.sh\n"
+            "Ou manualmente: túnel `ssh -L 20128:127.0.0.1:20128 root@VPS`, gere uma chave sk-... "
+            "no dashboard OmniRoute, defina NINEROUTER_KEY=sk-... no .env, e rode "
+            "`docker compose --profile router up -d pkf --force-recreate`."
+        )
     return (
         f"[9Router] Chave inválida ou ausente ({label}). PKF seguirá com Gemini/Groq.\n"
         "Para corrigir na VPS: cd /opt/pkf && bash deploy/hostinger/fix-ninerouter-key.sh\n"
@@ -81,6 +92,9 @@ def ninerouter_should_skip() -> tuple[bool, str]:
     if not ninerouter_enabled():
         return False, ""
     if not ninerouter_api_key():
+        ok, _detail = ninerouter_health()
+        if ok:
+            return False, ""
         return True, "NINEROUTER_KEY ausente"
     ok, detail = ninerouter_health()
     if not ok and is_ninerouter_auth_error(detail):

@@ -14,7 +14,13 @@ def _extract_token(request: Request) -> str | None:
 
 
 def _extract_ws_token(websocket: WebSocket) -> str | None:
-    return websocket.query_params.get("token") or websocket.headers.get("X-PKF-Token")
+    token = websocket.query_params.get("token") or websocket.headers.get("X-PKF-Token")
+    if token:
+        return token
+    proto = websocket.headers.get("sec-websocket-protocol", "")
+    if proto.startswith("pkf-token."):
+        return proto[len("pkf-token.") :]
+    return None
 
 
 def require_auth_token(token: str | None) -> None:
@@ -48,7 +54,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         expected = auth_token()
         if not expected:
             return await call_next(request)
-        if request.url.path.startswith("/assets/") or request.url.path in {"/api/health", "/"}:
+        if request.url.path.startswith("/assets/") or request.url.path in {
+            "/api/health",
+            "/",
+            "/ws",
+        }:
             return await call_next(request)
         token = _extract_token(request)
         if token != expected:

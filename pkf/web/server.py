@@ -435,13 +435,35 @@ def create_app(router: Router) -> FastAPI:
 
     @app.websocket("/ws")
     async def chat_socket(websocket: WebSocket):
+        expected = auth_token()
+        subprotocol: str | None = None
+        if expected:
+            offered = websocket.headers.get("sec-websocket-protocol", "")
+            if offered.startswith("pkf-token."):
+                subprotocol = offered.split(",")[0].strip()
+        await websocket.accept(subprotocol=subprotocol)
         if not check_ws_auth(websocket):
-            await websocket.close(code=4401, reason="Token inválido")
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "content": "Token inválido ou ausente. Acesse a PKF com ?token=SEU_PKF_AUTH_TOKEN na URL.",
+                }
+            )
+            await websocket.close(code=1008, reason="Token inválido")
             return
-        await websocket.accept()
         history: ChatHistory = app.state.history
-        await history.load()
-        await websocket.send_json({"type": "session", **await build_session_snapshot(router, history)})
+        try:
+            await history.load()
+            await websocket.send_json({"type": "session", **await build_session_snapshot(router, history)})
+        except Exception as exc:  # noqa: BLE001 — surface DB/bootstrap failures to the client
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "content": f"Falha ao iniciar sessão: {exc}",
+                }
+            )
+            await websocket.close(code=1011, reason="session bootstrap failed")
+            return
 
         async def on_event(event: dict) -> None:
             await websocket.send_json(event)

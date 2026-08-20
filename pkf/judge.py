@@ -8,8 +8,13 @@ from pkf.providers import get_ai_client
 
 def _judge_client(active_provider: str) -> tuple[AsyncOpenAI, str]:
     """Usa Groq/openai para o juiz quando o provedor ativo não tem o modelo."""
+    from pkf.config import router_only_mode
+
     judge_model = judge_model_for("")
     available = providers()
+    if router_only_mode() and available.get("ninerouter"):
+        client, config = get_ai_client("ninerouter")
+        return client, judge_model or config.model
     for name in ("groq", "openai"):
         cfg = available.get(name)
         if cfg and cfg.api_key:

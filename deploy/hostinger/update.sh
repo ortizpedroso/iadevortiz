@@ -31,12 +31,15 @@ if grep -q '127.0.0.1:8765:8765' docker-compose.yml; then
   sed -i 's/127.0.0.1:8765:8765/8765:8765/' docker-compose.yml
 fi
 
-echo "==> 9Router no .env (se ainda faltar URL)"
+echo "==> OmniRoute/9Router no .env (se ainda faltar URL)"
 grep -q '^NINEROUTER_URL=' .env || cat >> .env << 'EOF'
 
-# 9Router híbrido
+# OmniRoute router-only (340+ provedores via dashboard)
+ROUTER_IMAGE=diegosouzapw/omniroute:latest
+PKF_ROUTER_ONLY=1
 NINEROUTER_URL=http://ninerouter:20128
 PKF_PROVIDER=ninerouter
+PKF_PROVIDER_POOL=ninerouter
 NINEROUTER_MODEL=oc/big-pickle
 EOF
 
@@ -54,12 +57,12 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 
-echo "==> Auto-configurar 9Router/OmniRoute (se 401 ou chave ausente)"
+echo "==> Auto-configurar OmniRoute/9Router (se 401 ou chave ausente)"
 if curl -sf http://127.0.0.1:8765/api/health 2>/dev/null | grep -q '"ninerouter_ok": true'; then
-  echo "9Router OK"
+  echo "OmniRoute OK"
 else
-  echo "9Router com problema — executando fix-ninerouter-key.sh..."
-  bash deploy/hostinger/fix-ninerouter-key.sh || echo "AVISO: configure NINEROUTER_KEY manualmente ou use ROUTER_IMAGE=diegosouzapw/omniroute"
+  echo "OmniRoute com problema — executando fix-ninerouter-key.sh..."
+  bash deploy/hostinger/fix-ninerouter-key.sh || echo "AVISO: configure NINEROUTER_KEY manualmente (dashboard OmniRoute)"
 fi
 
 echo "==> Status"
@@ -67,5 +70,5 @@ docker compose --profile "$PROFILE" ps
 echo ""
 curl -s http://127.0.0.1:8765/api/health || true
 echo ""
-echo "PKF: http://SEU_IP:8765/?token=SEU_PKF_AUTH_TOKEN"
-echo "9Router dashboard: ssh -L 20128:127.0.0.1:20128 root@VPS  →  http://localhost:20128"
+echo "PKF: http://SEU_IP:8765/?token=$(grep '^PKF_AUTH_TOKEN=' .env 2>/dev/null | head -n1 | cut -d= -f2- || echo 'SEU_PKF_AUTH_TOKEN')"
+echo "OmniRoute dashboard: ssh -L 20128:127.0.0.1:20128 root@VPS  →  http://localhost:20128"

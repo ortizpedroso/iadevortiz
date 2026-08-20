@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Login local no 9Router (dentro do container) + API key + recarrega PKF.
+# Login local no OmniRoute/9Router (dentro do container) + API key + recarrega PKF.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/pkf}"
 cd "$APP_DIR"
 
 if ! docker compose --profile router ps ninerouter --status running -q 2>/dev/null | grep -q .; then
-  echo "==> Subindo 9Router"
+  echo "==> Subindo OmniRoute/9Router"
   docker compose --profile router up -d ninerouter
-  sleep 3
+  sleep 5
 fi
 
 DASH_PASS="${NINEROUTER_DASHBOARD_PASSWORD:-123456}"
 NEW_PASS="${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}"
 
-echo "==> Login local no 9Router (loopback dentro do container)"
+echo "==> Login local no OmniRoute (loopback dentro do container)"
 RESULT=$(docker compose exec -T \
   -e DASH_PASS="$DASH_PASS" \
   -e NEW_PASS="$NEW_PASS" \
@@ -23,6 +23,24 @@ const http = require("http");
 
 const dashPass = process.env.DASH_PASS || "123456";
 const newPass = process.env.NEW_PASS || "pkf-admin-2026";
+
+function mergeCookie(existing, incoming) {
+  const jar = new Map();
+  const add = (str) => {
+    if (!str) return;
+    for (const part of String(str).split(";")) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq > 0) jar.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
+    }
+  };
+  add(existing);
+  add(incoming);
+  return Array.from(jar.entries())
+    .map(([key, value]) => `${key}=${value}`)
+    .join("; ");
+}
 
 function request(method, path, body, cookie) {
   return new Promise((resolve, reject) => {
@@ -35,6 +53,7 @@ function request(method, path, body, cookie) {
         method,
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
           ...(payload ? { "Content-Length": Buffer.byteLength(payload) } : {}),
           ...(cookie ? { Cookie: cookie } : {}),
         },
@@ -44,7 +63,9 @@ function request(method, path, body, cookie) {
         res.on("data", (chunk) => (text += chunk));
         res.on("end", () => {
           const setCookie = res.headers["set-cookie"] || [];
-          const cookieHeader = setCookie.map((part) => part.split(";")[0]).join("; ");
+          const cookieHeader = Array.isArray(setCookie)
+            ? setCookie.map((part) => part.split(";")[0]).join("; ")
+            : String(setCookie).split(";")[0];
           resolve({ status: res.statusCode, body: text, cookie: cookieHeader });
         });
       }
@@ -69,62 +90,112 @@ function extractKey(data) {
   if (data.key) return data.key;
   if (data.apiKey) return data.apiKey;
   if (data.api_key) return data.api_key;
-  const items = Array.isArray(data) ? data : data.keys || data.data || [];
+  const items = Array.isArray(data) ? data : data.keys || data.data || data.items || [];
   for (const item of items) {
-    if (item && typeof item === "object") {
-      const value = item.key || item.apiKey || item.api_key;
-      if (value) return value;
-    }
+    if (!item || typeof item !== "object") continue;
+    const value = item.key || item.apiKey || item.api_key || item.plaintextKey;
+    if (value) return value;
   }
   return "";
 }
 
 (async () => {
-  let login = await request("POST", "/api/auth/login", { password: dashPass });
-  let loginData = parseJson(login.body);
+  let cookieJar = "";
+  const bootstrap = await request("GET", "/api/settings/require-login", null, cookieJar);
+  cookieJar = mergeCookie(cookieJar, bootstrap.cookie);
+  const bootstrapData = parseJson(bootstrap.body);
+
+  async function tryLogin(password) {
+    const attempt = await request("POST", "/api/auth/login", { password }, cookieJar);
+    cookieJar = mergeCookie(cookieJar, attempt.cookie);
+    const data = parseJson(attempt.body);
+    return { attempt, data };
+  }
+
+  const passwordCandidates = [...new Set([newPass, dashPass, "pkf-admin-2026", "123456"])];
+  let activePass = passwordCandidates[0];
+  let login = await tryLogin(activePass);
+  let loginData = login.data;
+
+  if (!loginData.success) {
+    const loginErr = parseJson(login.body);
+    const needsSetup =
+      loginErr.needsSetup === true ||
+      bootstrapData.hasPassword === false ||
+      String(loginErr.error || "").toLowerCase().includes("onboarding");
+
+    if (needsSetup) {
+      const setup = await request(
+        "POST",
+        "/api/settings/require-login",
+        { requireLogin: true, password: newPass },
+        cookieJar
+      );
+      cookieJar = mergeCookie(cookieJar, setup.cookie);
+      const setupData = parseJson(setup.body);
+      if (!setupData.success) {
+        console.log(JSON.stringify({ error: "setup_failed", detail: setup.body }));
+        return;
+      }
+      console.error(`[info] OmniRoute onboarding: senha inicial definida (${newPass})`);
+      activePass = newPass;
+      login = await tryLogin(activePass);
+      loginData = login.data;
+    } else {
+      for (const candidate of passwordCandidates.slice(1)) {
+        login = await tryLogin(candidate);
+        loginData = login.data;
+        if (loginData.success) {
+          activePass = candidate;
+          break;
+        }
+      }
+    }
+  }
 
   if (!loginData.success) {
     console.log(JSON.stringify({ error: "login_failed", detail: login.body }));
     return;
   }
 
-  let cookie = login.cookie;
-
   if (loginData.mustChangePassword) {
     const change = await request(
       "PATCH",
       "/api/settings",
-      { currentPassword: dashPass, newPassword: newPass },
-      cookie
+      { currentPassword: activePass, newPassword: newPass },
+      cookieJar
     );
+    cookieJar = mergeCookie(cookieJar, change.cookie);
     const changeData = parseJson(change.body);
     if (change.status >= 400 && !changeData.success) {
       console.log(JSON.stringify({ error: "password_change_failed", detail: change.body }));
       return;
     }
-    login = await request("POST", "/api/auth/login", { password: newPass });
-    loginData = parseJson(login.body);
-    cookie = login.cookie;
+    login = await tryLogin(newPass);
+    loginData = login.data;
     if (!loginData.success) {
       console.log(JSON.stringify({ error: "login_after_change_failed", detail: login.body }));
       return;
     }
+    activePass = newPass;
     console.error(`[info] Senha do dashboard alterada para: ${newPass}`);
   }
 
-  let keys = await request("GET", "/api/keys", null, cookie);
+  let keys = await request("GET", "/api/keys", null, cookieJar);
+  cookieJar = mergeCookie(cookieJar, keys.cookie);
   let key = extractKey(parseJson(keys.body));
 
   if (!key) {
-    const created = await request("POST", "/api/keys", { name: "pkf-vps" }, cookie);
+    const created = await request("POST", "/api/keys", { name: "pkf-vps" }, cookieJar);
+    cookieJar = mergeCookie(cookieJar, created.cookie);
     key = extractKey(parseJson(created.body));
     if (!key) {
-      console.log(JSON.stringify({ error: "key_create_failed", detail: created.body }));
+      console.log(JSON.stringify({ error: "key_create_failed", detail: created.body, cookie: cookieJar ? "set" : "empty" }));
       return;
     }
   }
 
-  console.log(JSON.stringify({ key, dashboard_password: loginData.mustChangePassword ? newPass : dashPass }));
+  console.log(JSON.stringify({ key, dashboard_password: activePass }));
 })().catch((err) => {
   console.log(JSON.stringify({ error: "exception", detail: String(err) }));
 });
@@ -143,13 +214,19 @@ PY
 )
 
 if [ -z "$KEY" ]; then
-  echo "Falha:"
+  echo "Falha no dashboard OmniRoute:"
   echo "$RESULT"
   echo ""
-  echo "Alternativa manual (PC com túnel SSH):"
-  echo "  ssh -i ~/.ssh/pkf_hostinger -L 20128:127.0.0.1:20128 root@187.77.240.125"
-  echo "  http://localhost:20128/dashboard/endpoint"
-  exit 1
+  if curl -sf http://127.0.0.1:20128/v1/models >/dev/null 2>&1; then
+    KEY="sk-pkf-$(openssl rand -hex 12)"
+    echo "==> OmniRoute aceita /v1 sem auth (REQUIRE_API_KEY=false)"
+    echo "==> Usando chave local gerada: ${KEY:0:18}..."
+  else
+    echo "Alternativa manual (PC com túnel SSH):"
+    echo "  ssh -i ~/.ssh/pkf_hostinger -L 20128:127.0.0.1:20128 root@187.77.240.125"
+    echo "  http://localhost:20128/dashboard/endpoint"
+    exit 1
+  fi
 fi
 
 echo "==> API key: ${KEY:0:15}..."
@@ -171,10 +248,15 @@ for _ in $(seq 1 20); do
 done
 
 echo "==> Resultado"
-python3 - <<'PY'
+PKF_TOKEN="$(grep '^PKF_AUTH_TOKEN=' .env 2>/dev/null | tail -n1 | cut -d= -f2-)"
+python3 - <<PY
 import json, urllib.request
+token = "${PKF_TOKEN}"
+url = "http://127.0.0.1:8765/api/health"
+if token:
+    url += f"?token={token}"
 try:
-    data = json.load(urllib.request.urlopen("http://127.0.0.1:8765/api/health", timeout=8))
+    data = json.load(urllib.request.urlopen(url, timeout=8))
     print("ninerouter_ok:", data.get("ninerouter_ok"))
     if data.get("ninerouter_error"):
         print("ninerouter_error:", data.get("ninerouter_error"))

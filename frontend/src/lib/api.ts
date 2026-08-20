@@ -1,15 +1,29 @@
+function normalizeToken(raw: string): string {
+  const value = raw.trim();
+  if (value.toLowerCase().startsWith("bearer ")) {
+    return value.slice(7).trim();
+  }
+  return value;
+}
+
 export function getToken(): string {
   const fromUrl = new URLSearchParams(location.search).get("token");
   if (fromUrl) {
-    sessionStorage.setItem("pkf_token", fromUrl);
-    return fromUrl;
+    const token = normalizeToken(fromUrl);
+    sessionStorage.setItem("pkf_token", token);
+    return token;
   }
-  return sessionStorage.getItem("pkf_token") || "";
+  return normalizeToken(sessionStorage.getItem("pkf_token") || "");
 }
 
 export function authHeaders(): HeadersInit {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export function wsProtocols(): string[] | undefined {
+  const token = getToken();
+  return token ? [`pkf-token.${token}`] : undefined;
 }
 
 export function wsUrl(): string {

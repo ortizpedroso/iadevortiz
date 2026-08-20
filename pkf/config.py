@@ -63,6 +63,11 @@ class ProviderConfig:
     supports_tools: bool = True
 
 
+def router_only_mode() -> bool:
+    """Quando ativo, PKF usa só o gateway OmniRoute/9Router — sem chaves diretas no pool."""
+    return os.getenv("PKF_ROUTER_ONLY", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def providers() -> dict[str, ProviderConfig]:
     from pkf.ninerouter import (
         ninerouter_api_key,
@@ -137,7 +142,9 @@ def default_provider() -> str:
     from pkf.ninerouter import ninerouter_enabled, ninerouter_should_skip
 
     explicit = os.getenv("PKF_PROVIDER", "").strip().lower()
-    if explicit in {"9router", "9-router"}:
+    if explicit in {"9router", "9-router", "omniroute"}:
+        return "ninerouter"
+    if router_only_mode() and ninerouter_enabled():
         return "ninerouter"
     if explicit:
         return explicit
@@ -315,6 +322,11 @@ def provider_pool_names() -> list[str]:
     from pkf.ninerouter import ninerouter_enabled, ninerouter_should_skip
 
     available = providers()
+    if router_only_mode():
+        if not ninerouter_enabled():
+            return []
+        return ["ninerouter"]
+
     if explicit := os.getenv("PKF_PROVIDER_POOL", "").strip():
         candidates = [p.strip() for p in explicit.split(",") if p.strip()]
     elif ninerouter_enabled():

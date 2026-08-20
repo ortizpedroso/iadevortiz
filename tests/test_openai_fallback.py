@@ -1,4 +1,5 @@
-from pkf.config import fallback_model_on_not_found, fallback_model_on_not_found as fb
+from pkf.config import fallback_model_on_not_found
+from pkf.config import fallback_model_on_not_found as fb
 
 
 def test_openai_fallback_chain_from_gpt4o_mini():
