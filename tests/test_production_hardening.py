@@ -60,6 +60,12 @@ def test_set_env_keys_script_uses_conditional_auth_write():
     assert "set_kv_default NINEROUTER_MODEL" in script
 
 
+def test_set_env_keys_script_migrates_weak_auth_token():
+    script = Path("deploy/hostinger/set-env-keys.sh").read_text(encoding="utf-8")
+    assert "migrate_weak_auth_token" in script
+    assert "teste123" in script
+
+
 def test_preview_redirect_without_token_query():
     preview_src = Path("pkf/web/preview.py").read_text(encoding="utf-8")
     assert "?token=" not in preview_src.split("redirect_preview_entry")[1].split("def serve")[0]

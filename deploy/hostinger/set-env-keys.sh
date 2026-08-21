@@ -127,6 +127,32 @@ dedupe_env_key() {
 
 dedupe_env_key PKF_AUTH_TOKEN
 dedupe_env_key NINEROUTER_KEY
+
+migrate_weak_auth_token() {
+  if [ "${PKF_ENV:-production}" != "production" ]; then
+    return 0
+  fi
+  local current=""
+  current="$(grep '^PKF_AUTH_TOKEN=' .env 2>/dev/null | tail -n1 | cut -d= -f2- || true)"
+  [ -n "$current" ] || return 0
+  local weak=0
+  case "${current,,}" in
+    teste123|changeme|password|pkf) weak=1 ;;
+  esac
+  if [ "${#current}" -lt 16 ]; then
+    weak=1
+  fi
+  if [ "$weak" -eq 0 ]; then
+    return 0
+  fi
+  local new_token=""
+  new_token="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null || openssl rand -hex 24)"
+  set_kv PKF_AUTH_TOKEN "$new_token"
+  echo "==> PKF_AUTH_TOKEN fraco/padrão migrado automaticamente (produção exige token forte)"
+  echo "==> Leia o novo valor localmente: grep '^PKF_AUTH_TOKEN=' .env"
+}
+
+migrate_weak_auth_token
 set_kv PKF_FALLBACK "${PKF_FALLBACK:-}"
 
 set_kv PKF_PROVIDER "${PKF_PROVIDER:-ninerouter}"
