@@ -15,6 +15,18 @@ def test_frontend_keyword():
     assert intent.kind == "feature"
 
 
+def test_conversational_question_not_feature():
+    intent = classify_intent("você consegue criar um sistema sozinho")
+    assert intent.kind == "question"
+    assert intent.agent == "generalista"
+
+
+def test_detailed_feature_request_still_routes_to_architect():
+    intent = classify_intent("crie um sistema de gestão de estoque com controle de validade")
+    assert intent.kind == "feature"
+    assert intent.agent == "architect"
+
+
 def test_review_command_routes_to_reviewer():
     intent = classify_intent("/review", last_agent="backend")
     assert intent.agent == "reviewer"

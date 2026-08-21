@@ -68,6 +68,20 @@ KEYWORD_MAP = {
 FEATURE_HINTS = ("crie", "criar", "implemente", "implementar", "adicione", "adicionar", "quero um", "preciso de um")
 CHANGE_HINTS = ("mude", "mudar", "altere", "alterar", "ajuste", "corrigir", "corrija", "renomeie")
 QUESTION_HINTS = ("o que", "como", "por que", "porque", "onde", "explique", "qual ")
+CONVERSATIONAL_QUESTION_PREFIXES = (
+    "você consegue",
+    "voce consegue",
+    "você pode",
+    "voce pode",
+    "vc pode",
+    "seria possível",
+    "seria possivel",
+    "dá pra",
+    "da pra",
+    "dá para",
+    "da para",
+    "consegue ",
+)
 
 
 @dataclass
@@ -124,6 +138,11 @@ def classify_intent(user_input: str, last_agent: str | None = None) -> Intent:
     return Intent(agent="generalista", kind=_kind_from_text(text), source="fallback")
 
 
+def _is_conversational_question(text: str) -> bool:
+    stripped = text.strip().lower()
+    return any(stripped.startswith(prefix) for prefix in CONVERSATIONAL_QUESTION_PREFIXES)
+
+
 def _kind_from_text(text: str) -> str:
     if any(hint in text for hint in ("revise", "review", "code review")):
         return "review_request"
@@ -131,6 +150,8 @@ def _kind_from_text(text: str) -> str:
         return "test_request"
     if any(hint in text for hint in CHANGE_HINTS):
         return "change"
+    if _is_conversational_question(text):
+        return "question"
     if any(hint in text for hint in FEATURE_HINTS):
         return "feature"
     if text.endswith("?") or any(hint in text for hint in QUESTION_HINTS):
@@ -150,7 +171,12 @@ async def classify_intent_llm(
         f"Agentes válidos: {sorted(VALID_AGENTS)}\n"
         f"Tipos válidos: {sorted(VALID_KINDS)}\n"
         f"Último agente: {last_agent or 'nenhum'}\n"
-        "Responda SOMENTE um JSON: {\"agent\": \"...\", \"kind\": \"...\"}\n"
+        "Responda SOMENTE um JSON: {\"agent\": \"...\", \"kind\": \"...\"}\n\n"
+        "Exemplos:\n"
+        '- "você consegue criar um sistema sozinho" -> {"agent": "generalista", "kind": "question"}\n'
+        '- "crie um sistema de gestão de estoque com controle de validade" -> '
+        '{"agent": "architect", "kind": "feature"}\n'
+        '- "como funciona o ciclo /build?" -> {"agent": "generalista", "kind": "question"}\n\n'
         f"Mensagem: {user_input}"
     )
     try:
