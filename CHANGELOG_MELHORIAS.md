@@ -4,6 +4,56 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Paralelismo real: backend + logic na mesma fase
+
+**Data:** 2026-08-21
+
+### Por que backend e logic rodam juntos
+
+Backend (API/persistência) e logic (regras de negócio) não têm dependência sequencial entre si — ambos leem a spec e escrevem em nós distintos do grafo. O `orchestrator.py` já executava tarefas da mesma fase em paralelo via `asyncio.gather`; o gargalo era `_assign_phases`, que colocava cada agente em fase diferente.
+
+Concorrência de escrita no mesmo arquivo continua protegida pelo `file_lock` em `pkf/workspace.py` (rodada 1).
+
+### Por que frontend e tester continuam sequenciais
+
+- **Frontend** depende do contrato de API documentado pelo backend (`HANDOFF_API_PATH`).
+- **Tester** depende do código implementado pelos agentes anteriores.
+
+### Mudança
+
+**Antes:**
+
+```python
+PHASE_ORDER = ("backend", "logic", "frontend", "tester")
+# _assign_phases: um índice de fase por agente
+```
+
+**Depois:**
+
+```python
+PHASE_GROUPS = (
+    ("backend", "logic"),
+    ("frontend",),
+    ("tester",),
+)
+# _assign_phases: índice = grupo em PHASE_GROUPS
+```
+
+Labels de UI em `orchestrator.py` adaptam-se aos agentes presentes na fase 0 (backend só, logic só, ou ambos).
+
+### Definition of Done
+
+- [x] `PHASE_GROUPS` substitui agrupamento serial; specs sem `logic` inalteradas
+- [x] Backend+logic → mesma fase, 2 tarefas; teste de `asyncio.gather` com mock
+- [x] Frontend e tester em fases separadas, depois
+- [x] `orchestrator.py` só alterado para labels de UI
+
+### Testes
+
+`python3 -m pytest tests/ -q` → **179 passed** (após esta mudança)
+
+---
+
 ## Integração PKF → Caddy compartilhado (eventosbr)
 
 **Data:** 2026-08-20
