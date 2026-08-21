@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from openai import APIStatusError
+
 
 def explain_provider_error(provider: str, exc: Exception) -> str:
     from pkf.config import router_only_mode
@@ -61,7 +63,7 @@ def explain_provider_error(provider: str, exc: Exception) -> str:
             "Falha no Gemini. Crie uma chave grátis em https://aistudio.google.com/apikey "
             "e configure GEMINI_API_KEY no .env."
         )
-    if provider == "ninerouter" and ("401" in lowered or "key" in lowered or "unauthorized" in lowered):
+    if provider == "ninerouter" and ("401" in lowered or "403" in lowered or "key" in lowered or "unauthorized" in lowered):
         if gateway_only:
             return (
                 "Gateway de IA não autenticado. Na VPS execute: "
@@ -99,7 +101,18 @@ def explain_provider_error(provider: str, exc: Exception) -> str:
             f"Detalhe: {text[:280]}"
         )
     if gateway_only:
-        return "Erro temporário no gateway de IA. Tente enviar a mensagem novamente."
+        if isinstance(exc, APIStatusError) and exc.status_code in {400, 402, 422}:
+            return (
+                "Gateway de IA rejeitou a requisição. Na VPS execute: "
+                "cd /opt/pkf && bash deploy/hostinger/update.sh"
+            )
+        detail = text[:240] if text else exc.__class__.__name__
+        if isinstance(exc, APIStatusError):
+            detail = f"HTTP {exc.status_code}: {detail}"
+        return (
+            "Erro temporário no gateway de IA. Tente enviar a mensagem novamente.\n\n"
+            f"Detalhe: {detail}"
+        )
     return f"Erro no provedor '{provider}': {text}"
 
 

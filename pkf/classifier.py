@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
 from pkf.agents.prompts import DEVELOPER_AGENTS
+from pkf.greetings import is_greeting
 
 VALID_AGENTS = {"architect", "frontend", "backend", "logic", "reviewer", "tester", "generalista"}
 VALID_KINDS = {"question", "feature", "change", "command", "review_request", "test_request"}
@@ -117,6 +118,9 @@ def classify_intent(user_input: str, last_agent: str | None = None) -> Intent:
         return Intent(agent=agent, kind="command", source="command")
     if text.startswith(("/status", "/agents", "/graph", "/help", "/workspace")):
         return Intent(agent=last_agent or "generalista", kind="command", source="command")
+
+    if is_greeting(user_input):
+        return Intent(agent="generalista", kind="question", source="keywords")
 
     kind = _kind_from_text(text)
     if kind == "review_request":

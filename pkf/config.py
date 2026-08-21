@@ -296,6 +296,18 @@ def ninerouter_model_chain() -> tuple[str, ...]:
     return tuple(seen)
 
 
+def next_ninerouter_model(current_model: str) -> str | None:
+    """Próximo modelo na cadeia OmniRoute/9Router (mesma ordem do rate-limit)."""
+    chain = list(ninerouter_model_chain())
+    try:
+        index = chain.index(current_model)
+    except ValueError:
+        return chain[1] if len(chain) > 1 else None
+    if index + 1 < len(chain):
+        return chain[index + 1]
+    return None
+
+
 OPENAI_FALLBACK_MODELS: tuple[str, ...] = tuple(
     part.strip()
     for part in os.getenv("PKF_OPENAI_FALLBACK_MODELS", "gpt-4o,gpt-3.5-turbo").split(",")
