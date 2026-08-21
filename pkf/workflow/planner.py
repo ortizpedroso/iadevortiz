@@ -15,7 +15,13 @@ BACKEND_HINTS = ("api", "backend", "servidor", "endpoint", "auth", "banco", "dat
 LOGIC_HINTS = ("regra", "negócio", "negocio", "algoritmo", "cálculo", "calculo", "whitelabel", "multi-tenant")
 TEST_HINTS = ("teste", "testes", "pytest", "coverage", "tdd", "unit test")
 
-PHASE_ORDER = ("backend", "logic", "frontend", "tester")
+PHASE_GROUPS: tuple[tuple[str, ...], ...] = (
+    ("backend", "logic"),
+    ("frontend",),
+    ("tester",),
+)
+
+PHASE_ORDER = tuple(agent for group in PHASE_GROUPS for agent in group)
 
 
 @dataclass
@@ -88,9 +94,11 @@ def group_tasks_into_phases(tasks: list[BuildTask]) -> list[list[BuildTask]]:
 
 
 def _assign_phases(tasks: list[BuildTask]) -> list[BuildTask]:
-    order = {name: index for index, name in enumerate(PHASE_ORDER)}
+    agent_phase = {
+        agent: index for index, group in enumerate(PHASE_GROUPS) for agent in group
+    }
     for task in tasks:
-        task.phase = order.get(task.agent, len(PHASE_ORDER))
+        task.phase = agent_phase.get(task.agent, len(PHASE_GROUPS))
     tasks.sort(key=lambda t: (t.phase, t.agent))
     return tasks
 
