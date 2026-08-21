@@ -14,11 +14,11 @@ def test_deploy_workflow_exists_and_parses():
         "workflow_dispatch",
         "appleboy/ssh-action@v1.2.0",
         "secrets.VPS_SSH_KEY",
-        "VPS_HOST_DEFAULT",
+        "187.77.240.125",
         "timeout-minutes: 10",
         "deploy/hostinger/update.sh",
         "VPS_HEALTHCHECK_URL",
-        "deploy-setup-required",
+        "Deploy secrets ausentes",
     ):
         assert needle in text, f"Trecho ausente no workflow: {needle}"
     try:
@@ -29,5 +29,4 @@ def test_deploy_workflow_exists_and_parses():
     assert doc["on"]["push"]["branches"] == ["main"]
     assert "workflow_dispatch" in doc["on"]
     assert "deploy" in doc["jobs"]
-    assert "deploy-setup-required" in doc["jobs"]
     assert doc["jobs"]["deploy"]["timeout-minutes"] == 10
