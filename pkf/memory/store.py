@@ -61,8 +61,8 @@ class MemoryStore:
                 best_ratio = ratio
                 best_name = name
         if best_ratio >= threshold and best_overlap >= MEMORY_MIN_OVERLAP_WORDS:
-            return best_name, int(round(best_ratio * 100))
-        return None, int(round(best_ratio * 100))
+            return best_name, round(best_ratio * 100)
+        return None, round(best_ratio * 100)
 
 
 def export_graph(graph: nx.DiGraph, dest: Path) -> str:

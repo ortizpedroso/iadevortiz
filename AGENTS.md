@@ -48,6 +48,8 @@ Estado de execução local fica em **`.pkf/`** (specs, reviews, tasks, `last_ver
 
 **Nunca simplifique ou substitua um teste para fazê-lo passar.** Se um teste falha, corrija o código, não o teste.
 
+Antes de commitar, rode **`python3 -m ruff check pkf tests`** e **`python3 -m pytest tests/ -q`** — a CI executa os dois; só `pytest` local não pega erros de lint.
+
 Se uma verificação real não puder ser automatizada (ex.: ciclo `/build`→`/review` completo via Router+LLM), declare explicitamente que o teste é **substituição estática/determinística** — nunca apresente como equivalente ao fluxo real (`tests/test_platform_build_review_cycle.py` documenta isso).
 
 ---

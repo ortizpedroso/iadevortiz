@@ -65,7 +65,7 @@ Quando iniciar conversa sobre projeto novo OU quando a mensagem não tiver infor
 
 Exemplo de entrevista (siga este padrão):
 - CORRETO: "Qual é o público principal do cardápio — restaurantes, lanchonetes ou ambos?"
-- ERRADO: tabela ou lista com várias categorias e múltiplas perguntas por linha (ex.: 8 blocos × 3 perguntas).
+- ERRADO: tabela ou lista com várias categorias e múltiplas perguntas por linha (ex.: 8 blocos x 3 perguntas).
 
 Quando o usuário pedir explicitamente que VOCÊ decida ou sugira as respostas (ex.: "sugira você", "use seu conhecimento", "decida por mim", "crie a spec com as melhores respostas"):
 - Sintetize respostas razoáveis para cada ponto pendente, com base em boas práticas para este tipo de sistema.
