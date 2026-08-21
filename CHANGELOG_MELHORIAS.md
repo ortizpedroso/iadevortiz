@@ -859,6 +859,33 @@ Numa spec de cardápio somente visualização, o build implementou carrinho func
 
 ---
 
+## AGENTS.md + compactação de contexto estruturada
+
+**Data:** 2026-08-21
+
+### Tarefa 1 — `AGENTS.md`
+
+Criado na raiz do repositório consolidando regras já formalizadas em `CHANGELOG_MELHORIAS.md` e referenciando `pkf/agents/prompts.py` (sem duplicar `CYCLE_RULES`/`CRITICAL_RULES`).
+
+### Tarefa 2 — `pkf/agents/compact.py`
+
+- `_compact_messages_mechanical` — fallback (antigo `compact_messages` por truncamento 180 chars).
+- `compact_messages_llm` — resumo estruturado via LLM (template Objetivo/Estado/Próximo Passo/Arquivos).
+- Compactações repetidas combinam resumo anterior; falha de rede/gateway → fallback mecânico automático.
+
+### DoD
+
+- [x] `AGENTS.md` existe na raiz, cobre regras da sessão.
+- [x] `compact_messages_llm` funciona com resumo estruturado.
+- [x] Fallback mecânico se LLM falhar (testado).
+- [x] Segunda compactação combina com a primeira (testado).
+
+### Testes
+
+`python3 -m pytest tests/ -q` → ver suíte após merge.
+
+---
+
 ## Observações fora de escopo (Fase 0)
 
 - Deploy VPS do commit `14d1a09` foi interrompido localmente (build Docker longo); push para `origin/main` concluído.

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import networkx as nx
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
-from pkf.agents.compact import compact_messages
+from pkf.agents.compact import compact_messages_llm
 from pkf.config import (
     NODE_LIMIT,
     fallback_model_on_not_found,
@@ -86,7 +86,7 @@ class Agent:
         native_tools = self.supports_tools and not is_reasoning_model(self.model)
         for _ in range(self.max_tool_rounds):
             messages = prepare_messages_for_api(
-                compact_messages(self.messages, self.model),
+                await compact_messages_llm(self.messages, self.model, self.client),
                 self.model,
                 self.name,
             )
