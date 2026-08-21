@@ -809,6 +809,32 @@ grep -q '^NINEROUTER_MODEL=' .env || echo 'NINEROUTER_MODEL=auto/free' >> .env
 
 ---
 
+## Fix: grounding de status de verificação + parada em ambiguidade no build
+
+### Problema 1 — resposta especulativa sobre falha na Verificação (T3)
+
+O usuário perguntou sobre falha na fase T3 depois do build; o agente listou causas genéricas (testes, lint, dependências) sem o erro real. Causa raiz: `verify_build_tool()` emitia `build_verify` mas **não persistia** o resultado — perguntas posteriores não tinham fundamento.
+
+### Problema 2 — implementação contradiz a spec sem parar
+
+Numa spec de cardápio somente visualização, o build implementou carrinho funcional e só relatou a contradição depois. `CRITICAL_RULES` já pedia parar em ambiguidade, mas os agentes de implementação não tinham instrução concreta no fluxo `/build`.
+
+### Implementado
+
+1. **Persistência:** toda chamada a `verify_build()` grava `.pkf/last_verify.json` (timestamp, fase, ok, resultado, details).
+2. **Ferramenta `get_last_verification`:** lê o arquivo persistido; disponível para `generalista` e `reviewer`.
+3. **Prompt `generalista`:** chamar `get_last_verification` antes de responder sobre status/falha de T3 — nunca hipóteses genéricas sem consultar.
+4. **Prompts `frontend`/`backend`/`logic`:** parar implementação do trecho ambíguo e reportar no retorno, sem codificar interpretação e só avisar depois.
+
+### DoD
+
+- [x] `verify_build()` persiste resultado em todo ponto onde é chamado (centralizado em `pkf/tools/impl.py`).
+- [x] `get_last_verification` existe, registrada pro `generalista` e `reviewer`.
+- [x] Prompt do `generalista` instrui a chamar essa ferramenta antes de responder sobre status de fase falha.
+- [x] Prompts de implementação instruem parar em ambiguidade em vez de implementar e reportar depois.
+
+---
+
 ## Observações fora de escopo (Fase 0)
 
 - Deploy VPS do commit `14d1a09` foi interrompido localmente (build Docker longo); push para `origin/main` concluído.
