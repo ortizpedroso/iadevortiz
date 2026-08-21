@@ -14,16 +14,18 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
 
     steps:
       - name: Deploy via SSH
-        if: ${{ secrets.VPS_SSH_KEY != '' }}
+        if: env.VPS_SSH_KEY != ''
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '187.77.240.125' }}
-          username: ${{ secrets.VPS_USER != '' && secrets.VPS_USER || 'root' }}
+          host: 187.77.240.125
+          username: root
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT != '' && secrets.VPS_PORT || '22' }}
+          port: 22
           command_timeout: 9m
           script: |
             set -euo pipefail
@@ -32,7 +34,7 @@ jobs:
             bash deploy/hostinger/update.sh
 
       - name: Verify deployment health
-        if: ${{ secrets.VPS_SSH_KEY != '' }}
+        if: env.VPS_SSH_KEY != ''
         env:
           HEALTHCHECK_URL: ${{ secrets.VPS_HEALTHCHECK_URL }}
         run: |
@@ -54,7 +56,7 @@ jobs:
           exit 1
 
       - name: Deploy secrets ausentes
-        if: ${{ secrets.VPS_SSH_KEY == '' }}
+        if: env.VPS_SSH_KEY == ''
         run: |
           echo "::warning::Deploy automático desativado: secret VPS_SSH_KEY não configurado."
           echo ""
