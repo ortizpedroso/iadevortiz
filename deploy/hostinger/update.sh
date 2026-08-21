@@ -45,12 +45,20 @@ docker compose --profile "$PROFILE" up -d postgres pkf ninerouter --force-recrea
 docker compose stop nginx 2>/dev/null || true
 
 echo "==> Aguardando PKF ficar healthy..."
-for _ in $(seq 1 30); do
-  if curl -sf http://127.0.0.1:8765/api/health | grep -q '"ok"'; then
+_health_ok=0
+for _ in $(seq 1 45); do
+  if curl -sf http://127.0.0.1:8765/api/health 2>/dev/null | grep -q '"ok"'; then
+    _health_ok=1
     break
   fi
   sleep 2
 done
+if [ "$_health_ok" -eq 0 ]; then
+  echo "AVISO: health check falhou — últimos logs do container pkf:"
+  docker compose --profile "$PROFILE" logs pkf --tail 40 2>/dev/null || true
+  echo "AVISO: token fraco (ex.: teste123) derruba o boot em PKF_ENV=production."
+  echo "       Rode: bash deploy/hostinger/set-env-keys.sh && docker compose --profile $PROFILE up -d pkf --force-recreate"
+fi
 
 echo "==> Auto-configurar OmniRoute (chave + provedores free)"
 bash deploy/hostinger/fix-ninerouter-key.sh || echo "AVISO: fix-ninerouter-key falhou"
