@@ -49,7 +49,7 @@ def save_platform_spec(workspace_root, slug: str = "pkf-platform") -> str:
 
 ## Visão
 
-Assistente multiagente para especificar, implementar, revisar e testar software — UI inspirada em Claude (tema claro bege, sidebar lateral, chat centralizado).
+Assistente multiagente para especificar, implementar, revisar e testar software — UI tema escuro (sidebar lateral, chat centralizado, variáveis CSS `--pkf-*`).
 
 ## Capacidades
 
@@ -76,6 +76,26 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - DeepSeek-R1 reasoning (architect, reviewer, logic)
 - PostgreSQL, memória persistente, skills BM25, juiz /goal
 - Headers de segurança; changelog automático na spec após build
+- **Verificação T3 persistida** (`.pkf/last_verify.json`) + ferramenta `get_last_verification` para respostas fundamentadas pós-build
+- **Saudações locais** (`oi`, `olá`) sem chamar gateway de IA
+
+## Segurança e produção
+
+- **`PKF_AUTH_TOKEN`**: obrigatório e forte em `PKF_ENV=production` (boot falha se ausente/fraco); deploy **não sobrescreve** token existente
+- **Preview isolado**: iframe sem `allow-same-origin`; URLs de preview **sem** token; CSP em preview e shell
+- **`/api/health` público**: só `{ok, auth_required}`; metadados completos apenas autenticado
+- **WebSocket**: rejeita conexão antes de `accept` se token inválido
+- **`run_command`**: desabilitado em produção salvo `PKF_ALLOW_RUN_COMMAND=1`
+- **Deploy**: `NINEROUTER_MODEL` só definido na 1ª instalação (`set_kv_default`); URLs pós-deploy **não** imprimem token
+- **Respostas pós-build**: `generalista`/`reviewer` consultam `get_last_verification` antes de hipóteses sobre falha T3
+- **Ambiguidade na spec**: agentes `frontend`/`backend`/`logic` param implementação e reportam conflito antes de codificar
+
+## Ferramentas de confiabilidade (rodada 1)
+
+- `edit_file`/`write_file`: validação sintaxe, diff auditado, lock por arquivo
+- `run_command`: sandbox shlex, allowlist, env filtrado; bloqueado em produção por padrão
+- `search_code`: modo semântico (`mode=semantic`) via índice local
+- `get_last_verification`: último resultado real da fase Verificação (T3)
 
 ## Fluxo /build
 
@@ -91,7 +111,7 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - **Sidebar esquerda**: seções Projetos e Conversas
 - **Projetos**: Menu de contexto ⋯ (fixar, renomear, excluir) + modo **Selecionar** para excluir vários ou todos
 - **Conversas**: Menu de contexto ⋯ (vincular projeto, excluir chat)
-- **Tema claro Claude**: variáveis CSS (`--pkf-bg-primary`, `--pkf-accent`, etc.), fundo `#faf9f5`, sidebar `#f0eee6`
+- **Tema escuro PKF**: variáveis CSS (`--pkf-bg-primary`, `--pkf-accent`, etc.), sidebar e painéis escuros
 - Indicador no header: agente ativo · provider · modelo
 - Acessibilidade: skip link, aria-live, `:focus-visible` com acento
 
@@ -122,12 +142,7 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 | `PKF_TIER_QUALITY` | Provedor tier qualidade (ex.: `ninerouter`) |
 | `PKF_QUALITY_MODEL` | Modelo Claude (ex.: `kr/claude-sonnet-4.5`) |
 | `PKF_USE_LANGGRAPH_BUILD` | `1` = pipeline /build via grafo piloto |
-
-## Ferramentas de confiabilidade (rodada 1)
-
-- `edit_file`/`write_file`: validação sintaxe, diff auditado, lock por arquivo
-- `run_command`: sandbox shlex, allowlist, env filtrado
-- `search_code`: modo semântico (`mode=semantic`) via índice local
+| `PKF_ALLOW_RUN_COMMAND` | `1` = permite `run_command` em produção |
 
 ## Stack
 

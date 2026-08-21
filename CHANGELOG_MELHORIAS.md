@@ -835,6 +835,30 @@ Numa spec de cardápio somente visualização, o build implementou carrinho func
 
 ---
 
+## Auditoria produção — hardening (auth, preview, deploy)
+
+### Problemas corrigidos
+
+| Área | Problema | Fix |
+|------|----------|-----|
+| Deploy | `set-env-keys.sh` sobrescrevia `PKF_AUTH_TOKEN` e `NINEROUTER_MODEL` a cada update | Só define na 1ª instalação; token forte gerado em produção |
+| Auth | API aberta se `PKF_AUTH_TOKEN` vazio | `validate_production_config()` no boot; middleware fail-closed |
+| Preview | iframe `allow-same-origin` + token na URL | Sandbox restrito; preview sem query token; CSP |
+| Health | Metadados expostos sem auth | Payload público mínimo `{ok, auth_required}` |
+| WebSocket | `accept` antes de validar token | Rejeita antes de `accept` |
+| Agentes | `run_command` arbitrário se auth falhar | Bloqueado em produção salvo `PKF_ALLOW_RUN_COMMAND=1` |
+| Deploy logs | `update.sh` imprimia token na URL | URLs sem token; operador lê `.env` |
+| Ops | `check-ws.sh` heredoc Python inválido | Token via `-e WS_TOKEN` |
+
+### DoD
+
+- [x] Spec `pkf-platform` atualizada (segurança, T3, tema escuro).
+- [x] `test_platform_build_review_cycle` aprovado sem lacunas.
+- [x] `tests/test_production_hardening.py` — 10 casos.
+- [x] Suite: 208 passed.
+
+---
+
 ## Observações fora de escopo (Fase 0)
 
 - Deploy VPS do commit `14d1a09` foi interrompido localmente (build Docker longo); push para `origin/main` concluído.
