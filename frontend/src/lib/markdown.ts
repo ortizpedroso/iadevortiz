@@ -18,10 +18,10 @@ export function renderMarkdown(src: string): string {
       return;
     }
     html += part
-      .replace(/^### (.+)$/gm, '<h3 class="mt-4 text-lg font-semibold text-[#ececec]">$1</h3>')
-      .replace(/^## (.+)$/gm, '<h2 class="mt-5 text-xl font-semibold text-[#ececec]">$1</h2>')
-      .replace(/^# (.+)$/gm, '<h1 class="mt-5 text-2xl font-semibold text-[#ececec]">$1</h1>')
-      .replace(/\*\*(.+?)\*\*/g, "<strong class=\"text-[#ececec]\">$1</strong>")
+      .replace(/^### (.+)$/gm, '<h3 class="mt-4 text-lg font-semibold text-[var(--pkf-text)]">$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2 class="mt-5 text-xl font-semibold text-[var(--pkf-text)]">$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1 class="mt-5 text-2xl font-semibold text-[var(--pkf-text)]">$1</h1>')
+      .replace(/\*\*(.+?)\*\*/g, "<strong class=\"text-[var(--pkf-text)]\">$1</strong>")
       .replace(/`([^`]+)`/g, '<code class="rounded bg-[#141414] px-1.5 py-0.5 text-sm text-[#d97757]">$1</code>')
       .replace(/^\- (.+)$/gm, "<li>$1</li>")
       .replace(/(<li>.*<\/li>)/gs, '<ul class="list-disc pl-5">$1</ul>')
