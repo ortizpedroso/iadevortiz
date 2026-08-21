@@ -83,6 +83,11 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - **Memória de sessão**: índice `.pkf/memory/index.json`; match por **proporção** de sobreposição (≥45%, mín. 3 termos) com stopwords de domínio (`sistema`, `projeto`, `quero`, `desenvolver`, …) para evitar falso-positivo entre projetos parecidos
 - **Agentes de memória**: restaurados com `project_context`, `list_dir`, `read_file`, `search_code`; prompt exige checar o workspace atual antes de afirmar que algo está implementado — resumo antigo não é estado atual
 - **Compactação de contexto**: `compact_messages_llm` (resumo estruturado) com fallback mecânico quando o gateway falha
+- **Coerência no /spec**:
+  - Arquiteto: **uma pergunta por vez** (few-shot CORRETO vs ERRADO); proíbe tabela/lista numerada de perguntas
+  - Delegação: quando usuário pede *"sugira você"* / *"decida por mim"*, sintetiza respostas e cria spec **completa** (não vazia)
+  - `save_spec`: rejeita `name` com 8+ palavras no fallback de título; rejeita `suggested_stack` como lista de rótulos ou sem chaves `frontend`/`backend`/`database`/`deploy`
+  - Classificador: reclamações de spec vazia/em branco roteiam para `architect`/`change`, não para `reviewer`
 
 ## Segurança e produção
 
@@ -95,8 +100,11 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - **Respostas pós-build**: `generalista`/`reviewer` consultam `get_last_verification` antes de hipóteses sobre falha T3
 - **Ambiguidade na spec**: agentes `frontend`/`backend`/`logic` param implementação e reportam conflito antes de codificar
 - **Memória**: agente de memória nunca afirma “já pronto” sem `list_dir`/`read_file`; projeto vazio deve ser declarado explicitamente
+- **save_spec**: não aceita título derivado de frase longa do usuário nem stack malformada
 
 ## Ferramentas de confiabilidade (rodada 1)
+
+- `save_spec`: validação de título e `suggested_stack` antes de persistir (rejeita frases longas e listas de rótulos)
 
 - `edit_file`/`write_file`: validação sintaxe, diff auditado, lock por arquivo
 - `run_command`: sandbox shlex, allowlist, env filtrado; bloqueado em produção por padrão
