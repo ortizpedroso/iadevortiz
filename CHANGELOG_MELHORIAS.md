@@ -786,6 +786,29 @@ Referência apenas; **não implementado nesta Fase 0**:
 
 ---
 
+## Fix: setup-omniroute-providers.sh não sobrescreve NINEROUTER_MODEL manual
+
+### Bug
+
+`deploy/hostinger/setup-omniroute-providers.sh` é invocado por `update.sh` em todo deploy. No final, usava `sed` para **sempre** gravar `NINEROUTER_MODEL=auto/free`, mesmo quando o `.env` já tinha um modelo real (ex.: `groq/openai/gpt-oss-120b`). O OmniRoute rejeita `auto/free` nesse contexto ("Invalid auto prefix format") e derrubou o gateway de IA em produção **duas vezes** nesta sessão.
+
+### Fix
+
+Trocar sobrescrita incondicional por default só na primeira instalação:
+
+```bash
+grep -q '^NINEROUTER_MODEL=' .env || echo 'NINEROUTER_MODEL=auto/free' >> .env
+```
+
+`PKF_NINEROUTER_MODEL_CHAIN` já seguia o padrão correto (só adiciona se ausente).
+
+### DoD
+
+- [x] Script só define `NINEROUTER_MODEL`/`PKF_NINEROUTER_MODEL_CHAIN` quando a variável não existe no `.env`.
+- [x] Rodar o script duas vezes seguidas com config manual já presente não altera essa config (`tests/test_setup_omniroute_env.py`).
+
+---
+
 ## Observações fora de escopo (Fase 0)
 
 - Deploy VPS do commit `14d1a09` foi interrompido localmente (build Docker longo); push para `origin/main` concluído.

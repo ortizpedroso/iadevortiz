@@ -154,7 +154,7 @@ NODE
 
 echo "$RESULT" | python3 -m json.tool 2>/dev/null || echo "$RESULT"
 
-grep -q '^NINEROUTER_MODEL=' .env && sed -i 's|^NINEROUTER_MODEL=.*|NINEROUTER_MODEL=auto/free|' .env || echo 'NINEROUTER_MODEL=auto/free' >> .env
+grep -q '^NINEROUTER_MODEL=' .env || echo 'NINEROUTER_MODEL=auto/free' >> .env
 grep -q '^PKF_NINEROUTER_MODEL_CHAIN=' .env || cat >> .env <<'EOF'
 PKF_NINEROUTER_MODEL_CHAIN=auto/free,auto,auto/coding,oc/big-pickle
 EOF
