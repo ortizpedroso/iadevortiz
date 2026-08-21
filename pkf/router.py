@@ -276,17 +276,33 @@ class Router:
             agent.messages.extend(recent)
 
     def _restore_memory_agents(self) -> None:
+        memory_tools = ("project_context", "list_dir", "read_file", "search_code")
         for name, summary in self.memory.index.items():
             if name in self.agents:
                 continue
+            tools = ToolRegistry(self.workspace, list(memory_tools), [], router=self)
+            system_prompt = (
+                "Você é um agente de memória da PKF. O resumo abaixo vem de uma conversa "
+                "ANTERIOR e pode ser de outro projeto ou estar desatualizado — NÃO representa "
+                "o estado atual do workspace.\n\n"
+                f"Resumo da conversa anterior:\n{summary}\n\n"
+                "Regras obrigatórias:\n"
+                "- Antes de afirmar que algo está implementado, pronto ou existente, use "
+                "list_dir, read_file ou search_code para verificar o projeto ATUAL.\n"
+                "- Se o diretório do projeto estiver vazio ou não corresponder ao resumo, "
+                "diga isso claramente. Não invente nem assuma que o resumo reflete a "
+                "realidade atual.\n"
+                "- Use o resumo apenas como contexto histórico quando for relevante ao "
+                "projeto atual."
+            )
             self.agents[name] = Agent(
                 name=name,
                 client=self.client,
                 model=self.model_to_use,
-                system_prompt=f"Você é um agente de memória da PKF. Responda só com base neste resumo:\n{summary}",
+                system_prompt=system_prompt,
                 router=self,
-                tools=None,
-                supports_tools=False,
+                tools=tools,
+                supports_tools=True,
             )
 
     def register_agent(self, agent: Agent, summary: str) -> None:
@@ -299,7 +315,7 @@ class Router:
     def _find_memory_agent(self, user_input: str) -> Agent | None:
         name, score = self.memory.find(user_input, RELEVANCE_THRESHOLD)
         if name and name in self.agents:
-            print(f"[Roteador] Memória relevante ({score} termos) → {name}")
+            print(f"[Roteador] Memória relevante ({score}% sobreposição) → {name}")
             return self.agents[name]
         return None
 

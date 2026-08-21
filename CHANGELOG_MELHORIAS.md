@@ -4,6 +4,39 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Agente de memória fabricando status de projeto
+
+**Data:** 2026-08-21  
+**Severidade:** alta — informação fabricada apresentada como fato ao usuário.
+
+### Bug real
+
+Fluxo em produção:
+1. Usuário: *"Quero desenvolver um sistema"* → arquiteto entrevistou corretamente.
+2. Usuário descreveu um **cardápio digital whitelabel**.
+3. Resposta seguinte afirmou *"Resumo do que já está pronto: vitrine pública, modal de detalhes, backend com modelos"* — **tudo fabricado**. O diretório do projeto estava **vazio**.
+
+### Causas raiz
+
+1. **`MemoryStore.find()`** com `RELEVANCE_THRESHOLD=2` (contagem absoluta): 2 palavras genéricas de domínio (`cardápio`, `digital`, `sistema`) bastavam para rotear a conversa a uma sessão antiga não relacionada.
+2. **`_restore_memory_agents()`** criava agentes com `tools=None, supports_tools=False` — sem `list_dir`/`read_file`/`search_code` para checar o workspace atual antes de afirmar status.
+
+### Correções
+
+| Área | Mudança |
+|------|---------|
+| `pkf/memory/store.py` | Match por **proporção** de sobreposição (≥45%) + mínimo de 3 termos; stopwords de domínio (`sistema`, `projeto`, `quero`, `desenvolver`, `digital`, …) ignoradas |
+| `pkf/config.py` | `RELEVANCE_THRESHOLD=0.45`, `MEMORY_MIN_OVERLAP_WORDS=3`, `MEMORY_DOMAIN_STOPWORDS` |
+| `pkf/router.py` | Agente de memória com ferramentas de leitura (`project_context`, `list_dir`, `read_file`, `search_code`) e prompt exigindo checar o projeto atual antes de afirmar implementação |
+
+### Definition of Done
+
+- [x] Match não dispara com 2 palavras genéricas em comum.
+- [x] Agente de memória tem ferramentas de leitura e instrução de checar o projeto atual.
+- [x] Testes reproduzem cenário de cardápio digital + projeto vazio sem fabricar status.
+
+---
+
 ## Arquiteto entrevista antes de criar spec
 
 **Data:** 2026-08-21
