@@ -7,6 +7,8 @@ from typing import Any
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
+REQUIRED_STACK_KEYS = ("frontend", "backend", "database", "deploy")
+
 
 @dataclass
 class SpecDocument:
@@ -42,6 +44,35 @@ class SpecDocument:
             "body": self.body,
             "markdown": self.to_markdown(),
         }
+
+
+def parse_spec_meta(content: str) -> dict | None:
+    match = FRONTMATTER_RE.match(content or "")
+    if not match:
+        return None
+    try:
+        meta = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+    return meta if isinstance(meta, dict) else None
+
+
+def validate_suggested_stack(meta: dict | None, stack: dict[str, str]) -> str | None:
+    raw = (meta or {}).get("suggested_stack")
+    if isinstance(raw, list):
+        return (
+            "suggested_stack malformado: veio como lista de rótulos "
+            '(ex.: ["frontend", "backend"]). Use objeto JSON com valores reais, '
+            'ex.: {"frontend": "React", "backend": "PHP", "database": "MySQL", "deploy": "Docker"}.'
+        )
+    for key in REQUIRED_STACK_KEYS:
+        value = str((stack or {}).get(key, "")).strip()
+        if not value:
+            return (
+                f"suggested_stack incompleto: a chave '{key}' está ausente ou vazia. "
+                "Preencha frontend, backend, database e deploy com tecnologias concretas."
+            )
+    return None
 
 
 def parse_spec(content: str) -> SpecDocument:
