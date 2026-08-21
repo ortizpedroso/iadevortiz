@@ -22,6 +22,8 @@ SPEC_CHECKS = (
     ("Benchmark", "benchmark"),
     ("Verificação T3", "get_last_verification"),
     ("Segurança produção", "Segurança e produção"),
+    ("Memória anti-fabricação", "Memória de sessão"),
+    ("Classificador", "Classificador de intenção"),
     ("Auth token deploy", "não sobrescreve"),
     ("Preview isolado", "allow-same-origin"),
 )

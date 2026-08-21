@@ -78,6 +78,11 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - Headers de segurança; changelog automático na spec após build
 - **Verificação T3 persistida** (`.pkf/last_verify.json`) + ferramenta `get_last_verification` para respostas fundamentadas pós-build
 - **Saudações locais** (`oi`, `olá`) sem chamar gateway de IA
+- **Classificador de intenção**: perguntas conversacionais (`você consegue…`, `dá pra…`) tratadas antes de `FEATURE_HINTS`; fallback LLM só quando keywords não resolvem
+- **Arquiteto entrevista**: uma pergunta por vez; sem `save_spec` até objetivo, requisitos, restrições e critério de “concluído” claros; pedido já detalhado pode ir direto à spec
+- **Memória de sessão**: índice `.pkf/memory/index.json`; match por **proporção** de sobreposição (≥45%, mín. 3 termos) com stopwords de domínio (`sistema`, `projeto`, `quero`, `desenvolver`, …) para evitar falso-positivo entre projetos parecidos
+- **Agentes de memória**: restaurados com `project_context`, `list_dir`, `read_file`, `search_code`; prompt exige checar o workspace atual antes de afirmar que algo está implementado — resumo antigo não é estado atual
+- **Compactação de contexto**: `compact_messages_llm` (resumo estruturado) com fallback mecânico quando o gateway falha
 
 ## Segurança e produção
 
@@ -89,6 +94,7 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - **Deploy**: `NINEROUTER_MODEL` só definido na 1ª instalação (`set_kv_default`); URLs pós-deploy **não** imprimem token
 - **Respostas pós-build**: `generalista`/`reviewer` consultam `get_last_verification` antes de hipóteses sobre falha T3
 - **Ambiguidade na spec**: agentes `frontend`/`backend`/`logic` param implementação e reportam conflito antes de codificar
+- **Memória**: agente de memória nunca afirma “já pronto” sem `list_dir`/`read_file`; projeto vazio deve ser declarado explicitamente
 
 ## Ferramentas de confiabilidade (rodada 1)
 
@@ -143,6 +149,9 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 | `PKF_QUALITY_MODEL` | Modelo Claude (ex.: `kr/claude-sonnet-4.5`) |
 | `PKF_USE_LANGGRAPH_BUILD` | `1` = pipeline /build via grafo piloto |
 | `PKF_ALLOW_RUN_COMMAND` | `1` = permite `run_command` em produção |
+| `PKF_RELEVANCE_THRESHOLD` | Proporção mínima (padrão `0.45`) para rotear mensagem a agente de memória |
+| `PKF_MEMORY_MIN_OVERLAP` | Mínimo de termos significativos em comum (padrão `3`) no match de memória |
+| `PKF_NINEROUTER_MODEL_CHAIN` | Cadeia de fallback de modelos no gateway OmniRoute |
 
 ## Stack
 
