@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 
 from pkf import __version__
-from pkf.config import auth_token
+from pkf.config import auth_token, is_production, validate_production_config
 from pkf.db.config import database_enabled
 from pkf.db.engine import close_db, init_db
 from pkf.errors import explain_provider_error
@@ -124,6 +124,7 @@ def create_app(router: Router) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        validate_production_config()
         if database_enabled():
             await init_db()
         history: ChatHistory = app.state.history
@@ -167,13 +168,13 @@ def create_app(router: Router) -> FastAPI:
         authed = not auth_token() or token == auth_token()
         payload = {
             "ok": True,
-            "auth_required": bool(auth_token()),
-            "database": database_enabled(),
-            "ui": "vite" if use_vite else "legacy",
-            "version": __version__,
-            "git_sha": os.getenv("PKF_GIT_SHA", "").strip() or None,
+            "auth_required": bool(auth_token()) or is_production(),
         }
         if authed:
+            payload["database"] = database_enabled()
+            payload["ui"] = "vite" if use_vite else "legacy"
+            payload["version"] = __version__
+            payload["git_sha"] = os.getenv("PKF_GIT_SHA", "").strip() or None
             payload["web_search"] = web_search_configured()
             payload["ninerouter"] = ninerouter_enabled()
             payload["provider_router"] = app.state.router.pool.status()
@@ -482,16 +483,10 @@ def create_app(router: Router) -> FastAPI:
 
     @app.websocket("/ws")
     async def chat_socket(websocket: WebSocket):
-        await websocket.accept()
         if not check_ws_auth(websocket):
-            await websocket.send_json(
-                {
-                    "type": "error",
-                    "content": "Token inválido ou ausente. Acesse a PKF com ?token=SEU_PKF_AUTH_TOKEN na URL.",
-                }
-            )
             await websocket.close(code=1008, reason="Token inválido")
             return
+        await websocket.accept()
         history: ChatHistory = app.state.history
         try:
             await history.load()

@@ -20,6 +20,10 @@ SPEC_CHECKS = (
     ("Tier qualidade", "PKF_TIER_QUALITY"),
     ("Build graph", "PKF_USE_LANGGRAPH_BUILD"),
     ("Benchmark", "benchmark"),
+    ("Verificação T3", "get_last_verification"),
+    ("Segurança produção", "Segurança e produção"),
+    ("Auth token deploy", "não sobrescreve"),
+    ("Preview isolado", "allow-same-origin"),
 )
 
 
@@ -39,6 +43,22 @@ def _implementation_gaps(spec_text: str) -> list[str]:
     css = Path("frontend/src/index.css").read_text(encoding="utf-8")
     if "--pkf-accent" not in css:
         gaps.append("CSS: variaveis centralizadas ausentes")
+    set_env = Path("deploy/hostinger/set-env-keys.sh").read_text(encoding="utf-8")
+    if "if ! grep -q '^PKF_AUTH_TOKEN=' .env" not in set_env:
+        gaps.append("Deploy: PKF_AUTH_TOKEN ainda sobrescrito a cada update")
+    if "set_kv_default NINEROUTER_MODEL" not in set_env:
+        gaps.append("Deploy: NINEROUTER_MODEL ainda sobrescrito em set-env-keys")
+    update_sh = Path("deploy/hostinger/update.sh").read_text(encoding="utf-8")
+    if "?token=$(grep '^PKF_AUTH_TOKEN='" in update_sh:
+        gaps.append("Deploy: update.sh ainda imprime token na URL")
+    preview_py = Path("pkf/web/preview.py").read_text(encoding="utf-8")
+    if "?token=" in preview_py:
+        gaps.append("Preview: redirect ainda inclui token na query")
+    app_tsx = Path("frontend/src/App.tsx").read_text(encoding="utf-8")
+    if "allow-same-origin" in app_tsx:
+        gaps.append("Preview: iframe ainda usa allow-same-origin")
+    if "validate_production_config" not in Path("pkf/web/server.py").read_text(encoding="utf-8"):
+        gaps.append("Backend: validate_production_config ausente no boot")
     return gaps
 
 
@@ -58,7 +78,8 @@ def run_build_review_cycle(workspace: Path) -> tuple[int, bool, list[str], str]:
     review = f"""# Review pkf-platform ({slug})
 
 Ciclo {cycles}/{MAX_REVIEW_FIX_CYCLES}. Spec alinhada com menu de contexto, PATCH rename,
-confirmacao de exclusao, variaveis CSS, Headroom, 9Router skip 401, tier qualidade, benchmark e build graph.
+confirmacao de exclusao, variaveis CSS, Headroom, 9Router skip 401, tier qualidade, benchmark,
+build graph, get_last_verification, hardening de producao (auth, preview, deploy).
 
 Status: {"APROVADO" if approved else "REPROVADO"}
 """

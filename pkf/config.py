@@ -182,6 +182,30 @@ def auth_token() -> str:
     return os.getenv("PKF_AUTH_TOKEN", "").strip()
 
 
+_WEAK_AUTH_TOKENS = frozenset({"teste123", "changeme", "password", "pkf"})
+
+
+def is_production() -> bool:
+    return os.getenv("PKF_ENV", "").strip().lower() == "production"
+
+
+def validate_production_config() -> None:
+    """Falha no boot se produção estiver sem token forte."""
+    if not is_production():
+        return
+    token = auth_token()
+    if not token:
+        raise RuntimeError(
+            "PKF_AUTH_TOKEN ausente em PKF_ENV=production. "
+            "Configure um token forte no .env antes de subir o serviço."
+        )
+    if len(token) < 16 or token.lower() in _WEAK_AUTH_TOKENS:
+        raise RuntimeError(
+            "PKF_AUTH_TOKEN fraco ou padrão em produção. "
+            "Use pelo menos 16 caracteres aleatórios (ex.: openssl rand -hex 24)."
+        )
+
+
 def ui_host() -> str:
     return os.getenv("PKF_HOST", "127.0.0.1")
 

@@ -29,7 +29,5 @@ export function wsUrl(): string {
 }
 
 export function previewUrl(path: string): string {
-  const token = getToken();
-  const qs = token ? `?token=${encodeURIComponent(token)}` : "";
-  return `${location.origin}${path}${qs}`;
+  return `${location.origin}${path}`;
 }

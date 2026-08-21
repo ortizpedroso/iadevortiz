@@ -737,7 +737,7 @@ export default function App() {
                 title="Preview do projeto"
                 src={previewSrc}
                 className="min-h-0 flex-1 bg-white"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                sandbox="allow-scripts allow-forms allow-popups"
               />
             </aside>
           ) : null}
