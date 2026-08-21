@@ -73,8 +73,8 @@ else
 fi
 
 echo ""
-echo "PKF local: http://127.0.0.1:8765/?token=$(grep '^PKF_AUTH_TOKEN=' .env 2>/dev/null | head -n1 | cut -d= -f2- || echo 'SEU_PKF_AUTH_TOKEN')"
+echo "PKF local: http://127.0.0.1:8765/  (autentique com PKF_AUTH_TOKEN do .env)"
 if [[ -n "$PKF_HOST_DOMAIN" ]]; then
-  echo "PKF público: https://${PKF_HOST_DOMAIN}/?token=$(grep '^PKF_AUTH_TOKEN=' .env 2>/dev/null | head -n1 | cut -d= -f2- || echo 'SEU_PKF_AUTH_TOKEN')"
+  echo "PKF público: https://${PKF_HOST_DOMAIN}/  (use ?token= com valor do .env — não compartilhe em logs)"
 fi
 echo "OmniRoute: configurado automaticamente (sem dashboard)"

@@ -10,7 +10,7 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from pkf.config import COMMAND_TIMEOUT, MAX_FILE_BYTES, MAX_SEARCH_MATCHES, pkf_dir
+from pkf.config import COMMAND_TIMEOUT, MAX_FILE_BYTES, MAX_SEARCH_MATCHES, is_production, pkf_dir
 from pkf.graph.project import ProjectGraph
 from pkf.semantic_index import update_file_index
 from pkf.skills.search import skill_search_tool_output
@@ -224,6 +224,15 @@ def run_command(workspace: Workspace, command: str) -> str:
     raw = command.strip()
     if not raw:
         return "Comando vazio."
+    if is_production() and os.getenv("PKF_ALLOW_RUN_COMMAND", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+    }:
+        return (
+            "run_command desabilitado em PKF_ENV=production. "
+            "Defina PKF_ALLOW_RUN_COMMAND=1 no .env se precisar executar testes na VPS."
+        )
     for token in SHELL_CHAINING:
         if token in raw:
             return (

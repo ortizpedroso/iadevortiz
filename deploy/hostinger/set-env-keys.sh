@@ -103,7 +103,14 @@ set_kv PKF_ENV "${PKF_ENV:-production}"
 set_kv PKF_HOST "${PKF_HOST:-0.0.0.0}"
 set_kv PKF_PORT "${PKF_PORT:-8765}"
 set_kv PKF_NO_BROWSER "${PKF_NO_BROWSER:-1}"
-set_kv PKF_AUTH_TOKEN "${PKF_AUTH_TOKEN:-teste123}"
+if ! grep -q '^PKF_AUTH_TOKEN=' .env; then
+  _auth="${PKF_AUTH_TOKEN:-}"
+  if [ -z "$_auth" ] && [ "${PKF_ENV:-production}" = "production" ]; then
+    _auth="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null || openssl rand -hex 24)"
+    echo "==> PKF_AUTH_TOKEN gerado automaticamente na primeira instalação"
+  fi
+  set_kv PKF_AUTH_TOKEN "${_auth:-teste123}"
+fi
 
 dedupe_env_key() {
   local key="$1"
@@ -151,7 +158,7 @@ set_kv DATABASE_URL "${DATABASE_URL:-postgresql+asyncpg://pkf:pkf@postgres:5432/
 
 # --- 9Router ---
 set_kv NINEROUTER_URL "${NINEROUTER_URL:-http://ninerouter:20128}"
-set_kv NINEROUTER_MODEL "${NINEROUTER_MODEL:-auto/free}"
+set_kv_default NINEROUTER_MODEL "${NINEROUTER_MODEL:-auto/free}"
 set_kv_default NINEROUTER_DASHBOARD_NEW_PASSWORD "${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}"
 if [ -n "${NINEROUTER_KEY:-}" ]; then
   set_kv NINEROUTER_KEY "$NINEROUTER_KEY"

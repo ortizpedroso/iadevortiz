@@ -75,7 +75,13 @@ def preview_path(workspace: Workspace, rel_path: str = "") -> Path:
 def serve_preview_file(workspace: Workspace, rel_path: str = ""):
     target = preview_path(workspace, rel_path)
     media_type, _ = mimetypes.guess_type(target.name)
-    return FileResponse(target, media_type=media_type or "application/octet-stream")
+    response = FileResponse(target, media_type=media_type or "application/octet-stream")
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; "
+        "frame-ancestors 'self'; object-src 'none'"
+    )
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    return response
 
 
 def redirect_preview_entry(workspace: Workspace, token: str | None):
@@ -85,5 +91,4 @@ def redirect_preview_entry(workspace: Workspace, token: str | None):
             status_code=404,
             detail="Nenhuma página encontrada. Use /build para gerar index.html no workspace.",
         )
-    suffix = f"?token={token}" if token else ""
-    return RedirectResponse(url=f"/preview/{entry}{suffix}")
+    return RedirectResponse(url=f"/preview/{entry}")
