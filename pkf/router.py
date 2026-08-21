@@ -16,6 +16,7 @@ from pkf.config import (
     rate_limit_cooldown_seconds,
 )
 from pkf.graph.project import ProjectGraph
+from pkf.greetings import greeting_reply, is_greeting
 from pkf.judge import evaluate_build_goal
 from pkf.memory.persistent import (
     append_memory_note,
@@ -54,7 +55,6 @@ from pkf.workflow.tasks import TaskTracker
 from pkf.workspace import Workspace
 from pkf.workspace_index import begin_build_session
 
-from pkf.greetings import greeting_reply, is_greeting
 
 class Router:
     def __init__(
