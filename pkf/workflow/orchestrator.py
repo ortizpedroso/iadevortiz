@@ -15,11 +15,25 @@ _TASK_LABELS = {
 }
 
 _PHASE_LABELS = {
-    0: "Fase 1 — backend/serviços",
-    1: "Fase 2 — regras de negócio",
-    2: "Fase 3 — interface",
-    3: "Fase 4 — testes",
+    1: "Fase 2 — interface",
+    2: "Fase 3 — testes",
 }
+
+
+def _phase_label(phase_index: int, phase_tasks: list[BuildTask]) -> str:
+    agents = {t.agent for t in phase_tasks}
+    if phase_index == 0:
+        has_backend = "backend" in agents
+        has_logic = "logic" in agents
+        if has_backend and has_logic:
+            return "Fase 1 — backend e regras de negócio"
+        if has_backend:
+            return "Fase 1 — backend/serviços"
+        if has_logic:
+            return "Fase 1 — regras de negócio"
+    if phase_index in _PHASE_LABELS:
+        return _PHASE_LABELS[phase_index]
+    return f"Fase {phase_index + 1}"
 
 
 async def run_build_tasks(
@@ -49,7 +63,7 @@ async def run_build_phases(
         runnable = [t for t in phase_tasks if not only_agents or t.agent in only_agents]
         if not runnable:
             continue
-        phase_label = _PHASE_LABELS.get(phase_index, f"Fase {phase_index + 1}")
+        phase_label = _phase_label(phase_index, runnable)
         await router.emit("build_phase", phase=phase_index, label=phase_label)
         if router.ui_mode:
             await router._emit_progress(phase_label + "…")
