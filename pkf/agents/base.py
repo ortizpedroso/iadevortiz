@@ -13,6 +13,8 @@ from pkf.config import (
     NODE_LIMIT,
     fallback_model_on_not_found,
     fallback_model_on_rate_limit,
+    is_ninerouter_client,
+    next_ninerouter_model,
     tool_rounds_for_agent,
 )
 from pkf.provider_errors import is_model_not_found_error, should_rotate_provider
@@ -105,6 +107,12 @@ class Agent:
                         print(f"[{self.name}] Rate limit em {self.model}; tentando {fb}")
                         self.model = fb
                         continue
+                if is_ninerouter_client(base_url) and exc.status_code in {500, 502, 503, 529}:
+                    fb = next_ninerouter_model(self.model)
+                    if fb and fb != self.model:
+                        print(f"[{self.name}] Gateway {exc.status_code} em {self.model}; tentando {fb}")
+                        self.model = fb
+                        continue
                 if is_model_not_found_error(exc):
                     fb = fallback_model_on_not_found(self.model, base_url)
                     if fb and fb != self.model:
@@ -115,7 +123,7 @@ class Agent:
                     self.client = self.router.client
                     self.model = self.router.model_to_use
                     continue
-                if native_tools and _looks_like_tool_unsupported(exc):
+                if native_tools and (_looks_like_tool_unsupported(exc) or is_ninerouter_client(base_url)):
                     native_tools = False
                     continue
                 raise

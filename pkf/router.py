@@ -54,6 +54,7 @@ from pkf.workflow.tasks import TaskTracker
 from pkf.workspace import Workspace
 from pkf.workspace_index import begin_build_session
 
+from pkf.greetings import greeting_reply, is_greeting
 
 class Router:
     def __init__(
@@ -339,6 +340,13 @@ class Router:
                 return "Informe a meta: /goal o preview deve mostrar index.html funcional"
             return f"Meta registrada: {self.cycle.goal}"
 
+        if not command and is_greeting(user_input):
+            await self.emit("routing", agent="generalista", kind="question", source="local")
+            self.cycle.last_agent = "generalista"
+            self.cycle.persist(self.workspace.root)
+            reply = greeting_reply()
+            return self._user_reply(reply) if self.ui_mode else reply
+
         memory_agent = None if command else self._find_memory_agent(user_input)
         if memory_agent and not command:
             self.cycle.last_agent = memory_agent.name
@@ -382,6 +390,7 @@ class Router:
         await self.emit("routing", agent=agent.name, kind=intent.kind, source=intent.source)
         self.cycle.last_agent = agent.name
         self.cycle.persist(self.workspace.root)
+
         self.bind_agent_provider(agent.name)
         reply = await agent.process(payload)
         self.cycle = DevCycle.load(self.workspace.root)
