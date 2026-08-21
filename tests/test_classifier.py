@@ -21,6 +21,15 @@ def test_conversational_question_not_feature():
     assert intent.agent == "generalista"
 
 
+def test_spec_blank_complaint_routes_to_architect_not_review():
+    intent = classify_intent("a especificação está em branco", last_agent="architect")
+    assert intent.agent == "architect"
+    assert intent.kind == "change"
+    assert intent.kind != "review_request"
+    assert intent.agent != "reviewer"
+    assert intent.source == "keywords"
+
+
 def test_detailed_feature_request_still_routes_to_architect():
     intent = classify_intent("crie um sistema de gestão de estoque com controle de validade")
     assert intent.kind == "feature"

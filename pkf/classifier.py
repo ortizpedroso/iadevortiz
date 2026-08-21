@@ -69,6 +69,8 @@ KEYWORD_MAP = {
 FEATURE_HINTS = ("crie", "criar", "implemente", "implementar", "adicione", "adicionar", "quero um", "preciso de um")
 CHANGE_HINTS = ("mude", "mudar", "altere", "alterar", "ajuste", "corrigir", "corrija", "renomeie")
 QUESTION_HINTS = ("o que", "como", "por que", "porque", "onde", "explique", "qual ")
+SPEC_COMPLAINT_MARKERS = ("especificação", "especificacao", " spec", "spec ")
+SPEC_EMPTY_MARKERS = ("branco", "vazia", "vazio", "em branco", "sem conteúdo", "sem conteudo", "sem nada")
 CONVERSATIONAL_QUESTION_PREFIXES = (
     "você consegue",
     "voce consegue",
@@ -122,6 +124,9 @@ def classify_intent(user_input: str, last_agent: str | None = None) -> Intent:
     if is_greeting(user_input):
         return Intent(agent="generalista", kind="question", source="keywords")
 
+    if _is_spec_complaint(text):
+        return Intent(agent="architect", kind="change", source="keywords")
+
     kind = _kind_from_text(text)
     if kind == "review_request":
         return Intent(agent="reviewer", kind=kind, source="keywords")
@@ -142,12 +147,20 @@ def classify_intent(user_input: str, last_agent: str | None = None) -> Intent:
     return Intent(agent="generalista", kind=_kind_from_text(text), source="fallback")
 
 
+def _is_spec_complaint(text: str) -> bool:
+    if not any(marker in text for marker in SPEC_COMPLAINT_MARKERS):
+        return False
+    return any(marker in text for marker in SPEC_EMPTY_MARKERS)
+
+
 def _is_conversational_question(text: str) -> bool:
     stripped = text.strip().lower()
     return any(stripped.startswith(prefix) for prefix in CONVERSATIONAL_QUESTION_PREFIXES)
 
 
 def _kind_from_text(text: str) -> str:
+    if _is_spec_complaint(text):
+        return "change"
     if any(hint in text for hint in ("revise", "review", "code review")):
         return "review_request"
     if any(hint in text for hint in ("teste", "testes", "pytest", "tdd")):

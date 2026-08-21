@@ -4,6 +4,40 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Coerência no fluxo /spec (3 bugs)
+
+**Data:** 2026-08-21
+
+### Bug 1 — lista de 24 perguntas
+
+Usuário respondeu com detalhes (cardápio digital, PHP OO, MySQL, Tailwind); arquiteto devolveu tabela 8×3 de perguntas, ignorando "uma pergunta por vez".
+
+**Correção:** few-shot CORRETO vs ERRADO no prompt + proibição explícita de tabela/lista numerada de perguntas.
+
+### Bug 2 — spec vazia com título = frase do usuário
+
+Mensagem *"agora eu quero que você me sugira as melhores respostas, para criar a nossa spec"* gerou spec com `title` = frase crua e `suggested_stack` como lista de rótulos.
+
+**Causa:** `save_spec` usava fallback `doc.title = name.replace(...)` sem validar frases longas; lista JSON em `suggested_stack` virava `{}` via `_stack_dict`.
+
+**Correção:** validação em `save_spec` rejeita `name` com 8+ palavras no fallback de título e `suggested_stack` malformado; prompt instrui síntese completa quando usuário delega decisão.
+
+### Bug 3 — reclamação de spec vazia tratada como review
+
+Mensagem *"a especificação está em branco"* com `last_agent=architect` caía em `classify_intent` linha 142 (`source=fallback` → `classify_intent_llm`), sem regra para reclamação de spec — risco de roteamento incorreto ao revisor.
+
+**Correção:** `_is_spec_complaint()` em `pkf/classifier.py` roteia para `architect`/`change` antes do fallback.
+
+### Definition of Done
+
+- [x] `save_spec` rejeita título derivado de frase longa do usuário
+- [x] `save_spec` rejeita `suggested_stack` malformado
+- [x] Prompt do arquiteto com few-shot uma pergunta vs lista
+- [x] Prompt instrui síntese quando usuário delega decisão
+- [x] Bug 3 corrigido com teste do cenário exato
+
+---
+
 ## Agente de memória fabricando status de projeto
 
 **Data:** 2026-08-21  
