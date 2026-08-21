@@ -16,6 +16,7 @@ from pkf.semantic_index import update_file_index
 from pkf.skills.search import skill_search_tool_output
 from pkf.spec.document import parse_spec
 from pkf.spec.store import save_spec_document
+from pkf.verify_store import load_last_verification, save_last_verification
 from pkf.web_search import web_search
 from pkf.workspace import Workspace, WorkspaceError
 from pkf.workspace_index import (
@@ -328,11 +329,47 @@ def graph_add_node(workspace: Workspace, node_id: str, parent: str, labels: list
     return f"Nó dinâmico '{node.id}' criado sob '{parent}'."
 
 
-def verify_build(workspace: Workspace) -> str:
+def verify_build(workspace: Workspace, phase: str = "T3") -> str:
     result = verify_workspace_files(workspace)
     if not result["ok"]:
-        return "Build incompleto: nenhum arquivo gerado no workspace."
-    return f"Build verificado: {result['count']} arquivo(s). Exemplos: {', '.join(result['files'][:8])}"
+        reason = result.get("reason")
+        if reason == "no_build_session":
+            text = "Build incompleto: sessão de build não iniciada."
+        elif reason == "invalid_session":
+            text = "Build incompleto: sessão de build inválida."
+        else:
+            text = "Build incompleto: nenhum arquivo gerado no workspace."
+    else:
+        text = f"Build verificado: {result['count']} arquivo(s). Exemplos: {', '.join(result['files'][:8])}"
+    save_last_verification(
+        workspace.root,
+        phase=phase,
+        ok=bool(result["ok"]),
+        result=text,
+        details=result,
+    )
+    return text
+
+
+def get_last_verification(workspace: Workspace) -> str:
+    data = load_last_verification(workspace.root)
+    if not data:
+        return "Nenhuma verificação de build registrada ainda."
+    status = "sucesso" if data.get("ok") else "falha"
+    lines = [
+        f"Última verificação ({data.get('phase', 'T3')}) — {status}",
+        f"Timestamp: {data.get('timestamp', 'desconhecido')}",
+        "",
+        str(data.get("result") or "").strip() or "(sem texto de resultado)",
+    ]
+    details = data.get("details")
+    if isinstance(details, dict) and details.get("reason"):
+        lines.append(f"\nMotivo técnico: {details['reason']}")
+    if isinstance(details, dict) and details.get("files"):
+        files = details["files"]
+        if files:
+            lines.append(f"Arquivos na sessão: {', '.join(files[:12])}")
+    return "\n".join(lines)
 
 
 def code_index(workspace: Workspace, query: str = "") -> str:
@@ -386,7 +423,9 @@ def dispatch(workspace: Workspace, name: str, arguments: dict) -> str:
                 arguments.get("labels", []),
             )
         if name == "verify_build":
-            return verify_build(workspace)
+            return verify_build(workspace, arguments.get("phase", "T3"))
+        if name == "get_last_verification":
+            return get_last_verification(workspace)
         if name == "code_index":
             return code_index(workspace, arguments.get("query", ""))
         if name == "skill_search":

@@ -171,6 +171,21 @@ TOOL_DEFINITIONS: dict[str, dict] = {
     },
     "verify_build": {
         "description": "Verifica se arquivos foram gerados no workspace após build.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "phase": {
+                    "type": "string",
+                    "description": "Fase da verificação (padrão: T3).",
+                }
+            },
+        },
+    },
+    "get_last_verification": {
+        "description": (
+            "Retorna o resultado real persistido da última verificação de build "
+            "(fase T3): timestamp, sucesso/falha e mensagem completa."
+        ),
         "parameters": {"type": "object", "properties": {}},
     },
     "skill_search": {
@@ -217,6 +232,7 @@ AGENT_TOOLS = {
         "search_code",
         "code_index",
         "get_spec",
+        "get_last_verification",
         "save_review",
         "graph_view",
         "verify_build",
@@ -232,7 +248,15 @@ AGENT_TOOLS = {
         "get_spec",
         "verify_build",
     ],
-    "generalista": ["project_context", "list_dir", "read_file", "search_code", "web_search", "graph_view"],
+    "generalista": [
+        "project_context",
+        "list_dir",
+        "read_file",
+        "search_code",
+        "web_search",
+        "graph_view",
+        "get_last_verification",
+    ],
 }
 
 
