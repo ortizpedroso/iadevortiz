@@ -24,3 +24,17 @@ def test_router_only_rate_limit_message(monkeypatch):
     assert "Groq" not in text
     assert "Gemini" not in text
     assert "alterna modelos" in text.lower()
+
+
+def test_router_only_gateway_model_rejection_message(monkeypatch):
+    from openai import APIStatusError
+
+    monkeypatch.setenv("PKF_ROUTER_ONLY", "1")
+
+    exc = APIStatusError.__new__(APIStatusError)
+    exc.status_code = 400
+    Exception.__init__(exc, "Invalid auto prefix format for auto/free")
+
+    text = explain_provider_error("ninerouter", exc)
+    assert "auto/free" in text
+    assert "oc/big-pickle" in text

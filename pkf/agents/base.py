@@ -17,7 +17,12 @@ from pkf.config import (
     next_ninerouter_model,
     tool_rounds_for_agent,
 )
-from pkf.provider_errors import is_model_not_found_error, should_rotate_provider
+from pkf.provider_errors import (
+    is_model_not_found_error,
+    is_ninerouter_model_rejection,
+    is_ninerouter_rotatable,
+    should_rotate_provider,
+)
 from pkf.reasoning import (
     completion_params_for_model,
     is_reasoning_model,
@@ -107,13 +112,13 @@ class Agent:
                         print(f"[{self.name}] Rate limit em {self.model}; tentando {fb}")
                         self.model = fb
                         continue
-                if is_ninerouter_client(base_url) and exc.status_code in {500, 502, 503, 529}:
+                if is_ninerouter_client(base_url) and is_ninerouter_rotatable(exc):
                     fb = next_ninerouter_model(self.model)
                     if fb and fb != self.model:
                         print(f"[{self.name}] Gateway {exc.status_code} em {self.model}; tentando {fb}")
                         self.model = fb
                         continue
-                if is_model_not_found_error(exc):
+                if is_model_not_found_error(exc) or is_ninerouter_model_rejection(exc):
                     fb = fallback_model_on_not_found(self.model, base_url)
                     if fb and fb != self.model:
                         print(f"[{self.name}] Modelo {self.model} indisponível; tentando {fb}")

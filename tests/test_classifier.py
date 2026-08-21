@@ -27,6 +27,13 @@ def test_detailed_feature_request_still_routes_to_architect():
     assert intent.agent == "architect"
 
 
+def test_quero_desenvolver_routes_without_llm_fallback():
+    intent = classify_intent("Quero desenvolver um sistema")
+    assert intent.kind == "feature"
+    assert intent.agent == "architect"
+    assert intent.source == "keywords"
+
+
 def test_review_command_routes_to_reviewer():
     intent = classify_intent("/review", last_agent="backend")
     assert intent.agent == "reviewer"

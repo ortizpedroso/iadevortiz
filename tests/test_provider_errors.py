@@ -1,6 +1,20 @@
 from types import SimpleNamespace
 
-from pkf.provider_errors import is_model_not_found_error, should_rotate_provider
+from openai import APIStatusError
+
+from pkf.provider_errors import (
+    is_model_not_found_error,
+    is_ninerouter_model_rejection,
+    is_ninerouter_rotatable,
+    should_rotate_provider,
+)
+
+
+def _status_error(status_code: int, message: str) -> APIStatusError:
+    exc = APIStatusError.__new__(APIStatusError)
+    exc.status_code = status_code
+    Exception.__init__(exc, message)
+    return exc
 
 
 def test_ninerouter_401_is_rotatable():
@@ -30,3 +44,20 @@ def test_model_not_found_message_is_detected():
 def test_api_status_404_is_model_not_found():
     exc = SimpleNamespace(status_code=404)
     assert is_model_not_found_error(exc)
+
+
+def test_ninerouter_400_auto_free_is_model_rejection():
+    exc = _status_error(400, "Invalid auto prefix format for auto/free")
+    assert is_ninerouter_model_rejection(exc)
+    assert is_ninerouter_rotatable(exc)
+
+
+def test_ninerouter_400_unrelated_not_rotatable():
+    exc = _status_error(400, "missing required field")
+    assert not is_ninerouter_model_rejection(exc)
+    assert not is_ninerouter_rotatable(exc)
+
+
+def test_ninerouter_503_is_rotatable():
+    exc = _status_error(503, "Service unavailable")
+    assert is_ninerouter_rotatable(exc)

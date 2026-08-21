@@ -154,9 +154,9 @@ NODE
 
 echo "$RESULT" | python3 -m json.tool 2>/dev/null || echo "$RESULT"
 
-grep -q '^NINEROUTER_MODEL=' .env || echo 'NINEROUTER_MODEL=auto/free' >> .env
+grep -q '^NINEROUTER_MODEL=' .env || echo 'NINEROUTER_MODEL=oc/big-pickle' >> .env
 grep -q '^PKF_NINEROUTER_MODEL_CHAIN=' .env || cat >> .env <<'EOF'
-PKF_NINEROUTER_MODEL_CHAIN=auto/free,auto,auto/coding,oc/big-pickle
+PKF_NINEROUTER_MODEL_CHAIN=oc/big-pickle,auto/coding,auto,auto/free
 EOF
 
-echo "==> NINEROUTER_MODEL=auto/free (roteamento automático free)"
+echo "==> NINEROUTER_MODEL=oc/big-pickle (padrão estável; auto/free só na cadeia de fallback)"

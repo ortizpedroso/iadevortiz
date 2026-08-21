@@ -102,9 +102,20 @@ def explain_provider_error(provider: str, exc: Exception) -> str:
         )
     if gateway_only:
         if isinstance(exc, APIStatusError) and exc.status_code in {400, 402, 422}:
+            detail = text[:280] if text else f"HTTP {exc.status_code}"
+            if "auto/free" in detail or "invalid" in detail.lower() or "prefix" in detail.lower():
+                return (
+                    "Gateway de IA rejeitou o modelo configurado (ex.: auto/free inválido).\n\n"
+                    "Na VPS:\n"
+                    "  grep NINEROUTER_MODEL /opt/pkf/.env\n"
+                    "  # Se for auto/free, ajuste para oc/big-pickle ou groq/.../...\n"
+                    "  cd /opt/pkf && bash deploy/hostinger/set-env-keys.sh && bash deploy/hostinger/update.sh\n\n"
+                    f"Detalhe: {detail}"
+                )
             return (
-                "Gateway de IA rejeitou a requisição. Na VPS execute: "
-                "cd /opt/pkf && bash deploy/hostinger/update.sh"
+                "Gateway de IA rejeitou a requisição.\n\n"
+                f"Detalhe: {detail}\n\n"
+                "Na VPS: cd /opt/pkf && bash deploy/hostinger/update.sh"
             )
         detail = text[:240] if text else exc.__class__.__name__
         if isinstance(exc, APIStatusError):

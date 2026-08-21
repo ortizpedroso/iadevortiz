@@ -18,6 +18,37 @@ def is_model_not_found_error(exc: Exception) -> bool:
     )
 
 
+def is_ninerouter_model_rejection(exc: Exception) -> bool:
+    """400/422 do OmniRoute por modelo inválido (ex.: auto/free rejeitado)."""
+    if not isinstance(exc, APIStatusError):
+        return False
+    if exc.status_code not in {400, 422}:
+        return False
+    text = str(exc).lower()
+    return any(
+        token in text
+        for token in (
+            "model",
+            "invalid",
+            "auto",
+            "prefix",
+            "unsupported",
+            "rejected",
+            "malformed",
+        )
+    )
+
+
+def is_ninerouter_rotatable(exc: Exception) -> bool:
+    if not isinstance(exc, APIStatusError):
+        return False
+    if exc.status_code in {500, 502, 503, 529}:
+        return True
+    if exc.status_code in {400, 404, 422}:
+        return is_model_not_found_error(exc) or is_ninerouter_model_rejection(exc)
+    return False
+
+
 def is_rotatable_error(exc: Exception) -> bool:
     if isinstance(exc, APIStatusError):
         return exc.status_code in {429, 500, 502, 503, 529}

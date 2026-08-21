@@ -66,7 +66,21 @@ KEYWORD_MAP = {
     "tester": ("teste", "testes", "pytest", "coverage", "tdd", "unit test"),
 }
 
-FEATURE_HINTS = ("crie", "criar", "implemente", "implementar", "adicione", "adicionar", "quero um", "preciso de um")
+FEATURE_HINTS = (
+    "crie",
+    "criar",
+    "implemente",
+    "implementar",
+    "adicione",
+    "adicionar",
+    "quero um",
+    "quero desenvolver",
+    "quero criar",
+    "preciso de um",
+    "preciso desenvolver",
+    "desenvolver um",
+    "desenvolver o",
+)
 CHANGE_HINTS = ("mude", "mudar", "altere", "alterar", "ajuste", "corrigir", "corrija", "renomeie")
 QUESTION_HINTS = ("o que", "como", "por que", "porque", "onde", "explique", "qual ")
 CONVERSATIONAL_QUESTION_PREFIXES = (

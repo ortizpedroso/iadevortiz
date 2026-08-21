@@ -4,6 +4,39 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Gateway 400/422 — auto/free e classificador
+
+**Data:** 2026-08-21
+
+### Bug real
+
+Mensagem **"Quero desenvolver um sistema"** falhava com *Gateway de IA rejeitou a requisição*:
+1. Classificador não reconhecia `quero desenvolver` → `source=fallback` → chamada LLM desnecessária no gateway.
+2. `.env` de produção com `NINEROUTER_MODEL=auto/free` → OmniRoute responde HTTP 400 (*Invalid auto prefix format*).
+3. Fallback de modelo no agente só tratava 500/502/503/529, **não** 400/422 de modelo inválido.
+
+### Correções
+
+| Área | Mudança |
+|------|---------|
+| `pkf/classifier.py` | `FEATURE_HINTS`: `quero desenvolver`, `quero criar`, `desenvolver um/o`, etc. |
+| `pkf/provider_errors.py` | `is_ninerouter_model_rejection()`, `is_ninerouter_rotatable()` (400/404/422) |
+| `pkf/agents/base.py` | Rotação de modelo OmniRoute em 400/422 de modelo |
+| `pkf/config.py` / `pkf/ninerouter.py` | Default `oc/big-pickle`; cadeia `oc/big-pickle,auto/coding,auto,auto/free` |
+| `pkf/errors.py` | Mensagem clara quando gateway rejeita `auto/free` |
+| `deploy/hostinger/set-env-keys.sh` | `migrate_ninerouter_auto_free()` — migra `auto/free` → `oc/big-pickle` |
+| `deploy/hostinger/setup-omniroute-providers.sh` | Default inicial `oc/big-pickle` (não sobrescreve manual) |
+| `deploy/hostinger/update.sh` | Heredoc inicial usa `oc/big-pickle` |
+
+### Deploy na VPS
+
+```bash
+cd /opt/pkf && git pull origin main && bash deploy/hostinger/update.sh
+grep '^NINEROUTER_MODEL=' .env   # deve ser oc/big-pickle (não auto/free)
+```
+
+---
+
 ## Arquiteto entrevista antes de criar spec
 
 **Data:** 2026-08-21

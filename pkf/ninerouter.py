@@ -26,7 +26,7 @@ def ninerouter_chat_model() -> str:
     return (
         os.getenv("NINEROUTER_MODEL", "").strip()
         or os.getenv("PKF_NINEROUTER_MODEL", "").strip()
-        or "auto/free"
+        or "oc/big-pickle"
     )
 
 

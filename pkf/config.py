@@ -307,7 +307,7 @@ def ninerouter_model_chain() -> tuple[str, ...]:
 
     raw = os.getenv(
         "PKF_NINEROUTER_MODEL_CHAIN",
-        "auto/free,auto,auto/coding,oc/big-pickle",
+        "oc/big-pickle,auto/coding,auto,auto/free",
     )
     parts = [part.strip() for part in raw.split(",") if part.strip()]
     primary = ninerouter_chat_model()

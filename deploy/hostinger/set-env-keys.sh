@@ -128,6 +128,19 @@ dedupe_env_key() {
 dedupe_env_key PKF_AUTH_TOKEN
 dedupe_env_key NINEROUTER_KEY
 
+migrate_ninerouter_auto_free() {
+  local current=""
+  if grep -q "^NINEROUTER_MODEL=" .env; then
+    current="$(grep "^NINEROUTER_MODEL=" .env | head -n1 | cut -d= -f2-)"
+  fi
+  case "$current" in
+    auto/free|auto/free-*)
+      set_kv NINEROUTER_MODEL "oc/big-pickle"
+      echo "==> NINEROUTER_MODEL migrado de auto/free para oc/big-pickle (OmniRoute rejeita auto/free)"
+      ;;
+  esac
+}
+
 migrate_weak_auth_token() {
   if [ "${PKF_ENV:-production}" != "production" ]; then
     return 0
@@ -184,7 +197,8 @@ set_kv DATABASE_URL "${DATABASE_URL:-postgresql+asyncpg://pkf:pkf@postgres:5432/
 
 # --- 9Router ---
 set_kv NINEROUTER_URL "${NINEROUTER_URL:-http://ninerouter:20128}"
-set_kv_default NINEROUTER_MODEL "${NINEROUTER_MODEL:-auto/free}"
+set_kv_default NINEROUTER_MODEL "${NINEROUTER_MODEL:-oc/big-pickle}"
+migrate_ninerouter_auto_free
 set_kv_default NINEROUTER_DASHBOARD_NEW_PASSWORD "${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}"
 if [ -n "${NINEROUTER_KEY:-}" ]; then
   set_kv NINEROUTER_KEY "$NINEROUTER_KEY"

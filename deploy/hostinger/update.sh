@@ -35,7 +35,7 @@ PKF_ROUTER_ONLY=1
 NINEROUTER_URL=http://ninerouter:20128
 PKF_PROVIDER=ninerouter
 PKF_PROVIDER_POOL=ninerouter
-NINEROUTER_MODEL=auto/free
+NINEROUTER_MODEL=oc/big-pickle
 EOF
 
 echo "==> Build e start (profile: $PROFILE)"

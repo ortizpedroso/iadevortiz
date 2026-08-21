@@ -123,7 +123,7 @@ def test_ninerouter_provider_registered(monkeypatch):
 def test_ninerouter_model_default(monkeypatch):
     monkeypatch.delenv("NINEROUTER_MODEL", raising=False)
     monkeypatch.delenv("PKF_NINEROUTER_MODEL", raising=False)
-    assert ninerouter_chat_model() == "auto/free"
+    assert ninerouter_chat_model() == "oc/big-pickle"
 
 
 def test_web_search_configured_with_ninerouter(monkeypatch):

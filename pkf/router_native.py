@@ -107,7 +107,7 @@ def _ninerouter_slots() -> list[dict]:
     key = ninerouter_api_key() or "local"
     models = list(ninerouter_model_chain())
     if not models:
-        models = ["auto/free"]
+        models = ["oc/big-pickle"]
     tiers = ("subscription", "cheap", "free")
     slots: list[dict] = []
     for index, model in enumerate(models[:3]):
