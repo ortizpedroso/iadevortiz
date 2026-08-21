@@ -1,11 +1,25 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import networkx as nx
 
-from pkf.config import pkf_dir
+from pkf.config import MEMORY_DOMAIN_STOPWORDS, MEMORY_MIN_OVERLAP_WORDS, pkf_dir
+
+
+def _memory_tokens(text: str) -> set[str]:
+    words = {word for word in re.findall(r"[a-zà-ú0-9]+", text.lower()) if len(word) > 3}
+    return {word for word in words if word not in MEMORY_DOMAIN_STOPWORDS}
+
+
+def _memory_match_score(user_words: set[str], summary_words: set[str]) -> tuple[int, float]:
+    if not user_words:
+        return 0, 0.0
+    overlap = user_words & summary_words
+    ratio = len(overlap) / len(user_words)
+    return len(overlap), ratio
 
 
 class MemoryStore:
@@ -31,21 +45,24 @@ class MemoryStore:
         self.index[name] = summary
         self.save()
 
-    def find(self, user_input: str, threshold: int) -> tuple[str | None, int]:
+    def find(self, user_input: str, threshold: float) -> tuple[str | None, int]:
         if not self.index:
             return None, 0
-        words = {word for word in user_input.lower().split() if len(word) > 3}
+        user_words = _memory_tokens(user_input)
+        if not user_words:
+            return None, 0
         best_name = None
-        best_score = 0
+        best_overlap = 0
+        best_ratio = 0.0
         for name, summary in self.index.items():
-            summary_words = {word for word in summary.lower().split() if len(word) > 3}
-            score = len(words & summary_words)
-            if score > best_score:
-                best_score = score
+            overlap, ratio = _memory_match_score(user_words, _memory_tokens(summary))
+            if ratio > best_ratio or (ratio == best_ratio and overlap > best_overlap):
+                best_overlap = overlap
+                best_ratio = ratio
                 best_name = name
-        if best_score >= threshold:
-            return best_name, best_score
-        return None, best_score
+        if best_ratio >= threshold and best_overlap >= MEMORY_MIN_OVERLAP_WORDS:
+            return best_name, int(round(best_ratio * 100))
+        return None, int(round(best_ratio * 100))
 
 
 def export_graph(graph: nx.DiGraph, dest: Path) -> str:

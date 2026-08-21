@@ -13,7 +13,28 @@ NODE_LIMIT = 12
 MAX_TOOL_ROUNDS = int(os.getenv("PKF_MAX_TOOL_ROUNDS", "16"))
 MAX_BUILD_TOOL_ROUNDS = int(os.getenv("PKF_BUILD_TOOL_ROUNDS", "30"))
 MAX_REVIEW_FIX_CYCLES = int(os.getenv("PKF_REVIEW_FIX_CYCLES", "3"))
-RELEVANCE_THRESHOLD = 2
+RELEVANCE_THRESHOLD = float(os.getenv("PKF_RELEVANCE_THRESHOLD", "0.45"))
+MEMORY_MIN_OVERLAP_WORDS = int(os.getenv("PKF_MEMORY_MIN_OVERLAP", "3"))
+MEMORY_DOMAIN_STOPWORDS = frozenset(
+    {
+        "quero",
+        "preciso",
+        "desenvolver",
+        "criar",
+        "fazer",
+        "construir",
+        "sistema",
+        "projeto",
+        "aplicativo",
+        "plataforma",
+        "software",
+        "solução",
+        "solucao",
+        "digital",
+        "novo",
+        "nova",
+    }
+)
 API_TIMEOUT = 120.0
 COMMAND_TIMEOUT = 45
 MAX_FILE_BYTES = 200_000
