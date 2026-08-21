@@ -466,7 +466,7 @@ class Router:
                 only_agents=pending_agents,
             )
             errors = [reply for _, reply in results if reply.startswith("Erro:")]
-            verify = verify_build_tool(self.workspace)
+            verify = verify_build_tool(self.workspace, phase="T3")
             await self.emit("build_verify", result=verify)
             ok = verify_ok(verify) and not errors
             tracker.set_phase_status("T3", "done" if ok else "failed")
@@ -580,7 +580,7 @@ class Router:
             fix_tasks = plan_fix_tasks(self.cycle.active_spec, issues)
             fix_phases = group_tasks_into_phases(fix_tasks)
             await run_build_phases(self, fix_phases, tracker)
-            verify = verify_build_tool(self.workspace)
+            verify = verify_build_tool(self.workspace, phase="T3_post_fix")
             if not verify_ok(verify):
                 last_reply += "\n\nVerificação pós-correção falhou."
 
