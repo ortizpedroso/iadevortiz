@@ -4,6 +4,42 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Arquiteto entrevista antes de criar spec
+
+**Data:** 2026-08-21
+
+### Bug real
+
+Mensagem **"você consegue criar um sistema sozinho"** (conversacional, sem info de projeto):
+1. `"criar"` em `FEATURE_HINTS` classificou como `feature` → roteou pro `architect`.
+2. Prompt pedia spec **AUTOMATICAMENTE** → spec vazia com título literal da pergunta e stack genérica.
+
+### Classificador (`pkf/classifier.py`)
+
+- Prefixos conversacionais (`você consegue`, `vc pode`, `dá pra`, etc.) viram `question` **antes** de checar `FEATURE_HINTS`.
+- Prompt do `classify_intent_llm` ganhou 3 exemplos few-shot (pergunta vs pedido real).
+
+### Prompt do arquiteto (`pkf/agents/prompts.py`)
+
+- Metodologia explícita: `/spec → /build → /review`, entrevista com **uma pergunta por vez**, sem `save_spec` até objetivo/requisitos/restrições/“concluído” claros.
+- Mensagens vagas → resposta conversacional, sem spec.
+- Pedido já detalhado → spec direta permitida.
+- Stack via `web_search` quando não especificada (sem padrão fixo React+Express+Postgres).
+
+### Definition of Done
+
+- [x] "você consegue criar um sistema sozinho" → `kind="question"`
+- [x] Arquiteto instruído a não criar spec sem info real
+- [x] Metodologia spec→build→review no prompt
+- [x] `web_search` para stack não especificada
+- [x] Pedido detalhado numa mensagem continua permitindo spec direta
+
+### Testes
+
+`python3 -m pytest tests/ -q` → **183 passed**
+
+---
+
 ## Paralelismo real: backend + logic na mesma fase
 
 **Data:** 2026-08-21
