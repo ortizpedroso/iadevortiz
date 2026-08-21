@@ -16,8 +16,8 @@ EOF
 
 
 def _run_env_snippet(env_dir: Path) -> None:
-    subprocess.run(
-        ["bash", "-c", ENV_WRITE_SNIPPET],
+    subprocess.run(  # noqa: S603
+        ["/usr/bin/bash", "-c", ENV_WRITE_SNIPPET],
         cwd=env_dir,
         check=True,
         text=True,
