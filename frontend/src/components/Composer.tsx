@@ -32,7 +32,7 @@ export function Composer({ busy, onSend }: Props) {
 
   return (
     <footer className="border-t border-[var(--pkf-border-soft)] bg-[var(--pkf-bg-primary)]/95 px-4 py-5 backdrop-blur">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto w-full max-w-4xl">
         {!busy ? (
           <div className="mb-3 flex flex-wrap justify-center gap-2">
             {SUGGESTIONS.map((s) => (

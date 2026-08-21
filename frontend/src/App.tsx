@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AuthModal } from "./components/AuthModal";
 import { Composer } from "./components/Composer";
 import { MessageList } from "./components/MessageList";
@@ -8,6 +8,11 @@ import { authHeaders, getToken, previewUrl, wsUrl } from "./lib/api";
 import type { ChatItem, Message, ProjectItem, SessionSnapshot, SpecPreview, TaskNode, WsEvent } from "./types";
 
 const EMPTY_SESSION: SessionSnapshot = {};
+const CHAT_SCROLL_THRESHOLD_PX = 100;
+
+function isNearChatBottom(el: HTMLElement, threshold = CHAT_SCROLL_THRESHOLD_PX) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+}
 
 export default function App() {
   const [authRequired, setAuthRequired] = useState(false);
@@ -41,6 +46,8 @@ export default function App() {
   const [useHttpFallback, setUseHttpFallback] = useState(false);
   const applySessionRef = useRef<(data: SessionSnapshot, replace?: boolean) => void>(() => {});
   const loadChangesRef = useRef<() => Promise<void>>(async () => {});
+  const chatScrollRef = useRef<HTMLElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
 
   const applyLibrary = useCallback((library?: { chats?: ChatItem[]; projects?: ProjectItem[] }) => {
     if (!library) return;
@@ -94,6 +101,28 @@ export default function App() {
 
   applySessionRef.current = applySession;
   loadChangesRef.current = loadChanges;
+
+  const scrollChatToBottom = useCallback((force = false) => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    if (force || shouldAutoScrollRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      shouldAutoScrollRef.current = isNearChatBottom(el);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [sessionReady]);
+
+  useLayoutEffect(() => {
+    scrollChatToBottom(false);
+  }, [messages, thinking, scrollChatToBottom]);
 
   const invalidateSocket = useCallback(() => {
     activeSocketIdRef.current += 1;
@@ -351,6 +380,7 @@ export default function App() {
   }
 
   async function sendMessageHttp(text: string) {
+    shouldAutoScrollRef.current = true;
     setMessages((m) => [...m, { role: "user", content: text }]);
     setThinking(true);
     setBusy(true);
@@ -390,6 +420,7 @@ export default function App() {
   }
 
   function sendMessage(text: string) {
+    shouldAutoScrollRef.current = true;
     if (useHttpFallbackRef.current || useHttpFallback) {
       void sendMessageHttp(text);
       return;
@@ -710,7 +741,7 @@ export default function App() {
         ) : null}
 
         <div className={`flex min-h-0 flex-1 ${previewOpen || showSpecPanel ? "flex-col lg:flex-row" : ""}`}>
-          <main id="main-chat" className="min-h-0 flex-1 overflow-auto" tabIndex={0}>
+          <main id="main-chat" ref={chatScrollRef} className="min-h-0 flex-1 overflow-auto" tabIndex={0}>
             <MessageList messages={messages} thinking={thinking} />
           </main>
 

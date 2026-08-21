@@ -4,6 +4,23 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## UI: auto-scroll e campo de mensagem mais largo
+
+**Data:** 2026-08-21
+
+### Mudanças
+
+- **Auto-scroll:** área de mensagens (`#main-chat`) rola ao final ao enviar e ao receber resposta (streaming/HTTP), só se o usuário já estava perto do fim (`<100px` do bottom).
+- **Campo mais largo:** `MessageList` e `Composer` de `max-w-2xl`/`max-w-3xl` para `max-w-4xl`, mantendo responsividade.
+
+### Definition of Done
+
+- [x] Auto-scroll ao enviar e ao receber resposta
+- [x] Não força scroll se o usuário estiver lendo mensagens antigas
+- [x] Campo de mensagem visivelmente mais largo e responsivo
+
+---
+
 ## Coerência no fluxo /spec (3 bugs)
 
 **Data:** 2026-08-21

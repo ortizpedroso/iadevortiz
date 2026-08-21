@@ -10,7 +10,7 @@ export function MessageList({
 }) {
   if (!messages.length && !thinking) {
     return (
-      <div className="mx-auto max-w-2xl px-4 pt-[10vh] text-center">
+      <div className="mx-auto max-w-4xl px-4 pt-[10vh] text-center">
         <div className="mx-auto mb-6 grid h-14 w-14 place-items-center rounded-2xl bg-[var(--pkf-accent)] text-xl font-bold text-[#1a1917]">
           P
         </div>
@@ -30,7 +30,7 @@ export function MessageList({
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-8 px-4 pb-10 pt-6">
+    <div className="mx-auto flex max-w-4xl flex-col gap-8 px-4 pb-10 pt-6">
       {messages.map((msg, i) => {
         const isUser = msg.role === "user";
         const isError = msg.role === "error";
