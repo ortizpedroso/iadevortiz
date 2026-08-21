@@ -29,6 +29,7 @@ def test_spec_file_contains_rodada2_features(tmp_path: Path):
         "Memória de sessão",
         "Classificador de intenção",
         "Coerência no /spec",
+        "Chat auto-scroll",
     ):
         assert keyword.lower() in text.lower() or keyword in text
 

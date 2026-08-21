@@ -126,6 +126,8 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - **Projetos**: Menu de contexto ⋯ (fixar, renomear, excluir) + modo **Selecionar** para excluir vários ou todos
 - **Conversas**: Menu de contexto ⋯ (vincular projeto, excluir chat)
 - **Tema escuro PKF**: variáveis CSS (`--pkf-bg-primary`, `--pkf-accent`, etc.), sidebar e painéis escuros
+- **Chat auto-scroll**: ao enviar e ao receber resposta, rola ao final só se o usuário já estava perto do fim (`<100px` do bottom); envio sempre força scroll
+- **Campo de mensagem largo**: `MessageList` e `Composer` em `max-w-4xl` (responsivo)
 - Indicador no header: agente ativo · provider · modelo
 - Acessibilidade: skip link, aria-live, `:focus-visible` com acento
 

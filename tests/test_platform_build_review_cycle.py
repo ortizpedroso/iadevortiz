@@ -26,6 +26,8 @@ SPEC_CHECKS = (
     ("Classificador", "Classificador de intenção"),
     ("Coerência /spec", "Coerência no /spec"),
     ("save_spec validação", "save_spec"),
+    ("Auto-scroll chat", "Chat auto-scroll"),
+    ("Composer largo", "max-w-4xl"),
     ("Auth token deploy", "não sobrescreve"),
     ("Preview isolado", "allow-same-origin"),
 )
@@ -61,6 +63,8 @@ def _implementation_gaps(spec_text: str) -> list[str]:
     app_tsx = Path("frontend/src/App.tsx").read_text(encoding="utf-8")
     if "allow-same-origin" in app_tsx:
         gaps.append("Preview: iframe ainda usa allow-same-origin")
+    if "shouldAutoScrollRef" not in app_tsx or "isNearChatBottom" not in app_tsx:
+        gaps.append("Frontend: auto-scroll inteligente do chat ausente")
     if "validate_production_config" not in Path("pkf/web/server.py").read_text(encoding="utf-8"):
         gaps.append("Backend: validate_production_config ausente no boot")
     impl = Path("pkf/tools/impl.py").read_text(encoding="utf-8")
@@ -76,6 +80,12 @@ def _implementation_gaps(spec_text: str) -> list[str]:
         gaps.append("Arquiteto: few-shot uma pergunta vs lista ausente")
     if "sugira você" not in architect:
         gaps.append("Arquiteto: instrução de síntese ao delegar decisão ausente")
+    composer = Path("frontend/src/components/Composer.tsx").read_text(encoding="utf-8")
+    message_list = Path("frontend/src/components/MessageList.tsx").read_text(encoding="utf-8")
+    if "max-w-4xl" not in composer:
+        gaps.append("Frontend: Composer sem max-w-4xl")
+    if "max-w-4xl" not in message_list:
+        gaps.append("Frontend: MessageList sem max-w-4xl")
     return gaps
 
 
@@ -97,7 +107,7 @@ def run_build_review_cycle(workspace: Path) -> tuple[int, bool, list[str], str]:
 Ciclo {cycles}/{MAX_REVIEW_FIX_CYCLES}. Spec alinhada com menu de contexto, PATCH rename,
 confirmacao de exclusao, variaveis CSS, Headroom, 9Router skip 401, tier qualidade, benchmark,
 build graph, get_last_verification, coerencia /spec (save_spec, classificador, arquiteto),
-hardening de producao (auth, preview, deploy).
+auto-scroll e composer largo, hardening de producao (auth, preview, deploy).
 
 Status: {"APROVADO" if approved else "REPROVADO"}
 """
