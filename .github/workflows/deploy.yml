@@ -4,24 +4,31 @@ name: Deploy to VPS
   push:
     branches:
       - main
+  workflow_dispatch:
 
 concurrency:
   group: deploy-main
   cancel-in-progress: false
 
+env:
+  VPS_HOST_DEFAULT: "187.77.240.125"
+  VPS_USER_DEFAULT: "root"
+  VPS_PORT_DEFAULT: "22"
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: ${{ secrets.VPS_SSH_KEY != '' }}
 
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || env.VPS_HOST_DEFAULT }}
+          username: ${{ secrets.VPS_USER != '' && secrets.VPS_USER || env.VPS_USER_DEFAULT }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
+          port: ${{ secrets.VPS_PORT != '' && secrets.VPS_PORT || env.VPS_PORT_DEFAULT }}
           command_timeout: 9m
           script: |
             set -euo pipefail
@@ -49,3 +56,22 @@ jobs:
           done
           echo "Health check failed after 3 attempts"
           exit 1
+
+  deploy-setup-required:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.VPS_SSH_KEY == '' }}
+    steps:
+      - name: Deploy secrets ausentes
+        run: |
+          echo "::warning::Deploy automático desativado: secret VPS_SSH_KEY não configurado."
+          echo ""
+          echo "Na VPS (SSH), rode uma vez:"
+          echo "  cd /opt/pkf && git pull origin main"
+          echo "  bash deploy/hostinger/bootstrap-github-actions-deploy.sh"
+          echo ""
+          echo "Cadastre VPS_SSH_KEY (e opcionalmente VPS_HOST/VPS_USER) em:"
+          echo "  GitHub → Settings → Secrets and variables → Actions"
+          echo ""
+          echo "Ou instale deploy por cron na VPS (sem Actions):"
+          echo "  bash deploy/hostinger/install-cron-deploy.sh"
+          exit 0

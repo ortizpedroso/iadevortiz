@@ -11,13 +11,14 @@ def test_deploy_workflow_exists_and_parses():
         '"on":',
         "branches:",
         "main",
+        "workflow_dispatch",
         "appleboy/ssh-action@v1.2.0",
-        "secrets.VPS_HOST",
-        "secrets.VPS_USER",
         "secrets.VPS_SSH_KEY",
+        "VPS_HOST_DEFAULT",
         "timeout-minutes: 10",
         "deploy/hostinger/update.sh",
         "VPS_HEALTHCHECK_URL",
+        "deploy-setup-required",
     ):
         assert needle in text, f"Trecho ausente no workflow: {needle}"
     try:
@@ -26,5 +27,7 @@ def test_deploy_workflow_exists_and_parses():
         return
     doc = yaml.safe_load(text)
     assert doc["on"]["push"]["branches"] == ["main"]
+    assert "workflow_dispatch" in doc["on"]
     assert "deploy" in doc["jobs"]
+    assert "deploy-setup-required" in doc["jobs"]
     assert doc["jobs"]["deploy"]["timeout-minutes"] == 10

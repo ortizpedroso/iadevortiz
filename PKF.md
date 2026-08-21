@@ -73,12 +73,40 @@ Variáveis opcionais do hook: `CADDY_CTR` (default `eventosbr-caddy-1`), `WEB_CT
 
 ## Deploy automático (GitHub Actions)
 
-Todo **push na `main`** dispara o workflow `.github/workflows/deploy.yml`:
+Todo **push na `main`** (ou **Run workflow** manual) dispara `.github/workflows/deploy.yml` — **se** o secret `VPS_SSH_KEY` estiver configurado.
 
-1. SSH na VPS
+1. SSH na VPS (`187.77.240.125`, usuário `root` por padrão)
 2. `git pull origin main`
-3. `bash deploy/hostinger/update.sh` (rebuild com `PKF_GIT_SHA` para invalidar cache do frontend)
-4. Health check opcional com retry
+3. `bash deploy/hostinger/update.sh`
+
+### Configurar deploy automático (uma vez)
+
+**Na VPS:**
+
+```bash
+cd /opt/pkf && git pull origin main
+bash deploy/hostinger/bootstrap-github-actions-deploy.sh
+```
+
+O script gera a chave, adiciona em `authorized_keys` e imprime o valor de `VPS_SSH_KEY`.
+
+**No GitHub** → Settings → Secrets and variables → Actions:
+
+| Secret | Obrigatório | Valor |
+|--------|-------------|-------|
+| `VPS_SSH_KEY` | **Sim** | chave privada impressa pelo bootstrap |
+| `VPS_HOST` | Não | `187.77.240.125` (default no workflow) |
+| `VPS_USER` | Não | `root` (default no workflow) |
+| `VPS_PORT` | Não | `22` |
+| `VPS_HEALTHCHECK_URL` | Não | URL pública do `/api/health` |
+
+### Alternativa sem GitHub Actions (cron na VPS)
+
+```bash
+cd /opt/pkf && bash deploy/hostinger/install-cron-deploy.sh
+```
+
+Verifica `origin/main` a cada 5 min e roda `update.sh` quando houver commit novo.
 
 ### Secrets obrigatórios (cadastro manual, uma única vez)
 
