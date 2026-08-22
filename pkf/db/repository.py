@@ -144,6 +144,24 @@ async def save_task_tree(session: AsyncSession, chat_session_id: uuid.UUID, tree
         session.add(TaskTree(session_id=chat_session_id, tree=tree))
 
 
+async def save_session_handoffs(
+    session: AsyncSession,
+    chat_session_id: uuid.UUID,
+    handoffs: dict,
+) -> None:
+    chat = await session.get(ChatSession, chat_session_id)
+    if not chat:
+        return
+    chat.session_handoffs = handoffs
+
+
+async def load_session_handoffs(session: AsyncSession, chat_session_id: uuid.UUID) -> dict:
+    chat = await session.get(ChatSession, chat_session_id)
+    if not chat or not chat.session_handoffs:
+        return {}
+    return dict(chat.session_handoffs)
+
+
 async def load_task_tree(session: AsyncSession, chat_session_id: uuid.UUID) -> list[dict]:
     result = await session.execute(
         select(TaskTree).where(TaskTree.session_id == chat_session_id).order_by(TaskTree.updated_at.desc())

@@ -14,9 +14,11 @@ from pkf.db.repository import (
     list_file_changes_db,
     list_messages,
     load_cycle,
+    load_session_handoffs,
     load_task_tree,
     record_file_change_db,
     reset_active_session,
+    save_session_handoffs,
     save_task_tree,
     sync_cycle,
 )
@@ -145,3 +147,15 @@ class DbContext:
             return
         async with self.session() as db:
             await record_file_change_db(db, self.session_id, path, action, snippet)
+
+    async def save_handoffs(self, handoffs: dict) -> None:
+        if not self.enabled or not self.session_id:
+            return
+        async with self.session() as db:
+            await save_session_handoffs(db, self.session_id, handoffs)
+
+    async def load_handoffs(self) -> dict:
+        if not self.enabled or not self.session_id:
+            return {}
+        async with self.session() as db:
+            return await load_session_handoffs(db, self.session_id)

@@ -65,6 +65,9 @@ class ChatSession(Base):
     goal: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_agent: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
+    session_handoffs: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=_utcnow
