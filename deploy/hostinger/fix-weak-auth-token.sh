@@ -12,8 +12,8 @@ echo "==> Aguardando health..."
 for _ in $(seq 1 30); do
   if curl -sf http://127.0.0.1:8765/api/health 2>/dev/null | grep -q '"ok"'; then
     echo "OK: PKF respondendo"
-    echo "Token (guarde em local seguro):"
-    grep '^PKF_AUTH_TOKEN=' .env | tail -n1
+    echo "Token atualizado — leia localmente na VPS:"
+    echo "  grep '^PKF_AUTH_TOKEN=' .env"
     exit 0
   fi
   sleep 2

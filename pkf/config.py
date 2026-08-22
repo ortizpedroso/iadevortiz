@@ -72,7 +72,37 @@ DEFAULT_IGNORES = {
 }
 
 SECRET_NAMES = {".env", ".env.local", "credentials.json", "secrets.json"}
+SECRET_PREFIXES = (".env", "secrets")
 SECRET_SUFFIXES = {".pem", ".key", ".p12", ".pfx"}
+SECRET_ENV_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_PASSWORD")
+SECRET_ENV_EXACT = frozenset(
+    {
+        "DATABASE_URL",
+        "PKF_AUTH_TOKEN",
+        "NINEROUTER_KEY",
+        "NINEROUTER_DASHBOARD_PASSWORD",
+        "NINEROUTER_DASHBOARD_NEW_PASSWORD",
+    }
+)
+
+
+def is_secret_filename(name: str) -> bool:
+    lower = name.lower()
+    if lower in SECRET_NAMES:
+        return True
+    if any(lower.startswith(prefix) for prefix in SECRET_PREFIXES):
+        return True
+    suffix = Path(name).suffix.lower()
+    return suffix in SECRET_SUFFIXES
+
+
+def is_secret_env_var(key: str) -> bool:
+    upper = key.upper()
+    if upper in SECRET_ENV_EXACT:
+        return True
+    if "SECRET" in upper:
+        return True
+    return any(upper.endswith(suffix) for suffix in SECRET_ENV_SUFFIXES)
 
 
 @dataclass(frozen=True)
@@ -238,7 +268,41 @@ def ui_port() -> int:
 def headroom_proxy_url() -> str | None:
     """URL do proxy Headroom (OpenAI-compatible). Opt-in via PKF_HEADROOM_PROXY_URL."""
     url = os.getenv("PKF_HEADROOM_PROXY_URL", "").strip()
-    return url or None
+    if not url:
+        return None
+    return _validated_headroom_url(url)
+
+
+def _validated_headroom_url(url: str) -> str | None:
+    from ipaddress import ip_address
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise RuntimeError("PKF_HEADROOM_PROXY_URL deve usar http ou https.")
+    host = (parsed.hostname or "").lower()
+    if not host:
+        raise RuntimeError("PKF_HEADROOM_PROXY_URL sem hostname.")
+    allowlist = {
+        item.strip().lower()
+        for item in os.getenv("PKF_HEADROOM_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+        if item.strip()
+    }
+    if host in allowlist:
+        return url
+    blocked_hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}  # noqa: S104
+    if host in blocked_hosts:
+        raise RuntimeError("PKF_HEADROOM_PROXY_URL não pode apontar para loopback.")
+    try:
+        addr = ip_address(host)
+        if (
+            addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved
+        ) and host not in allowlist:
+            raise RuntimeError("PKF_HEADROOM_PROXY_URL bloqueado: IP interno/privado.")
+    except ValueError:
+        if host.endswith((".local", ".internal")):
+            raise RuntimeError("PKF_HEADROOM_PROXY_URL bloqueado: host interno.") from None
+    return url
 
 
 QUALITY_TIER_AGENTS = frozenset({"architect", "reviewer"})

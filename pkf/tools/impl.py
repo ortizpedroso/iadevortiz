@@ -10,7 +10,7 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from pkf.config import COMMAND_TIMEOUT, MAX_FILE_BYTES, MAX_SEARCH_MATCHES, is_production, pkf_dir
+from pkf.config import COMMAND_TIMEOUT, MAX_FILE_BYTES, MAX_SEARCH_MATCHES, is_production, is_secret_env_var, pkf_dir
 from pkf.graph.project import ProjectGraph
 from pkf.semantic_index import update_file_index
 from pkf.skills.search import skill_search_tool_output
@@ -174,15 +174,23 @@ def edit_file(
     return f"Editado {rel}: {count} substituição(ões)."
 
 
+MAX_REGEX_PATTERN_LEN = 200
+
+
 def search_code(workspace: Workspace, query: str, path: str = ".", mode: str = "text") -> str:
     if (mode or "text").lower() == "semantic":
         from pkf.semantic_index import semantic_search
 
         return semantic_search(workspace, query)
+    if len(query) > MAX_REGEX_PATTERN_LEN:
+        return f"Padrão regex muito longo (máx. {MAX_REGEX_PATTERN_LEN} caracteres)."
     start = workspace.resolve(path)
     if not start.exists():
         return f"Caminho não encontrado: {path}"
-    pattern = re.compile(query, re.IGNORECASE)
+    try:
+        pattern = re.compile(query, re.IGNORECASE)
+    except re.error as exc:
+        return f"Padrão regex inválido: {exc}"
     matches: list[str] = []
     files = workspace.iter_files(start if start.is_dir() else start.parent)
     for file_path in files:
@@ -202,15 +210,9 @@ def search_code(workspace: Workspace, query: str, path: str = ".", mode: str = "
 
 def _safe_subprocess_env() -> dict[str, str]:
     env = os.environ.copy()
-    blocked: list[str] = []
     for key in list(env):
-        upper = key.upper()
-        if (
-            upper.endswith(("_API_KEY", "_TOKEN", "_SECRET")) or upper == "DATABASE_URL" or "SECRET" in upper
-        ):
-            blocked.append(key)
-    for key in blocked:
-        env.pop(key, None)
+        if is_secret_env_var(key):
+            env.pop(key, None)
     return env
 
 

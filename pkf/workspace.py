@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from pkf.config import DEFAULT_IGNORES, SECRET_NAMES, SECRET_SUFFIXES
+from pkf.config import DEFAULT_IGNORES, is_secret_filename
 from pkf.projects.manager import (
     ensure_project,
     get_project_display_name,
@@ -75,8 +75,7 @@ class Workspace:
         return bool(parts & DEFAULT_IGNORES)
 
     def is_secret(self, path: Path) -> bool:
-        name = path.name.lower()
-        return name in SECRET_NAMES or path.suffix.lower() in SECRET_SUFFIXES
+        return is_secret_filename(path.name)
 
     def iter_files(self, start: Path | None = None):
         base = start or self.root
