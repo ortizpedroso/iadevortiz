@@ -4,6 +4,32 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Fechar lacunas restantes — handoff/resume, consulta barata, UI
+
+**Data:** 2026-08-22  
+**Branch:** `cursor/pkf-close-remaining-gaps-1cb2`  
+**Spec:** `specs/fechar-lacunas-restantes.md`
+
+### O que mudou
+
+| Tarefa | Mudança |
+|--------|---------|
+| **1** | Retomada de build documenta handoffs no checkpoint; `mark_resume_agents` na árvore; orquestrador já injeta `handoff_context_for_deps` ao retomar |
+| **2** | `get_prior_phase_response` + `build_agent_responses.json` (máx. 20 entradas, 50k chars/resposta) |
+| **3** | 6 achados Média: AUD-004..008 herdados da remediação; consulta barata implementada |
+| **4** | `TaskTree.tsx` exibe `detail` (handoff, pulado, retomado) e status `skipped` |
+
+### Achados Média — status
+
+- AUD-004 — corrigido (herdado)
+- AUD-005 — corrigido + teste de truncamento
+- AUD-006 — corrigido (herdado)
+- AUD-007 — corrigido (herdado)
+- AUD-008 — corrigido (herdado)
+- Consulta barata — corrigido neste PR
+
+---
+
 ## Arquitetura de Grafos (DAG) e Sincronia Autônoma
 
 **Data:** 2026-08-22  
