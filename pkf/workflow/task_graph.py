@@ -11,6 +11,10 @@ if TYPE_CHECKING:
 DAG_FORMAT = "dag_v1"
 
 
+class DagValidationError(ValueError):
+    """DAG inválido (ex.: ciclo em depends_on)."""
+
+
 @dataclass
 class TaskGraphNode:
     task_id: str
@@ -72,7 +76,7 @@ def topological_layers(tasks: list[BuildTask]) -> list[list[BuildTask]]:
     while remaining:
         layer = [by_id[tid] for tid in remaining if indegree[tid] == 0]
         if not layer:
-            raise ValueError("Ciclo detectado no DAG de tarefas")
+            raise DagValidationError("Ciclo detectado no DAG de tarefas — revise depends_on no plano de build.")
         layers.append(layer)
         for task in layer:
             remaining.remove(task.task_id)
@@ -83,7 +87,7 @@ def topological_layers(tasks: list[BuildTask]) -> list[list[BuildTask]]:
 
 
 def ready_tasks(tasks: list[BuildTask], completed: set[str]) -> list[BuildTask]:
-    """Tarefas cujo depends_on está totalmente em ``completed``."""
+    """Tarefas cujo depends_on está totalmente em ``completed`` (sucesso)."""
     ready: list[BuildTask] = []
     done = set(completed)
     for task in tasks:
@@ -92,3 +96,10 @@ def ready_tasks(tasks: list[BuildTask], completed: set[str]) -> list[BuildTask]:
         if all(dep in done for dep in task.depends_on):
             ready.append(task)
     return ready
+
+
+def validate_dag(tasks: list[BuildTask]) -> None:
+    """Levanta DagValidationError se o grafo tiver ciclo ou deps inválidas."""
+    if not tasks:
+        return
+    topological_layers(tasks)
