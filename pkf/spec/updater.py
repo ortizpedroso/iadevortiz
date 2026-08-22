@@ -55,9 +55,11 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 
 - Pipeline **/spec → aprovação manual → /build → review→fix loop** até aprovação
 - **Duas implementações de /build**:
-  - **Clássica** (padrão): fases backend → logic → frontend → tester, brainstorm, juiz /goal, changelog
+  - **DAG clássica** (padrão): `plan_build` → topologia `depends_on` → `run_build_dag` (ordenção topológica + `asyncio.gather` por grau zero)
   - **Grafo piloto** (`PKF_USE_LANGGRAPH_BUILD=1`): plan → build → review em `build_graph.py`
-- **Build em fases**: backend → logic → frontend → tester (dependências respeitadas)
+- **Build em DAG**: `backend` e `logic` em paralelo (grau zero); `frontend` após ambos; `tester` após `frontend` — dependências via `AGENT_DEPENDS` / `depends_on`
+- **Handoff entre agentes**: resumo compacto em `.pkf/session_handoffs.json` + `chat_sessions.session_handoffs` (JSONB); `handoff_context_for_deps()` injeta contexto nas tarefas dependentes (substitui histórico bruto)
+- **Grafo de impacto AST**: `ast_parser.py` + BFS em `impact_graph.py` limita escopo do `reviewer` a arquivos afetados por mutações
 - **Planner LLM** com fallback heurístico por keywords na spec
 - **Handoff API**: backend documenta `.pkf/handoff/api.md` → frontend consome
 - **Retry inteligente**: reexecuta só agentes que falharam (até `PKF_BUILD_RETRIES`)
@@ -129,10 +131,10 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 ## Fluxo /build
 
 1. Brainstorm (architect, sem código) — omitido em `/build resume`
-2. Planner (LLM ou heurística) → fases ordenadas
-3. Implementação em fases com handoff API (`prepare_for_build`; retomada pula agentes `done`)
-4. Verificação de arquivos + retry por agente
-5. Loop review → correção → review até **Status: APROVADO**
+2. Planner (LLM ou heurística) → DAG com `depends_on` (`dag_v1` em `task_trees`)
+3. `run_build_dag`: ordenação topológica dinâmica; paralelo só no grau de entrada zero; handoff ao fim de cada tarefa
+4. Verificação de arquivos + retry por agente (`prepare_for_build`; retomada pula agentes `done`)
+5. Loop review → correção → review até **Status: APROVADO** (reviewer com escopo BFS quando há mutações)
 6. Juiz independente (/goal) + resposta amigável na UI
 
 ## UI / UX

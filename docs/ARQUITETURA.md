@@ -6,7 +6,7 @@ Documentação complementar a [`PKF.md`](../PKF.md). Descreve componentes, banco
 
 ## 1. Visão geral
 
-A PKF (Plataforma de Desenvolvimento com IA) é um assistente multiagente para equipes e desenvolvedores que querem **especificar, implementar, revisar e testar** software em um ciclo guiado. A metodologia central é `/spec → /build → /review`: o arquiteto gera e refina a especificação; após aprovação manual na UI, o pipeline `/build` planeja tarefas por agente (backend, lógica, frontend, tester), executa fases paralelas ou sequenciais conforme dependências, verifica artefatos gerados e entra em loop automático de review→correção até aprovação ou limite de ciclos.
+A PKF (Plataforma de Desenvolvimento com IA) é um assistente multiagente para equipes e desenvolvedores que querem **especificar, implementar, revisar e testar** software em um ciclo guiado. A metodologia central é `/spec → /build → /review`: o arquiteto gera e refina a especificação; após aprovação manual na UI, o pipeline `/build` planeja tarefas como **DAG** (`depends_on` por agente), executa com ordenação topológica dinâmica (paralelo só no grau de entrada zero), injeta **handoff** compacto entre dependentes, verifica artefatos gerados e entra em loop automático de review→correção até aprovação ou limite de ciclos.
 
 A plataforma combina backend Python (FastAPI + WebSocket), frontend React (Vite), PostgreSQL opcional para persistência de chats/specs/tarefas, e um **gateway de IA** (OmniRoute/9Router na VPS, com fallback para Groq, Gemini e outros via `ProviderPool`). O roteador (`pkf/router.py`) centraliza comandos, classificação de intenção, delegação a agentes especializados e orquestração do build (`pkf/workflow/orchestrator.py`).
 
@@ -101,6 +101,7 @@ erDiagram
         text goal "nullable"
         varchar last_agent "nullable"
         boolean is_active
+        jsonb session_handoffs "default {}"
         timestamptz created_at
         timestamptz updated_at
     }
@@ -130,7 +131,7 @@ erDiagram
     task_trees {
         uuid id PK
         uuid session_id FK
-        jsonb tree
+        jsonb tree "dag_v1 nodes+depends_on"
         timestamptz updated_at
     }
 
@@ -178,6 +179,7 @@ erDiagram
 | `goal` | Text, nullable | Meta `/goal` |
 | `last_agent` | String(64), nullable | Último agente usado |
 | `is_active` | Boolean | Sessão ativa |
+| `session_handoffs` | JSON/JSONB, default `{}` | Delta de handoff por `task_id` (resumo compacto entre agentes) |
 | `created_at` | DateTime(tz) | Criação |
 | `updated_at` | DateTime(tz) | Última atualização |
 
@@ -213,7 +215,7 @@ erDiagram
 |--------|------|-----------|
 | `id` | UUID (PK) | Registro |
 | `session_id` | UUID (FK → chat_sessions.id, CASCADE) | Sessão |
-| `tree` | JSON/JSONB (list) | Árvore de tarefas do build |
+| `tree` | JSON/JSONB | DAG de build (`format: dag_v1`, nós com `task_id`, `depends_on`, `status`) |
 | `updated_at` | DateTime(tz) | Última atualização |
 
 ### file_changes
@@ -295,7 +297,7 @@ sequenceDiagram
 
 ## 5. Ciclo `/spec → /build → /review`
 
-Estados da spec e fases do build conforme `pkf/workflow/cycle.py`, `pkf/workflow/planner.py` (`PHASE_GROUPS`) e `pkf/router.py`.
+Estados da spec e DAG de build conforme `pkf/workflow/cycle.py`, `pkf/workflow/planner.py` (`AGENT_DEPENDS`, `depends_on`) e `pkf/workflow/orchestrator.py` (`run_build_dag`).
 
 ```mermaid
 stateDiagram-v2
@@ -305,41 +307,46 @@ stateDiagram-v2
     pending_approval --> approved: UI POST /api/spec/approve
     pending_approval --> SPEC: change / ajuste stack
     approved --> BUILD: /build (spec status approved)
-    BUILD --> Fase1: PHASE_GROUPS[0]
-    state Fase1 {
-        [*] --> backend_logic
-        note right of backend_logic: backend + logic em paralelo<br/>(asyncio.gather)
+    BUILD --> DAG_plan: plan_build → DAG
+    state DAG_plan {
+        [*] --> topo_sort
+        note right of topo_sort: grau de entrada zero<br/>asyncio.gather em paralelo
+        topo_sort --> handoff: save_handoff por tarefa
+        handoff --> topo_sort: libera dependentes
     }
-    Fase1 --> Fase2: PHASE_GROUPS[1]
-    state Fase2 {
-        [*] --> frontend
-    }
-    Fase2 --> Fase3: PHASE_GROUPS[2]
-    state Fase3 {
-        [*] --> tester
-    }
-    Fase3 --> T3_verify: verify_build T3
+    DAG_plan --> T3_verify: verify_build T3
     T3_verify --> BUILD_retry: erros / verify falhou
-    BUILD_retry --> Fase1: retry agentes falhos
+    BUILD_retry --> DAG_plan: retry agentes falhos
     T3_verify --> REVIEW: verify OK
-    REVIEW --> review_loop: _auto_review
+    REVIEW --> review_loop: _auto_review (+ escopo BFS)
     review_loop --> REVIEW_fix: REPROVADO
-    REVIEW_fix --> Fase1: plan_fix_tasks + run_build_phases
+    REVIEW_fix --> DAG_plan: plan_fix_tasks + run_build_dag
     REVIEW_fix --> review_loop: até MAX_REVIEW_FIX_CYCLES
     review_loop --> [*]: APROVADO + juiz /goal
 ```
 
-**PHASE_GROUPS** (`pkf/workflow/planner.py`):
+### Dependências padrão do DAG (`AGENT_DEPENDS`)
 
 ```python
-PHASE_GROUPS = (
-    ("backend", "logic"),  # Fase 0 — paralelo
-    ("frontend",),         # Fase 1 — sequencial
-    ("tester",),           # Fase 2 — sequencial
-)
+AGENT_DEPENDS = {
+    "backend": (),
+    "logic": (),
+    "frontend": ("backend", "logic"),
+    "tester": ("frontend",),
+}
 ```
 
-O planner heurístico (`plan_build`) ou LLM (`plan_build_llm`) inclui apenas agentes necessários à spec. `group_tasks_into_phases` agrupa por `task.phase`. O orquestrador (`run_build_phases`) executa cada fase em sequência; tarefas dentro da mesma fase rodam em paralelo via `asyncio.gather`.
+O planner heurístico (`plan_build`) ou LLM (`plan_build_llm`) gera `BuildTask` com `task_id` e `depends_on`. O payload persistido em `task_trees.tree` usa `format: dag_v1`. O orquestrador (`run_build_dag`) calcula dinamicamente tarefas prontas (`ready_tasks`) e despacha em paralelo apenas as de grau zero; ao concluir, libera dependentes.
+
+`PHASE_GROUPS` permanece como fallback de agrupamento legado em `group_tasks_into_phases`, mas a execução principal é via DAG.
+
+### Handoff entre agentes
+
+Ao fim de cada tarefa, `save_handoff()` grava resumo compacto (até 2000 chars) em `.pkf/session_handoffs.json` e opcionalmente em `chat_sessions.session_handoffs` (JSONB). Tarefas dependentes recebem `handoff_context_for_deps()` na instrução — **sem** repassar histórico bruto de mensagens. Único mecanismo de coordenação entre agentes (pub/sub `LISTEN/NOTIFY` removido).
+
+### Grafo de impacto (review cirúrgico)
+
+`pkf/utils/ast_parser.py` extrai imports de arquivos `.py` alterados (`write_file`/`edit_file` registram em `impact_graph.py`). BFS identifica arquivos afetados; `_auto_review` limita o escopo do `reviewer` a essa lista, economizando tokens.
 
 ---
 

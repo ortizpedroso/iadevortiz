@@ -34,6 +34,10 @@ def test_spec_file_contains_rodada2_features(tmp_path: Path):
         "REQUIRE_API_KEY",
         "PKF_REQUIRE_AUTH",
         "rate limit",
+        "depends_on",
+        "handoff_context_for_deps",
+        "impact_graph",
+        "run_build_dag",
     ):
         assert keyword.lower() in text.lower() or keyword in text
 

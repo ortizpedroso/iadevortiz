@@ -36,6 +36,13 @@ O Grupo D foi removido porque:
 - `pkf/web/state_events.py`
 - Referências em `pkf/web/server.py` e `pkf/workflow/orchestrator.py`
 
+### Documentação e spec (pós-remoção)
+
+- `docs/ARQUITETURA.md` — DAG, handoff, impact graph; `session_handoffs` no schema
+- `AGENTS.md` — pipeline atualizado
+- `pkf/spec/updater.py` — spec `pkf-platform` alinhada
+- `tests/test_platform_build_review_cycle.py` — verificação estática DAG/handoff/sem `state_events`
+
 ---
 
 ## Arquitetura de Grafos (DAG) e Sincronia Autônoma

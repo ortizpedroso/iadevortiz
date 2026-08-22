@@ -36,6 +36,10 @@ SPEC_CHECKS = (
     ("Rate limiting", "Rate limiting"),
     ("Auth loopback", "PKF_REQUIRE_AUTH"),
     ("Scroll pausado", "Auto-scroll pausado"),
+    ("DAG depends_on", "depends_on"),
+    ("Handoff agentes", "handoff_context_for_deps"),
+    ("Grafo impacto AST", "impact_graph"),
+    ("Orquestrador DAG", "run_build_dag"),
 )
 
 
@@ -114,6 +118,27 @@ def _implementation_gaps(spec_text: str) -> list[str]:
         gaps.append("Frontend: Composer sem max-w-4xl")
     if "max-w-4xl" not in message_list:
         gaps.append("Frontend: MessageList sem max-w-4xl")
+    if not Path("pkf/workflow/task_graph.py").is_file():
+        gaps.append("Workflow: task_graph.py ausente")
+    if not Path("pkf/workflow/handoff.py").is_file():
+        gaps.append("Workflow: handoff.py ausente")
+    orchestrator = Path("pkf/workflow/orchestrator.py").read_text(encoding="utf-8")
+    if "run_build_dag" not in orchestrator:
+        gaps.append("Orquestrador: run_build_dag ausente")
+    if "handoff_context_for_deps" not in orchestrator:
+        gaps.append("Orquestrador: handoff_context_for_deps não integrado")
+    planner = Path("pkf/workflow/planner.py").read_text(encoding="utf-8")
+    if "AGENT_DEPENDS" not in planner or "depends_on" not in planner:
+        gaps.append("Planner: DAG depends_on ausente")
+    if not Path("pkf/utils/ast_parser.py").is_file():
+        gaps.append("Utils: ast_parser.py ausente")
+    if not Path("pkf/utils/impact_graph.py").is_file():
+        gaps.append("Utils: impact_graph.py ausente")
+    if Path("pkf/web/state_events.py").is_file():
+        gaps.append("Web: state_events.py ainda presente (Grupo D removido)")
+    router = Path("pkf/router.py").read_text(encoding="utf-8")
+    if "load_review_scope" not in router:
+        gaps.append("Router: escopo BFS do reviewer ausente")
     return gaps
 
 
@@ -134,8 +159,9 @@ def run_build_review_cycle(workspace: Path) -> tuple[int, bool, list[str], str]:
 
 Ciclo {cycles}/{MAX_REVIEW_FIX_CYCLES}. Spec alinhada com menu de contexto, PATCH rename,
 confirmacao de exclusao, variaveis CSS, Headroom, 9Router skip 401, tier qualidade, benchmark,
-build graph, get_last_verification, coerencia /spec (save_spec, classificador, arquiteto),
-auto-scroll e composer largo, hardening de producao (auth, preview, deploy, remediação segurança).
+build DAG (depends_on, run_build_dag, handoff), grafo de impacto AST, get_last_verification,
+coerencia /spec (save_spec, classificador, arquiteto), auto-scroll e composer largo,
+hardening de producao (auth, preview, deploy, remediação segurança).
 
 Status: {"APROVADO" if approved else "REPROVADO"}
 """
