@@ -10,7 +10,7 @@ services:
 
       POSTGRES_USER: pkf
 
-      POSTGRES_PASSWORD: pkf
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
 
       POSTGRES_DB: pkf
 
@@ -58,7 +58,7 @@ services:
 
       PKF_AUTH_TOKEN: ${PKF_AUTH_TOKEN:-}
 
-      DATABASE_URL: postgresql+asyncpg://pkf:pkf@postgres:5432/pkf
+      DATABASE_URL: postgresql+asyncpg://pkf:${POSTGRES_PASSWORD}@postgres:5432/pkf
 
       NINEROUTER_URL: ${NINEROUTER_URL:-}
 
@@ -136,11 +136,11 @@ services:
 
       DATA_DIR: /app/data
 
-      INITIAL_PASSWORD: ${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}
+      INITIAL_PASSWORD: ${NINEROUTER_DASHBOARD_NEW_PASSWORD}
 
-      OMNIROUTE_PASSWORD: ${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}
+      OMNIROUTE_PASSWORD: ${NINEROUTER_DASHBOARD_NEW_PASSWORD}
 
-      REQUIRE_API_KEY: "false"
+      REQUIRE_API_KEY: "true"
 
       HOSTNAME: "0.0.0.0"
 

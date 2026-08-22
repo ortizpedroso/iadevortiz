@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import webbrowser
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from openai import APIConnectionError, APIStatusError, APITimeoutError
@@ -24,6 +25,7 @@ from pkf.web.auth import (
     AuthMiddleware,
     SecurityHeadersMiddleware,
     _extract_token,
+    auth_enforced,
     check_ws_auth,
 )
 from pkf.web.history import ChatHistory
@@ -39,6 +41,8 @@ from pkf.web.library import (
     pin_project,
 )
 from pkf.web.preview import preview_info, redirect_preview_entry, serve_preview_file
+from pkf.web.preview_tokens import issue_preview_token
+from pkf.web.rate_limit import limiter
 from pkf.web_search import web_search_configured
 from pkf.workflow.cycle import DevCycle
 from pkf.workflow.tasks import TaskTracker
@@ -46,6 +50,36 @@ from pkf.workspace_index import build_file_tree, list_changes
 
 PKG_DIR = Path(__file__).resolve().parent
 LEGACY_STATIC = PKG_DIR / "static"
+logger = logging.getLogger(__name__)
+
+
+def _allowed_ws_origins() -> set[str]:
+    raw = os.getenv("PKF_ALLOWED_ORIGINS", "").strip()
+    if raw:
+        return {item.strip().rstrip("/") for item in raw.split(",") if item.strip()}
+    domain = os.getenv("PKF_HOST_DOMAIN", "").strip()
+    if domain:
+        return {f"https://{domain}", f"http://{domain}"}
+    return set()
+
+
+def _ws_origin_allowed(websocket: WebSocket) -> bool:
+    allowed = _allowed_ws_origins()
+    if not allowed:
+        return True
+    origin = (websocket.headers.get("origin") or "").rstrip("/")
+    if not origin:
+        return True
+    return origin in allowed
+
+
+def _ws_accept_subprotocol(websocket: WebSocket) -> str | None:
+    proto = websocket.headers.get("sec-websocket-protocol", "")
+    for part in proto.split(","):
+        candidate = part.strip()
+        if candidate.startswith("pkf-token."):
+            return candidate
+    return None
 
 
 async def build_session_snapshot(router: Router, history: ChatHistory) -> dict:
@@ -163,33 +197,28 @@ def create_app(router: Router) -> FastAPI:
         return response
 
     @app.get("/api/health")
-    async def health(request: Request):
-        token = _extract_token(request)
-        authed = not auth_token() or token == auth_token()
-        payload = {
+    async def health():
+        return {
             "ok": True,
-            "auth_required": bool(auth_token()) or is_production(),
+            "auth_required": bool(auth_token()) or auth_enforced() or is_production(),
         }
-        if authed:
-            payload["database"] = database_enabled()
-            payload["ui"] = "vite" if use_vite else "legacy"
-            payload["version"] = __version__
-            payload["git_sha"] = os.getenv("PKF_GIT_SHA", "").strip() or None
-            payload["web_search"] = web_search_configured()
-            payload["ninerouter"] = ninerouter_enabled()
-            payload["provider_router"] = app.state.router.pool.status()
-            if ninerouter_enabled():
-                ok, detail = ninerouter_health()
-                payload["ninerouter_ok"] = ok
-                if not ok:
-                    payload["ninerouter_error"] = detail
-        return payload
+
+    @app.get("/api/preview-token")
+    async def preview_token_api(request: Request):
+        limiter.check(request, limit=30, window=60, scope="preview-token")
+        entry = preview_info(router.workspace).get("entry")
+        path = f"/preview/{entry}" if entry else "/preview"
+        token, ttl = issue_preview_token(path.removeprefix("/preview/") or "*")
+        return {"token": token, "expires_in": ttl, "path": path}
 
     @app.get("/api/preview")
     async def preview_api():
         info = preview_info(router.workspace)
         if info["entry"]:
             info["path"] = f"/preview/{info['entry']}"
+            token, ttl = issue_preview_token(info["entry"])
+            info["preview_token"] = token
+            info["preview_token_expires_in"] = ttl
         return info
 
     @app.get("/preview")
@@ -389,10 +418,24 @@ def create_app(router: Router) -> FastAPI:
             snapshot = await build_session_snapshot(router, history)
             snapshot["provider_ok"] = healthy
             snapshot["database"] = database_enabled()
+            snapshot["ui"] = "vite" if use_vite else "legacy"
+            snapshot["version"] = __version__
+            snapshot["git_sha"] = os.getenv("PKF_GIT_SHA", "").strip() or None
+            snapshot["web_search"] = web_search_configured()
+            snapshot["ninerouter"] = ninerouter_enabled()
+            snapshot["provider_router"] = app.state.router.pool.status()
+            if ninerouter_enabled():
+                ok, detail = ninerouter_health()
+                snapshot["ninerouter_ok"] = ok
+                if not ok:
+                    snapshot["ninerouter_error"] = detail
             project_preview = snapshot.get("project_preview") or preview_info(router.workspace)
             snapshot["project_preview"] = project_preview
             if project_preview.get("entry"):
                 snapshot["project_preview"]["path"] = f"/preview/{project_preview['entry']}"
+                ptoken, ttl = issue_preview_token(project_preview["entry"])
+                snapshot["project_preview"]["preview_token"] = ptoken
+                snapshot["project_preview"]["preview_token_expires_in"] = ttl
             if not healthy:
                 snapshot["provider_error"] = explain_provider_error(
                     router.provider_name, Exception(detail)
@@ -471,7 +514,8 @@ def create_app(router: Router) -> FastAPI:
         return {"ok": True, "spec": preview}
 
     @app.post("/api/message")
-    async def post_message(payload: dict | None = None):
+    async def post_message(request: Request, payload: dict | None = None):
+        limiter.check(request, limit=30, window=60, scope="api-message")
         payload = payload or {}
         content = (payload.get("content") or "").strip()
         if not content:
@@ -483,19 +527,29 @@ def create_app(router: Router) -> FastAPI:
 
     @app.websocket("/ws")
     async def chat_socket(websocket: WebSocket):
+        try:
+            limiter.check_ws(websocket, limit=30, window=60, scope="ws-connect")
+        except HTTPException:
+            await websocket.close(code=1008, reason="Muitas conexões")
+            return
+        if not _ws_origin_allowed(websocket):
+            await websocket.close(code=1008, reason="Origin não permitida")
+            return
         if not check_ws_auth(websocket):
             await websocket.close(code=1008, reason="Token inválido")
             return
-        await websocket.accept()
+        subprotocol = _ws_accept_subprotocol(websocket)
+        await websocket.accept(subprotocol=subprotocol)
         history: ChatHistory = app.state.history
         try:
             await history.load()
             await websocket.send_json({"type": "session", **await build_session_snapshot(router, history)})
-        except Exception as exc:  # noqa: BLE001 — surface DB/bootstrap failures to the client
+        except Exception:
+            logger.exception("Falha ao iniciar sessão WebSocket")
             await websocket.send_json(
                 {
                     "type": "error",
-                    "content": f"Falha ao iniciar sessão: {exc}",
+                    "content": "Falha ao iniciar sessão. Tente recarregar a página.",
                 }
             )
             await websocket.close(code=1011, reason="session bootstrap failed")

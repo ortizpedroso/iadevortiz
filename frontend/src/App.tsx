@@ -4,7 +4,7 @@ import { Composer } from "./components/Composer";
 import { MessageList } from "./components/MessageList";
 import { Sidebar } from "./components/Sidebar";
 import { SpecPanel } from "./components/SpecPanel";
-import { authHeaders, getToken, previewUrl, wsUrl } from "./lib/api";
+import { authHeaders, getToken, previewUrl, setPreviewToken, wsProtocols, wsUrl } from "./lib/api";
 import type { ChatItem, Message, ProjectItem, SessionSnapshot, SpecPreview, TaskNode, WsEvent } from "./types";
 
 const EMPTY_SESSION: SessionSnapshot = {};
@@ -48,6 +48,7 @@ export default function App() {
   const loadChangesRef = useRef<() => Promise<void>>(async () => {});
   const chatScrollRef = useRef<HTMLElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
+  const [scrollPaused, setScrollPaused] = useState(false);
 
   const applyLibrary = useCallback((library?: { chats?: ChatItem[]; projects?: ProjectItem[] }) => {
     if (!library) return;
@@ -91,7 +92,14 @@ export default function App() {
       if (panel === "spec") setPanel("project");
     }
     if (data.project_preview?.available && data.project_preview.path) {
-      setPreviewSrc(previewUrl(data.project_preview.path));
+      if (data.project_preview.preview_token) {
+        setPreviewToken(
+          String(data.project_preview.preview_token),
+          data.project_preview.path,
+          Number(data.project_preview.preview_token_expires_in) || 900,
+        );
+      }
+      void previewUrl(data.project_preview.path).then(setPreviewSrc);
     } else if (replace) {
       setPreviewSrc("");
       setPreviewOpen(false);
@@ -114,7 +122,9 @@ export default function App() {
     const el = chatScrollRef.current;
     if (!el) return;
     const onScroll = () => {
-      shouldAutoScrollRef.current = isNearChatBottom(el);
+      const paused = !isNearChatBottom(el);
+      shouldAutoScrollRef.current = !paused;
+      setScrollPaused(paused);
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
@@ -148,7 +158,8 @@ export default function App() {
       window.history.replaceState({}, "", url.toString());
     }
     const socketId = activeSocketIdRef.current;
-    const ws = new WebSocket(wsUrl());
+    const protocols = wsProtocols();
+    const ws = protocols ? new WebSocket(wsUrl(), protocols) : new WebSocket(wsUrl());
     socketRef.current = ws;
     ws.onopen = () => {
       if (socketId !== activeSocketIdRef.current || ws !== socketRef.current) return;
@@ -390,6 +401,13 @@ export default function App() {
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ content: text }),
       });
+      if (res.status === 401 || res.status === 403) {
+        sessionStorage.removeItem("pkf_token");
+        setAuthOpen(true);
+        setStatus("Token inválido");
+        setMessages((m) => [...m, { role: "error", content: "Token inválido ou ausente." }]);
+        return;
+      }
       const event = await res.json();
       if (event.type === "error") {
         setMessages((m) => [...m, { role: "error", content: event.content || "Erro" }]);
@@ -741,7 +759,20 @@ export default function App() {
         ) : null}
 
         <div className={`flex min-h-0 flex-1 ${previewOpen || showSpecPanel ? "flex-col lg:flex-row" : ""}`}>
-          <main id="main-chat" ref={chatScrollRef} className="min-h-0 flex-1 overflow-auto" tabIndex={0}>
+          <main id="main-chat" ref={chatScrollRef} className="relative min-h-0 flex-1 overflow-auto" tabIndex={0}>
+            {scrollPaused && messages.length > 0 ? (
+              <button
+                type="button"
+                className="sticky top-3 z-10 mx-auto mb-2 flex min-h-9 items-center gap-2 rounded-full border border-[var(--pkf-border)] bg-[var(--pkf-bg-panel)]/95 px-4 text-xs text-[var(--pkf-muted)] shadow-lg backdrop-blur"
+                onClick={() => {
+                  shouldAutoScrollRef.current = true;
+                  setScrollPaused(false);
+                  scrollChatToBottom(true);
+                }}
+              >
+                Auto-scroll pausado · Ir para o fim ↓
+              </button>
+            ) : null}
             <MessageList messages={messages} thinking={thinking} />
           </main>
 

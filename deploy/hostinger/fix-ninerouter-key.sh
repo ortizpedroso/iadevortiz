@@ -11,8 +11,12 @@ if ! docker compose --profile router ps ninerouter --status running -q 2>/dev/nu
   sleep 5
 fi
 
-DASH_PASS="${NINEROUTER_DASHBOARD_PASSWORD:-123456}"
-NEW_PASS="${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}"
+DASH_PASS="${NINEROUTER_DASHBOARD_PASSWORD:-}"
+NEW_PASS="${NINEROUTER_DASHBOARD_NEW_PASSWORD:-}"
+if [ -z "$NEW_PASS" ]; then
+  echo "Erro: defina NINEROUTER_DASHBOARD_NEW_PASSWORD no .env (rode set-env-keys.sh)"
+  exit 1
+fi
 
 echo "==> Login local no OmniRoute (loopback dentro do container)"
 RESULT=$(docker compose exec -T \
@@ -21,8 +25,8 @@ RESULT=$(docker compose exec -T \
   ninerouter node - <<'NODE'
 const http = require("http");
 
-const dashPass = process.env.DASH_PASS || "123456";
-const newPass = process.env.NEW_PASS || "pkf-admin-2026";
+const dashPass = process.env.DASH_PASS || "";
+const newPass = process.env.NEW_PASS || "";
 
 function mergeCookie(existing, incoming) {
   const jar = new Map();
@@ -112,7 +116,7 @@ function extractKey(data) {
     return { attempt, data };
   }
 
-  const passwordCandidates = [...new Set([newPass, dashPass, "pkf-admin-2026", "123456"])];
+  const passwordCandidates = [...new Set([newPass, dashPass].filter(Boolean))];
   let activePass = passwordCandidates[0];
   let login = await tryLogin(activePass);
   let loginData = login.data;
@@ -137,7 +141,7 @@ function extractKey(data) {
         console.log(JSON.stringify({ error: "setup_failed", detail: setup.body }));
         return;
       }
-      console.error(`[info] OmniRoute onboarding: senha inicial definida (${newPass})`);
+      console.error("[info] OmniRoute onboarding: senha inicial definida");
       activePass = newPass;
       login = await tryLogin(activePass);
       loginData = login.data;
@@ -178,7 +182,7 @@ function extractKey(data) {
       return;
     }
     activePass = newPass;
-    console.error(`[info] Senha do dashboard alterada para: ${newPass}`);
+    console.error("[info] Senha do dashboard alterada");
   }
 
   let keys = await request("GET", "/api/keys", null, cookieJar);
@@ -217,14 +221,8 @@ if [ -z "$KEY" ]; then
   echo "Falha no dashboard OmniRoute:"
   echo "$RESULT"
   echo ""
-  if curl -sf http://127.0.0.1:20128/v1/models >/dev/null 2>&1; then
-    KEY="sk-pkf-$(openssl rand -hex 12)"
-    echo "==> OmniRoute aceita /v1 sem auth (REQUIRE_API_KEY=false)"
-    echo "==> Usando chave local gerada: ${KEY:0:18}..."
-  else
-    echo "Execute na VPS: bash deploy/hostinger/update.sh"
-    exit 1
-  fi
+  echo "Execute na VPS: bash deploy/hostinger/update.sh"
+  exit 1
 fi
 
 echo "==> API key: ${KEY:0:15}..."

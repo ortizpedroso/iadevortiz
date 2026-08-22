@@ -109,7 +109,7 @@ if ! grep -q '^PKF_AUTH_TOKEN=' .env; then
     _auth="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null || openssl rand -hex 24)"
     echo "==> PKF_AUTH_TOKEN gerado automaticamente na primeira instalação"
   fi
-  set_kv PKF_AUTH_TOKEN "${_auth:-teste123}"
+  set_kv PKF_AUTH_TOKEN "${_auth}"
 fi
 
 dedupe_env_key() {
@@ -153,6 +153,39 @@ migrate_weak_auth_token() {
 }
 
 migrate_weak_auth_token
+
+migrate_omniroute_password() {
+  local current=""
+  current="$(grep '^NINEROUTER_DASHBOARD_NEW_PASSWORD=' .env 2>/dev/null | tail -n1 | cut -d= -f2- || true)"
+  local weak=0
+  case "${current,,}" in
+    ""|pkf-admin-2026|123456) weak=1 ;;
+  esac
+  if [ -n "$current" ] && [ "${#current}" -lt 12 ]; then
+    weak=1
+  fi
+  if [ "$weak" -eq 0 ] && [ -n "$current" ]; then
+    return 0
+  fi
+  local new_pass=""
+  new_pass="$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))' 2>/dev/null || openssl rand -hex 16)"
+  set_kv NINEROUTER_DASHBOARD_NEW_PASSWORD "$new_pass"
+  echo "==> NINEROUTER_DASHBOARD_NEW_PASSWORD fraco/ausente — gerado automaticamente"
+  echo "==> Leia localmente: grep '^NINEROUTER_DASHBOARD_NEW_PASSWORD=' .env"
+}
+
+migrate_postgres_password() {
+  if grep -q '^POSTGRES_PASSWORD=' .env; then
+    return 0
+  fi
+  local pass=""
+  pass="$(python3 -c 'import secrets; print(secrets.token_urlsafe(16))' 2>/dev/null || openssl rand -hex 16)"
+  set_kv POSTGRES_PASSWORD "$pass"
+  echo "==> POSTGRES_PASSWORD gerado automaticamente na primeira instalação"
+}
+
+migrate_omniroute_password
+migrate_postgres_password
 set_kv PKF_FALLBACK "${PKF_FALLBACK:-}"
 
 set_kv PKF_PROVIDER "${PKF_PROVIDER:-ninerouter}"

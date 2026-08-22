@@ -51,7 +51,13 @@ export type SessionSnapshot = {
   provider_ok?: boolean;
   provider_error?: string;
   provider_pool?: string[];
-  project_preview?: { available?: boolean; path?: string; entry?: string };
+  project_preview?: {
+    available?: boolean;
+    path?: string;
+    entry?: string;
+    preview_token?: string;
+    preview_token_expires_in?: number;
+  };
   tasks?: TaskNode[];
   database?: boolean;
   goal?: string;

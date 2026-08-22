@@ -10,7 +10,11 @@ if ! docker compose --profile router ps ninerouter --status running -q 2>/dev/nu
   sleep 5
 fi
 
-DASH_PASS="${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}"
+DASH_PASS="${NINEROUTER_DASHBOARD_NEW_PASSWORD:-}"
+if [ -z "$DASH_PASS" ]; then
+  echo "Erro: defina NINEROUTER_DASHBOARD_NEW_PASSWORD no .env"
+  exit 1
+fi
 
 echo "==> OmniRoute: provedores free automáticos"
 RESULT=$(docker compose exec -T \
@@ -19,7 +23,7 @@ RESULT=$(docker compose exec -T \
   ninerouter node - <<'NODE'
 const http = require("http");
 
-const dashPass = process.env.DASH_PASS || "pkf-admin-2026";
+const dashPass = process.env.DASH_PASS || "";
 const newPass = process.env.NEW_PASS || dashPass;
 
 function mergeCookie(existing, incoming) {
@@ -97,7 +101,7 @@ const FREE_PROVIDERS = [
     return parseJson(attempt.body);
   }
 
-  const candidates = [...new Set([newPass, dashPass, "pkf-admin-2026", "123456"])];
+  const candidates = [...new Set([newPass, dashPass].filter(Boolean))];
   let loginData = { success: false };
   for (const password of candidates) {
     loginData = await tryLogin(password);

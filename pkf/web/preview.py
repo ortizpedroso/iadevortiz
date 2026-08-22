@@ -77,7 +77,7 @@ def serve_preview_file(workspace: Workspace, rel_path: str = ""):
     media_type, _ = mimetypes.guess_type(target.name)
     response = FileResponse(target, media_type=media_type or "application/octet-stream")
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; "
+        "default-src 'self' 'unsafe-inline' data: blob:; "
         "frame-ancestors 'self'; object-src 'none'"
     )
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
