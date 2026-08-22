@@ -91,12 +91,23 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 
 ## Segurança e produção
 
-- **`PKF_AUTH_TOKEN`**: obrigatório e forte em `PKF_ENV=production` (boot falha se ausente/fraco); deploy **não sobrescreve** token existente
-- **Preview isolado**: iframe sem `allow-same-origin`; URLs de preview **sem** token; CSP em preview e shell
-- **`/api/health` público**: só `{ok, auth_required}`; metadados completos apenas autenticado
-- **WebSocket**: rejeita conexão antes de `accept` se token inválido
+- **`PKF_AUTH_TOKEN`**: obrigatório e forte em `PKF_ENV=production` (boot falha se ausente/fraco); deploy **não sobrescreve** token existente; `PKF_REQUIRE_AUTH=1` força auth mesmo em loopback
+- **Auth por bind**: fora de `127.0.0.1`/`localhost` exige token sempre (`auth_enforced()`)
+- **OmniRoute**: `REQUIRE_API_KEY=true` no compose; senha do dashboard gerada por `migrate_omniroute_password()` — sem `pkf-admin-2026` hardcoded
+- **Preview isolado**: iframe sem `allow-same-origin`; URLs usam **`preview_token`** assinado (15 min), não `PKF_AUTH_TOKEN`; CSP sem `unsafe-eval` no preview
+- **`/api/health` público**: só `{ok, auth_required}`; versão, providers e metadados em `/api/session` autenticado
+- **WebSocket**: autenticação via subprotocol `pkf-token.<token>` (sem token na query string); validação de `Origin`; rate limit de conexões
+- **Rate limiting**: `/api/message`, preview-token e tentativas de auth com lockout temporário
+- **Secrets**: blocklist por padrão (`.env*`, `secrets*`, `*.pem`); env sensível filtrado em `run_command`
 - **`run_command`**: desabilitado em produção salvo `PKF_ALLOW_RUN_COMMAND=1`
-- **Deploy**: `NINEROUTER_MODEL` só definido na 1ª instalação (`set_kv_default`); URLs pós-deploy **não** imprimem token
+- **Deploy**: `VPS_HOST` via GitHub Secret; `NINEROUTER_MODEL` só na 1ª instalação; scripts não imprimem tokens; `POSTGRES_PASSWORD` configurável
+- **HTTP fallback**: 401/403 abre modal de auth (paridade com WebSocket)
+- **Headroom proxy**: allowlist de hosts; bloqueio de IPs internos/privados (anti-SSRF)
+- **Classificador LLM**: delimitadores explícitos entre instrução e mensagem do usuário (anti prompt-injection)
+- **Memória**: resumo de `index.json` sanitizado/truncado antes de injetar no system prompt
+- **`init_db`**: singleton — não recria engine sem dispose
+- **`restore_chat_history`**: reidrata só o agente ativo (não todos)
+- **UI**: indicador "Auto-scroll pausado" quando usuário rola para cima
 - **Respostas pós-build**: `generalista`/`reviewer` consultam `get_last_verification` antes de hipóteses sobre falha T3
 - **Ambiguidade na spec**: agentes `frontend`/`backend`/`logic` param implementação e reportam conflito antes de codificar
 - **Memória**: agente de memória nunca afirma “já pronto” sem `list_dir`/`read_file`; projeto vazio deve ser declarado explicitamente
@@ -126,7 +137,7 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - **Projetos**: Menu de contexto ⋯ (fixar, renomear, excluir) + modo **Selecionar** para excluir vários ou todos
 - **Conversas**: Menu de contexto ⋯ (vincular projeto, excluir chat)
 - **Tema escuro PKF**: variáveis CSS (`--pkf-bg-primary`, `--pkf-accent`, etc.), sidebar e painéis escuros
-- **Chat auto-scroll**: ao enviar e ao receber resposta, rola ao final só se o usuário já estava perto do fim (`<100px` do bottom); envio sempre força scroll
+- **Chat auto-scroll**: ao enviar e ao receber resposta, rola ao final só se o usuário já estava perto do fim (`<100px` do bottom); envio sempre força scroll; **indicador "Auto-scroll pausado"** quando o usuário rola para cima
 - **Campo de mensagem largo**: `MessageList` e `Composer` em `max-w-4xl` (responsivo)
 - Indicador no header: agente ativo · provider · modelo
 - Acessibilidade: skip link, aria-live, `:focus-visible` com acento
@@ -159,6 +170,10 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 | `PKF_QUALITY_MODEL` | Modelo Claude (ex.: `kr/claude-sonnet-4.5`) |
 | `PKF_USE_LANGGRAPH_BUILD` | `1` = pipeline /build via grafo piloto |
 | `PKF_ALLOW_RUN_COMMAND` | `1` = permite `run_command` em produção |
+| `PKF_REQUIRE_AUTH` | `1` = força auth mesmo em bind loopback |
+| `PKF_ALLOWED_ORIGINS` | Allowlist de `Origin` para WebSocket |
+| `POSTGRES_PASSWORD` | Senha do PostgreSQL (gerada no 1º deploy) |
+| `NINEROUTER_DASHBOARD_NEW_PASSWORD` | Senha do dashboard OmniRoute (gerada, sem default fraco) |
 | `PKF_RELEVANCE_THRESHOLD` | Proporção mínima (padrão `0.45`) para rotear mensagem a agente de memória |
 | `PKF_MEMORY_MIN_OVERLAP` | Mínimo de termos significativos em comum (padrão `3`) no match de memória |
 | `PKF_NINEROUTER_MODEL_CHAIN` | Cadeia de fallback de modelos no gateway OmniRoute |

@@ -30,6 +30,10 @@ def test_spec_file_contains_rodada2_features(tmp_path: Path):
         "Classificador de intenção",
         "Coerência no /spec",
         "Chat auto-scroll",
+        "preview_token",
+        "REQUIRE_API_KEY",
+        "PKF_REQUIRE_AUTH",
+        "rate limit",
     ):
         assert keyword.lower() in text.lower() or keyword in text
 

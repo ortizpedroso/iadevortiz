@@ -213,12 +213,11 @@ set_kv PKF_TIER_FREE "${PKF_TIER_FREE:-${_tier_free}}"
 set_kv PKF_PROVIDER_POOL "${PKF_PROVIDER_POOL:-${_pool_default}}"
 migrate_provider_pool
 
-set_kv DATABASE_URL "${DATABASE_URL:-postgresql+asyncpg://pkf:pkf@postgres:5432/pkf}"
+set_kv DATABASE_URL "${DATABASE_URL:-postgresql+asyncpg://pkf:${POSTGRES_PASSWORD:-pkf}@postgres:5432/pkf}"
 
 # --- 9Router ---
 set_kv NINEROUTER_URL "${NINEROUTER_URL:-http://ninerouter:20128}"
 set_kv_default NINEROUTER_MODEL "${NINEROUTER_MODEL:-auto/free}"
-set_kv_default NINEROUTER_DASHBOARD_NEW_PASSWORD "${NINEROUTER_DASHBOARD_NEW_PASSWORD:-pkf-admin-2026}"
 if [ -n "${NINEROUTER_KEY:-}" ]; then
   set_kv NINEROUTER_KEY "$NINEROUTER_KEY"
 fi

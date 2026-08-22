@@ -30,6 +30,12 @@ SPEC_CHECKS = (
     ("Composer largo", "max-w-4xl"),
     ("Auth token deploy", "não sobrescreve"),
     ("Preview isolado", "allow-same-origin"),
+    ("Preview token", "preview_token"),
+    ("WS subprotocol", "pkf-token."),
+    ("OmniRoute API key", "REQUIRE_API_KEY"),
+    ("Rate limiting", "Rate limiting"),
+    ("Auth loopback", "PKF_REQUIRE_AUTH"),
+    ("Scroll pausado", "Auto-scroll pausado"),
 )
 
 
@@ -65,6 +71,28 @@ def _implementation_gaps(spec_text: str) -> list[str]:
         gaps.append("Preview: iframe ainda usa allow-same-origin")
     if "shouldAutoScrollRef" not in app_tsx or "isNearChatBottom" not in app_tsx:
         gaps.append("Frontend: auto-scroll inteligente do chat ausente")
+    if "scrollPaused" not in app_tsx or "Auto-scroll pausado" not in app_tsx:
+        gaps.append("Frontend: indicador auto-scroll pausado ausente")
+    api_ts = Path("frontend/src/lib/api.ts").read_text(encoding="utf-8")
+    if "pkf-token." not in api_ts or "preview_token" not in api_ts:
+        gaps.append("Frontend: WS subprotocol ou preview_token ausente em api.ts")
+    compose = Path("docker-compose.yml").read_text(encoding="utf-8")
+    if 'REQUIRE_API_KEY: "true"' not in compose:
+        gaps.append("Deploy: OmniRoute REQUIRE_API_KEY não está true")
+    if "pkf-admin-2026" in compose:
+        gaps.append("Deploy: senha OmniRoute fraca ainda no compose")
+    deploy_yml = Path(".github/workflows/deploy.yml").read_text(encoding="utf-8")
+    if "secrets.VPS_HOST" not in deploy_yml:
+        gaps.append("Deploy: VPS_HOST secret ausente no workflow")
+    if "187.77.240.125" in deploy_yml:
+        gaps.append("Deploy: IP VPS ainda hardcoded no workflow")
+    auth_py = Path("pkf/web/auth.py").read_text(encoding="utf-8")
+    if "auth_enforced" not in auth_py or "preview_token" not in auth_py:
+        gaps.append("Backend: auth_enforced ou preview_token ausente")
+    if not Path("pkf/web/preview_tokens.py").is_file():
+        gaps.append("Backend: preview_tokens.py ausente")
+    if not Path("pkf/web/rate_limit.py").is_file():
+        gaps.append("Backend: rate_limit.py ausente")
     if "validate_production_config" not in Path("pkf/web/server.py").read_text(encoding="utf-8"):
         gaps.append("Backend: validate_production_config ausente no boot")
     impl = Path("pkf/tools/impl.py").read_text(encoding="utf-8")
@@ -107,7 +135,7 @@ def run_build_review_cycle(workspace: Path) -> tuple[int, bool, list[str], str]:
 Ciclo {cycles}/{MAX_REVIEW_FIX_CYCLES}. Spec alinhada com menu de contexto, PATCH rename,
 confirmacao de exclusao, variaveis CSS, Headroom, 9Router skip 401, tier qualidade, benchmark,
 build graph, get_last_verification, coerencia /spec (save_spec, classificador, arquiteto),
-auto-scroll e composer largo, hardening de producao (auth, preview, deploy).
+auto-scroll e composer largo, hardening de producao (auth, preview, deploy, remediação segurança).
 
 Status: {"APROVADO" if approved else "REPROVADO"}
 """
