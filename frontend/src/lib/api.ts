@@ -27,9 +27,7 @@ export function authHeaders(): HeadersInit {
 
 export function wsUrl(): string {
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const token = getToken();
-  const qs = token ? `?token=${encodeURIComponent(token)}` : "";
-  return `${proto}://${location.host}/ws${qs}`;
+  return `${proto}://${location.host}/ws`;
 }
 
 export function wsProtocols(): string[] | undefined {

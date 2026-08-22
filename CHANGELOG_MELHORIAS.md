@@ -4,6 +4,52 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Investigação WS 1011 — causa real e restauração H2
+
+**Data:** 2026-08-22  
+**Branch:** `cursor/pkf-ws-token-investigation`
+
+### Contexto
+
+O commit `4d5013f` misturou (a) resiliência do bootstrap WS quando Postgres falha e (b) reintrodução de `?token=` na URL do WebSocket, com comentário de que "Caddy/proxy pode remover subprotocol". Isso ocorreu na mesma janela do hotfix `b8bb940` (mismatch `POSTGRES_PASSWORD`).
+
+### Teste empírico realizado
+
+| Cenário | Ambiente | Resultado observado |
+|---------|----------|---------------------|
+| Subprotocol-only (token válido) | Local (`TestClient`) | `type: session` — conexão OK sem `?token=` |
+| Subprotocol-only (DB degradado) | Local (`TestClient`) | `type: session`, `database_degraded: true` |
+| Sem auth | Produção `wss://pkf.inovesw.com.br/ws` | Close **1006** |
+| Subprotocol inválido (`pkf-token.testtoken123`) | Produção via Caddy | Close **1002**; request com `Sec-WebSocket-Protocol` presente |
+| `?token=` inválido (sem subprotocol) | Produção via Caddy | Close **1006** |
+| Subprotocol válido E2E | Produção | **Não testado** — token de produção indisponível neste ambiente |
+
+**Evidência do 1011:** em `pkf/web/server.py`, código **1011** só é emitido no `except` do bootstrap (`history.load()` / snapshot), não na validação de auth (que usa **1008**). Com Postgres instável, o bootstrap falhava antes das correções de degradação — independente de subprotocol vs query.
+
+### Cenário confirmado
+
+**Postgres degradado era a causa provável do 1011**, não remoção de subprotocol pelo Caddy. O proxy encaminha `Sec-WebSocket-Protocol` (comportamento diferente 1002 vs 1006 com token inválido). A reintrodução de `?token=` na URL foi precaução não confirmada.
+
+### O que mudou
+
+| Arquivo | Mudança |
+|---------|---------|
+| `frontend/src/lib/api.ts` | `wsUrl()` sem `?token=` — restaura H2; auth só via `wsProtocols()` |
+| `pkf/web/auth.py` | Documenta subprotocol como primário; `?token=` mantido como fallback servidor |
+| `tests/test_ws_session.py` | Testes usam subprotocol-only |
+| `tests/test_production_hardening.py` | Assert que `wsUrl()` não inclui query token |
+
+**Mantido (correto):** bootstrap resiliente Postgres, `history.load()` fallback, origin WS, HTTP fallback no 1011, CSP fonts.
+
+### Definition of Done
+
+- [x] Teste empírico documentado com resultados reais (sem suposição de E2E produção com token válido)
+- [x] H2 restaurado no frontend (`wsUrl` sem token na URL)
+- [x] Fallback `?token=` no servidor preservado
+- [x] `python3 -m pytest tests/ -q` verde
+
+---
+
 ## Retomada de build e coerência de progresso
 
 **Data:** 2026-08-22  

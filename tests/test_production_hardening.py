@@ -65,12 +65,13 @@ def test_set_env_keys_script_migrates_weak_auth_token():
     assert "teste123" in script
 
 
-def test_frontend_ws_uses_subprotocol_and_query_fallback():
+def test_frontend_ws_uses_subprotocol_without_query_token():
     api = Path("frontend/src/lib/api.ts").read_text(encoding="utf-8")
     assert "pkf-token." in api
     assert "wsProtocols" in api
     ws_fn = api.split("export function wsUrl")[1].split("export ")[0]
-    assert "?token=" in ws_fn
+    assert "?token=" not in ws_fn
+    assert "/ws" in ws_fn
 
 
 def test_health_public_payload_minimal():

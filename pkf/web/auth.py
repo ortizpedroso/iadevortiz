@@ -26,6 +26,12 @@ def _extract_token(request: Request) -> str | None:
 
 
 def _extract_ws_token(websocket: WebSocket) -> str | None:
+    """Extrai token WS. Caminho primário: subprotocol ``pkf-token.<token>`` (H2).
+
+    Fallback secundário (compatibilidade/proxy legado): query ``?token=`` ou header
+    ``X-PKF-Token``. O frontend usa apenas subprotocol por padrão desde a investigação
+    WS 1011 (Postgres degradado era a causa real do bootstrap, não Caddy).
+    """
     proto = websocket.headers.get("sec-websocket-protocol", "")
     for part in proto.split(","):
         candidate = part.strip()
