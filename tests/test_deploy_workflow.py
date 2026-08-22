@@ -14,7 +14,7 @@ def test_deploy_workflow_exists_and_parses():
         "workflow_dispatch",
         "appleboy/ssh-action@v1.2.0",
         "secrets.VPS_SSH_KEY",
-        "187.77.240.125",
+        "secrets.VPS_HOST",
         "timeout-minutes: 10",
         "deploy/hostinger/update.sh",
         "VPS_HEALTHCHECK_URL",

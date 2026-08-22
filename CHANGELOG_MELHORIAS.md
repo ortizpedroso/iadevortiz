@@ -4,6 +4,81 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Remediação de segurança (auditoria C/H/M/B/L/P)
+
+**Data:** 2026-08-22  
+**Branch:** `cursor/pkf-security-remediation`
+
+### Grupo A — Crítico/Alto
+
+| ID | O que foi feito | DoD |
+|----|-----------------|-----|
+| **C3 (A1)** | `REQUIRE_API_KEY: "true"` no OmniRoute; senha gerada via `migrate_omniroute_password()` em `set-env-keys.sh` | Compose sem `pkf-admin-2026`; senha forte no `.env` |
+| **H5/P1 (A2)** | Token de preview assinado (`pkf/web/preview_tokens.py`); iframe usa `?preview_token=` | Preview carrega sem Bearer; token expira em 15 min |
+| **H2/P2 (A3)** | WebSocket autentica via subprotocol `pkf-token.<token>` (sem `?token=` na URL) | Frontend e `check-ws.sh` usam subprotocol |
+| **H6 (A4)** | Auth obrigatória fora de loopback; `PKF_REQUIRE_AUTH=1` força em dev | Bind `0.0.0.0` exige token |
+| **L9 (A5)** | Branches órfãs `cursor/pkf-fix-gateway-400-1cb2` e `feat/build-paralelo-ui-projetos` removidas do remoto | PR #21 já fechado; remotes limpos |
+
+### Grupo B — Alto
+
+| ID | O que foi feito | DoD |
+|----|-----------------|-----|
+| **H1 (B1)** | Rate limit em `/api/message`, WS connect e lockout após falhas de auth | `pkf/web/rate_limit.py` |
+| **H3 (B2)** | `teste123` removido de exemplos (`secrets.env.example`, `.env.free.example`) | Placeholders neutros |
+| **H4 (B3)** | Senhas hardcoded removidas dos scripts OmniRoute | Geração/migração automática |
+| **H7 (B4)** | IP VPS movido para `secrets.VPS_HOST` no deploy | Sem IP hardcoded no workflow |
+| **H8 (B5)** | `sendMessageHttp` trata 401/403 com modal de auth | Paridade com WebSocket |
+| **M1 (B6)** | `is_secret_filename()` cobre `.env*`, `secrets*`, `*.pem` | `read_file` bloqueia padrões |
+| **M2 (B7)** | `_safe_subprocess_env` remove vars sensíveis expandidas | Sem `PKF_AUTH_TOKEN`/`NINEROUTER_KEY` no subprocess |
+
+### Grupo C — Médio
+
+| ID | O que foi feito | DoD |
+|----|-----------------|-----|
+| **C-M3** | Comentário legado em `pkf/web/static/index.html` | UI Vite documentada como atual |
+| **C-M4** | `unsafe-inline` mantido na shell principal (quebra UI sem ele) | Documentado em `auth.py` |
+| **C-M5** | `POSTGRES_PASSWORD` configurável via `.env`; porta 5432 não publicada | `migrate_postgres_password()` |
+| **C-M6** | `/api/health` público mínimo; detalhes em `/api/session` | Só `ok` + `auth_required` |
+| **C-M7** | `fix-weak-auth-token.sh` não imprime token em texto plano | Aponta para `grep` local |
+| **C-M8** | Validação de `Origin` no upgrade WebSocket | Allowlist `PKF_ALLOWED_ORIGINS` |
+| **C-M9** | Allowlist/bloqueio SSRF em `PKF_HEADROOM_PROXY_URL` | IPs privados bloqueados |
+| **C-M10** | Limite de tamanho em regex de `search_code` | Máx. 200 caracteres |
+| **C-M12** | Erros de bootstrap WS genéricos no cliente | Log detalhado server-side |
+| **C-M13** | Delimitadores no prompt do classificador LLM | Anti prompt-injection |
+| **C-M14** | Sanitização/truncamento de `index.json` de memória | `memory/store.py` + `router.py` |
+
+### Grupo D — Confiabilidade
+
+| ID | O que foi feito | DoD |
+|----|-----------------|-----|
+| **B1 (D1)** | `init_db()` singleton com early-return | Sem recriar engine sem dispose |
+| **B2 (D2)** | `restore_chat_history` só no agente ativo | Sem bloat entre agentes |
+
+### Grupo E — Baixa
+
+| ID | O que foi feito | DoD |
+|----|-----------------|-----|
+| **L2 (E1)** | `delete_project_record` limpa filesystem quando `workspace_root` informado | Paridade DB + disco |
+| **L3 (E2)** | `replace_messages` — pendência documentada (diff/bulk) | Comentário em `history.py` |
+| **L4/L5 (E3)** | Placeholders neutros em `AuthModal.tsx` e `check-ws.sh` | Sem `teste123` |
+| **L6 (E4)** | `unsafe-eval` removido do CSP do preview | Mantido `unsafe-inline` para HTML gerado |
+| **L7 (E5)** | `react-markdown` não instalado — mudança grande | **Pendente** (avaliar em rodada futura) |
+
+### Grupo F — Produto
+
+| ID | O que foi feito | DoD |
+|----|-----------------|-----|
+| **P6 (F1)** | Indicador "Auto-scroll pausado" quando usuário rola para cima | Botão para ir ao fim |
+
+### Fora de escopo (não tocado)
+
+- **C1** RBAC/mTLS
+- **C2** sandbox real de `run_command`
+- **P3** observabilidade completa
+- **P4** classificador 100% local
+
+---
+
 ## UI: auto-scroll e campo de mensagem mais largo
 
 **Data:** 2026-08-21

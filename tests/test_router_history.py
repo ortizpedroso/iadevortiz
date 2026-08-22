@@ -26,8 +26,9 @@ def router(tmp_path):
     return Router("mock", ws, ui_mode=True, client=MagicMock(), provider_pool=pool)
 
 
-def test_restore_chat_history_seeds_agents(router: Router):
+def test_restore_chat_history_seeds_active_agent(router: Router):
     router._register_core_agents()
+    router.cycle.last_agent = "generalista"
     messages = [
         {"role": "user", "content": "primeira"},
         {"role": "assistant", "content": "resposta"},
@@ -39,3 +40,5 @@ def test_restore_chat_history_seeds_agents(router: Router):
     assert roles.count("user") == 2
     assert roles[-1] == "user"
     assert agent.messages[-1]["content"] == "segunda"
+    architect_users = [m for m in router.agents["architect"].messages if m["role"] == "user"]
+    assert architect_users == []

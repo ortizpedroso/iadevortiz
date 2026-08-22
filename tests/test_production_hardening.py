@@ -9,7 +9,6 @@ import pytest
 
 from pkf.config import validate_production_config
 from pkf.tools.impl import run_command
-from pkf.web import server as web_server
 from pkf.workspace import Workspace
 
 
@@ -66,23 +65,25 @@ def test_set_env_keys_script_migrates_weak_auth_token():
     assert "teste123" in script
 
 
-def test_preview_redirect_without_token_query():
-    preview_src = Path("pkf/web/preview.py").read_text(encoding="utf-8")
-    assert "?token=" not in preview_src.split("redirect_preview_entry")[1].split("def serve")[0]
+def test_frontend_ws_uses_subprotocol():
+    api = Path("frontend/src/lib/api.ts").read_text(encoding="utf-8")
+    assert "pkf-token." in api
+    assert "wsProtocols" in api
+    assert "?token=" not in api.split("export function wsUrl")[1].split("export ")[0]
 
 
 def test_health_public_payload_minimal():
-    src = Path(web_server.__file__).read_text(encoding="utf-8")
+    src = Path("pkf/web/server.py").read_text(encoding="utf-8")
     assert '"auth_required"' in src
-    assert "if authed:" in src
-    assert 'payload["version"]' in src or "payload[\"version\"]" in src
+    assert 'async def health():' in src or "async def health(" in src
+    assert "ninerouter_ok" not in src.split("async def health")[1].split("async def preview")[0]
 
 
-def test_frontend_preview_url_without_token():
+def test_frontend_preview_url_uses_preview_token():
     api = Path("frontend/src/lib/api.ts").read_text(encoding="utf-8")
-    fn = api.split("export function previewUrl")[1].split("export function")[0]
-    assert "getToken" not in fn
-    assert "?token=" not in fn
+    fn = api.split("export async function previewUrl")[1].split("export ")[0]
+    assert "preview_token" in fn
+    assert "getToken()" not in fn
 
 
 def test_iframe_sandbox_without_same_origin():
