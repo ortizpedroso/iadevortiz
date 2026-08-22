@@ -100,7 +100,8 @@ def format_prior_phase_response(workspace_root: Path, task_id: str = "", agent: 
     else:
         return "Informe task_id ou agent."
 
-    assert entry is not None
+    if entry is None:
+        return "Nenhuma resposta registrada."
     response = str(entry.get("response") or "").strip() or "(sem texto)"
     status = entry.get("status", "ok")
     agent_name = entry.get("agent", "?")
