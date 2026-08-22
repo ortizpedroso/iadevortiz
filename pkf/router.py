@@ -43,14 +43,14 @@ from pkf.workflow.compose import (
     verify_ok,
 )
 from pkf.workflow.cycle import DevCycle, parse_command
-from pkf.workflow.orchestrator import failed_agents, run_build_phases
+from pkf.workflow.orchestrator import failed_agents, run_build_dag
 from pkf.workflow.planner import (
-    group_tasks_into_phases,
     plan_build,
     plan_build_llm,
     plan_fix_tasks,
 )
 from pkf.workflow.review import load_latest_review, parse_review_status
+from pkf.workflow.task_graph import dag_payload_from_tasks
 from pkf.workflow.tasks import TaskTracker
 from pkf.workspace import Workspace
 from pkf.workspace_index import begin_build_session
@@ -500,7 +500,7 @@ class Router:
         tasks = await plan_build_llm(self.client, self.model_to_use, self.workspace.root, self.cycle.active_spec)
         if not tasks:
             tasks = plan_build(self.workspace.root, self.cycle.active_spec)
-        phases = group_tasks_into_phases(tasks)
+        dag = dag_payload_from_tasks(tasks)
 
         tracker = TaskTracker(self.workspace.root, db_context=self.db)
         agent_list = [t.agent for t in tasks]
@@ -508,8 +508,23 @@ class Router:
         await self.emit_task_tree(tracker)
         await self.emit(
             "plan",
-            tasks=[{"agent": t.agent, "node": t.node_id, "phase": t.phase} for t in tasks],
+            tasks=[
+                {
+                    "agent": t.agent,
+                    "node": t.node_id,
+                    "task_id": t.task_id,
+                    "depends_on": t.depends_on,
+                    "phase": t.phase,
+                }
+                for t in tasks
+            ],
+            dag=dag,
         )
+        if self.db:
+            tree_payload = tracker.to_list()
+            if tree_payload:
+                tree_payload.append(dag)
+            await self.db.save_tasks(tree_payload or [dag])
         if resume and done_agents:
             skipped = ", ".join(sorted(done_agents))
             await self.emit("build_resume", skipped_agents=list(done_agents))
@@ -524,9 +539,11 @@ class Router:
                 await self._emit_progress("Implementando em fases (backend → lógica → frontend)…")
 
         agents_to_run: set[str] | None = None
+        initial_completed: set[str] = set()
         if resume:
             pending = {t.agent for t in tasks} - done_agents
             agents_to_run = pending or None
+            initial_completed = {t.task_id for t in tasks if t.agent in done_agents}
 
         results: list[tuple[str, str]] = []
         verify = ""
@@ -539,11 +556,12 @@ class Router:
                 await self._emit_progress(
                     f"Reexecutando agentes com falha (tentativa {attempt}/{MAX_BUILD_RETRIES})…"
                 )
-            results = await run_build_phases(
+            results = await run_build_dag(
                 self,
-                phases,
+                tasks,
                 tracker,
                 only_agents=pending_agents,
+                initial_completed=initial_completed,
             )
             errors = [reply for _, reply in results if reply.startswith("Erro:")]
             verify = verify_build_tool(self.workspace, phase="T3")
@@ -658,8 +676,7 @@ class Router:
                     f"Corrigindo {len(issues)} problema(s) apontados no review…"
                 )
             fix_tasks = plan_fix_tasks(self.cycle.active_spec, issues)
-            fix_phases = group_tasks_into_phases(fix_tasks)
-            await run_build_phases(self, fix_phases, tracker)
+            await run_build_dag(self, fix_tasks, tracker)
             verify = verify_build_tool(self.workspace, phase="T3_post_fix")
             if not verify_ok(verify):
                 last_reply += "\n\nVerificação pós-correção falhou."
@@ -673,6 +690,14 @@ class Router:
         self.bind_agent_provider("reviewer")
         await self.emit("routing", agent="reviewer", kind="command", source="auto")
         _, review_payload = self.cycle.apply("/review", "command", "")
+        from pkf.utils.impact_graph import load_review_scope
+
+        scope = load_review_scope(self.workspace.root)
+        if scope:
+            review_payload += (
+                "\n\nRevise APENAS estes arquivos (grafo de impacto AST):\n"
+                + "\n".join(f"- `{p}`" for p in scope[:30])
+            )
         return await self.agents["reviewer"].process(review_payload) or ""
 
     async def start_session(self) -> None:

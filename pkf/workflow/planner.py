@@ -2,18 +2,27 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
 from pkf.graph.project import ProjectGraph
 from pkf.spec.store import load_spec
 from pkf.workflow.compose import HANDOFF_API_PATH
+from pkf.workflow.task_graph import topological_layers
 
 FRONTEND_HINTS = ("ui", "interface", "html", "css", "react", "página", "pagina", "tela", "botão", "botao", "layout")
 BACKEND_HINTS = ("api", "backend", "servidor", "endpoint", "auth", "banco", "database", "sql", "crud")
 LOGIC_HINTS = ("regra", "negócio", "negocio", "algoritmo", "cálculo", "calculo", "whitelabel", "multi-tenant")
 TEST_HINTS = ("teste", "testes", "pytest", "coverage", "tdd", "unit test")
+
+# Ordem lógica para dependências padrão (DAG, não fases rígidas)
+AGENT_DEPENDS: dict[str, tuple[str, ...]] = {
+    "backend": (),
+    "logic": (),
+    "frontend": ("backend", "logic"),
+    "tester": ("frontend",),
+}
 
 PHASE_GROUPS: tuple[tuple[str, ...], ...] = (
     ("backend", "logic"),
@@ -29,9 +38,31 @@ class BuildTask:
     agent: str
     node_id: str
     instruction: str
+    task_id: str = ""
     acceptance: str = ""
     parallel: bool = True
     phase: int = 0
+    depends_on: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.task_id:
+            self.task_id = self.node_id or self.agent
+
+
+def _default_depends(agent: str, present: set[str]) -> list[str]:
+    deps: list[str] = []
+    for dep in AGENT_DEPENDS.get(agent, ()):
+        if dep in present:
+            deps.append(dep)
+    return deps
+
+
+def _apply_dag_deps(tasks: list[BuildTask]) -> list[BuildTask]:
+    present = {t.task_id for t in tasks}
+    for task in tasks:
+        if not task.depends_on:
+            task.depends_on = _default_depends(task.agent, present)
+    return tasks
 
 
 def plan_build(workspace_root, spec_name: str | None) -> list[BuildTask]:
@@ -56,6 +87,7 @@ def plan_build(workspace_root, spec_name: str | None) -> list[BuildTask]:
             BuildTask(
                 agent=agent,
                 node_id=node_id,
+                task_id=node_id,
                 acceptance=accept,
                 instruction=instruction,
             )
@@ -73,12 +105,19 @@ def plan_build(workspace_root, spec_name: str | None) -> list[BuildTask]:
         add("tester", "tester", "testes automatizados", "testes cobrindo critérios da spec")
     if not tasks:
         add("frontend", "frontend", "implementação principal da spec", "preview disponível com index.html")
-    return _assign_phases(tasks)
+    return _apply_dag_deps(tasks)
 
 
 def group_tasks_into_phases(tasks: list[BuildTask]) -> list[list[BuildTask]]:
+    """Compatibilidade: converte DAG em camadas topológicas."""
     if not tasks:
         return []
+    if any(t.depends_on for t in tasks):
+        return topological_layers(tasks)
+    return _legacy_group_phases(tasks)
+
+
+def _legacy_group_phases(tasks: list[BuildTask]) -> list[list[BuildTask]]:
     distinct_phases = {t.phase for t in tasks}
     if len(distinct_phases) > 1 or (distinct_phases and 0 not in distinct_phases):
         ordered = sorted(tasks, key=lambda t: (t.phase, t.agent))
@@ -120,14 +159,13 @@ async def plan_build_llm(
     if not body.strip():
         return None
 
-    prompt = f"""Analise a spec e produza APENAS JSON válido para o build multiagente PKF.
+    prompt = f"""Analise a spec e produza APENAS JSON válido para o build multiagente PKF (grafo DAG).
 
 Agentes disponíveis: backend, logic, frontend, tester
-Ordem de fases: backend → logic → frontend → tester (dependências respeitadas)
-Inclua só agentes necessários para a spec.
+Use depends_on para dependências reais (ex: frontend depende de backend).
 
 Formato:
-{{"phases": [{{"agents": ["backend"], "focus": "..."}}, {{"agents": ["frontend"], "focus": "..."}}]}}
+{{"tasks": [{{"task_id": "backend", "agent": "backend", "depends_on": [], "focus": "..."}}, {{"task_id": "frontend", "agent": "frontend", "depends_on": ["backend"], "focus": "..."}}]}}
 
 Spec:
 {body[:4000]}
@@ -145,29 +183,51 @@ Stack: {json.dumps(stack, ensure_ascii=False)}
         if not match:
             return None
         data = json.loads(match.group())
-        phases = data.get("phases") or []
+        items = data.get("tasks") or data.get("phases") or []
         tasks: list[BuildTask] = []
-        for phase_index, phase in enumerate(phases):
-            agents = phase.get("agents") or []
-            focus = str(phase.get("focus") or "implementação conforme spec")
-            if not isinstance(agents, list):
-                continue
-            for agent in agents:
-                name = str(agent).strip().lower()
-                if name not in PHASE_ORDER and name != "tester":
-                    continue
-                node_id = name if name != "tester" else "tester"
-                instruction = _task_instruction(name, node_id, focus, f"Entregar {focus}", "")
-                tasks.append(
-                    BuildTask(
-                        agent=name,
-                        node_id=node_id,
-                        acceptance=focus,
-                        instruction=instruction,
-                        phase=phase_index,
+        if items and isinstance(items[0], dict) and "agents" in items[0]:
+            for phase_index, phase in enumerate(items):
+                agents = phase.get("agents") or []
+                focus = str(phase.get("focus") or "implementação conforme spec")
+                for agent in agents:
+                    name = str(agent).strip().lower()
+                    if name not in PHASE_ORDER and name != "tester":
+                        continue
+                    node_id = name
+                    instruction = _task_instruction(name, node_id, focus, f"Entregar {focus}", "")
+                    tasks.append(
+                        BuildTask(
+                            agent=name,
+                            node_id=node_id,
+                            task_id=node_id,
+                            acceptance=focus,
+                            instruction=instruction,
+                            phase=phase_index,
+                        )
                     )
+            return _apply_dag_deps(tasks) or None
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("agent") or item.get("task_id") or "").strip().lower()
+            if name not in PHASE_ORDER and name != "tester":
+                continue
+            task_id = str(item.get("task_id") or name)
+            focus = str(item.get("focus") or "implementação conforme spec")
+            deps = [str(d) for d in item.get("depends_on") or []]
+            instruction = _task_instruction(name, task_id, focus, f"Entregar {focus}", "")
+            tasks.append(
+                BuildTask(
+                    agent=name,
+                    node_id=task_id,
+                    task_id=task_id,
+                    acceptance=focus,
+                    instruction=instruction,
+                    depends_on=deps,
                 )
-        return tasks or None
+            )
+        return _apply_dag_deps(tasks) or None
     except (json.JSONDecodeError, KeyError, TypeError, AttributeError, APIConnectionError, APIStatusError, APITimeoutError):
         return None
 
@@ -203,11 +263,12 @@ def plan_fix_tasks(spec_name: str | None, issues: list[str]) -> list[BuildTask]:
             BuildTask(
                 agent=agent,
                 node_id=node_id,
+                task_id=node_id,
                 instruction=instruction,
                 acceptance="Problemas do review corrigidos",
             )
         )
-    return _assign_phases(tasks)
+    return _apply_dag_deps(tasks)
 
 
 def _task_instruction(

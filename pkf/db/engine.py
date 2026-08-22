@@ -43,6 +43,12 @@ async def close_db() -> None:
     _session_factory = None
 
 
+def get_engine() -> AsyncEngine:
+    if _engine is None:
+        raise RuntimeError("Database not initialized. Set DATABASE_URL and call init_db().")
+    return _engine
+
+
 def get_session_factory() -> async_sessionmaker[AsyncSession]:
     if _session_factory is None:
         raise RuntimeError("Database not initialized. Set DATABASE_URL and call init_db().")

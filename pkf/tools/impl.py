@@ -106,6 +106,14 @@ def _short_unified_diff(old: str, new: str, rel_path: str, max_lines: int = 24) 
     return "".join(list(diff_lines)[:max_lines])[:800]
 
 
+def _update_impact_graph(workspace: Workspace, rel: str, target: Path) -> None:
+    from pkf.utils.impact_graph import bfs_affected_files, register_file, store_review_scope
+
+    register_file(workspace.root, rel, target)
+    affected = bfs_affected_files(workspace.root, rel)
+    store_review_scope(workspace.root, affected)
+
+
 def write_file(workspace: Workspace, path: str, content: str) -> str:
     target = workspace.resolve(path)
     if workspace.is_secret(target):
@@ -129,6 +137,7 @@ def write_file(workspace: Workspace, path: str, content: str) -> str:
     record_change(workspace, rel, action, content[:300])
     with contextlib.suppress(OSError, ValueError, RuntimeError):
         update_file_index(workspace, rel)
+    _update_impact_graph(workspace, rel, target)
     return f"Arquivo gravado: {rel} ({len(content)} caracteres)"
 
 
@@ -171,6 +180,7 @@ def edit_file(
     record_change(workspace, rel, "edit", audit)
     with contextlib.suppress(OSError, ValueError, RuntimeError):
         update_file_index(workspace, rel)
+    _update_impact_graph(workspace, rel, target)
     return f"Editado {rel}: {count} substituição(ões)."
 
 
