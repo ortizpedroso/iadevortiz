@@ -361,6 +361,7 @@ Extraídos de `pkf/web/server.py`. Autenticação via `AuthMiddleware` (`pkf/web
 | POST | `/api/chats` | Bearer | Cria novo chat |
 | POST | `/api/chats/{chat_id}/activate` | Bearer | Ativa chat e carrega histórico |
 | DELETE | `/api/chats/{chat_id}` | Bearer | Exclui chat |
+| PATCH | `/api/chats/{chat_id}` | Bearer | Renomeia chat (`title`) |
 | POST | `/api/chats/{chat_id}/attach` | Bearer | Anexa chat a projeto (`project_slug`) |
 | POST | `/api/projects/{slug}/activate` | Bearer | Ativa projeto no workspace |
 | PATCH | `/api/projects/{slug}` | Bearer | Renomeia projeto (`name`) |
@@ -391,7 +392,7 @@ Extraídos de `pkf/web/server.py`. Autenticação via `AuthMiddleware` (`pkf/web
 |--------|------------|---------------|
 | Backend | Python 3.12, FastAPI, Uvicorn | Ecossistema maduro para IA e ferramentas; FastAPI oferece REST + WebSocket com tipagem |
 | Frontend | Vite, React 19, TypeScript, Tailwind CSS 4 | Build rápido, UI reativa para chat/spec/preview em tempo real |
-| Banco | PostgreSQL 16, SQLAlchemy async, Alembic | Persistência de chats, specs e task trees com JSONB; migrations versionadas |
+| Banco | PostgreSQL 16, SQLAlchemy async, Alembic | Persistência de chats, specs e task trees com JSONB; migrations versionadas; `update.sh` executa `alembic upgrade head` após deploy |
 | IA (SDK) | OpenAI Python SDK | API unificada para múltiplos gateways compatíveis (OmniRoute, Groq, Gemini) |
 | Gateway | OmniRoute / 9Router | Roteamento centralizado de modelos free/subscription na VPS sem expor chaves no cliente |
 | Inferência rápida | Groq (LPU) | Fallback de baixa latência quando o gateway está indisponível ou em cooldown |

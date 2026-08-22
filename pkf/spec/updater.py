@@ -49,7 +49,7 @@ def save_platform_spec(workspace_root, slug: str = "pkf-platform") -> str:
 
 ## Visão
 
-Assistente multiagente para especificar, implementar, revisar e testar software — UI tema escuro (sidebar lateral, chat centralizado, variáveis CSS `--pkf-*`).
+Assistente multiagente para especificar, implementar, revisar e testar software — UI tema claro com tokens CSS `--pkf-*` (sidebar, chat centralizado, painéis legíveis).
 
 ## Capacidades
 
@@ -89,7 +89,7 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - **Coerência no /spec**:
   - Arquiteto: **uma pergunta por vez** (few-shot CORRETO vs ERRADO); proíbe tabela/lista numerada de perguntas
   - Delegação: quando usuário pede *"sugira você"* / *"decida por mim"*, sintetiza respostas e cria spec **completa** (não vazia)
-  - `save_spec`: rejeita `name` com 8+ palavras no fallback de título; rejeita `suggested_stack` como lista de rótulos ou sem chaves `frontend`/`backend`/`database`/`deploy`
+  - `save_spec`: rejeita `name` com 8+ palavras no fallback de título; rejeita `suggested_stack` como lista de rótulos ou sem chaves `frontend`/`backend`/`database`/`deploy`; rejeita corpo sem substância (`validate_spec_substance`: ≥300 chars ou ≥2 seções reais)
   - Classificador: reclamações de spec vazia/em branco roteiam para `architect`/`change`, não para `reviewer`
 
 ## Segurança e produção
@@ -114,11 +114,12 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - **Respostas pós-build**: `generalista`/`reviewer` consultam `get_last_verification` antes de hipóteses sobre falha T3
 - **Ambiguidade na spec**: agentes `frontend`/`backend`/`logic` param implementação e reportam conflito antes de codificar
 - **Memória**: agente de memória nunca afirma “já pronto” sem `list_dir`/`read_file`; projeto vazio deve ser declarado explicitamente
-- **save_spec**: não aceita título derivado de frase longa do usuário nem stack malformada
+- **save_spec**: não aceita título derivado de frase longa do usuário, stack malformada nem spec com uma frase genérica
+- **Deploy Alembic**: imagem Docker inclui `alembic/` + `alembic.ini`; `update.sh` roda `alembic upgrade head` após healthcheck
 
 ## Ferramentas de confiabilidade (rodada 1)
 
-- `save_spec`: validação de título e `suggested_stack` antes de persistir (rejeita frases longas e listas de rótulos)
+- `save_spec`: validação de título, `suggested_stack` e substância mínima do corpo antes de persistir
 
 - `edit_file`/`write_file`: validação sintaxe, diff auditado, lock por arquivo
 - `run_command`: sandbox shlex, allowlist, env filtrado; bloqueado em produção por padrão
@@ -139,8 +140,9 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 
 - **Sidebar esquerda**: seções Projetos e Conversas
 - **Projetos**: Menu de contexto ⋯ (fixar, renomear, excluir) + modo **Selecionar** para excluir vários ou todos
-- **Conversas**: Menu de contexto ⋯ (vincular projeto, excluir chat)
-- **Tema escuro PKF**: variáveis CSS (`--pkf-bg-primary`, `--pkf-accent`, etc.), sidebar e painéis escuros
+- **Conversas**: Menu de contexto ⋯ (renomear, vincular projeto, excluir) — paridade visual com projetos
+- **Painel spec**: texto legível via `text-[var(--pkf-text)]`; botões **Projetos** e **Spec** no header para alternar painéis
+- **Tema PKF**: variáveis CSS (`--pkf-bg-primary`, `--pkf-accent`, `--pkf-text`, etc.)
 - **Chat auto-scroll**: ao enviar e ao receber resposta, rola ao final só se o usuário já estava perto do fim (`<100px` do bottom); envio sempre força scroll; **indicador "Auto-scroll pausado"** quando o usuário rola para cima
 - **Campo de mensagem largo**: `MessageList` e `Composer` em `max-w-4xl` (responsivo)
 - Indicador no header: agente ativo · provider · modelo
@@ -154,6 +156,7 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 | `POST /api/chats` | Novo chat |
 | `POST /api/chats/{id}/activate` | Ativa chat e carrega mensagens |
 | `DELETE /api/chats/{id}` | Exclui chat |
+| `PATCH /api/chats/{id}` | Renomeia chat (`title`) |
 | `POST /api/chats/{id}/attach` | Anexa ou desanexa projeto |
 | `POST /api/projects/{slug}/activate` | Ativa projeto |
 | `PATCH /api/projects/{slug}` | Renomeia nome de exibição (slug inalterado) |

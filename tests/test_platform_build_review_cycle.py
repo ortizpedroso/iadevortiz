@@ -26,6 +26,9 @@ SPEC_CHECKS = (
     ("Classificador", "Classificador de intenção"),
     ("Coerência /spec", "Coerência no /spec"),
     ("save_spec validação", "save_spec"),
+    ("save_spec substância", "validate_spec_substance"),
+    ("PATCH rename chat", "PATCH /api/chats"),
+    ("Alembic deploy", "alembic upgrade head"),
     ("Auto-scroll chat", "Chat auto-scroll"),
     ("Composer largo", "max-w-4xl"),
     ("Auth token deploy", "não sobrescreve"),
@@ -63,6 +66,8 @@ def _implementation_gaps(spec_text: str) -> list[str]:
     update_sh = Path("deploy/hostinger/update.sh").read_text(encoding="utf-8")
     if "?token=$(grep '^PKF_AUTH_TOKEN='" in update_sh:
         gaps.append("Deploy: update.sh ainda imprime token na URL")
+    if "alembic upgrade head" not in update_sh:
+        gaps.append("Deploy: alembic upgrade head ausente em update.sh")
     preview_py = Path("pkf/web/preview.py").read_text(encoding="utf-8")
     if "?token=" in preview_py:
         gaps.append("Preview: redirect ainda inclui token na query")
@@ -100,6 +105,15 @@ def _implementation_gaps(spec_text: str) -> list[str]:
         gaps.append("save_spec: validate_suggested_stack não integrado")
     if "frase/comando do usuário" not in impl:
         gaps.append("save_spec: validação de título longo ausente")
+    if "validate_spec_substance" not in impl:
+        gaps.append("save_spec: validate_spec_substance não integrado")
+    if '"/api/chats/{chat_id}"' not in Path(web_server.__file__).read_text(encoding="utf-8") and "chats_rename" not in Path(web_server.__file__).read_text(encoding="utf-8"):
+        gaps.append("Backend: PATCH /api/chats/{chat_id} ausente")
+    if "onRenameChat" not in app_tsx:
+        gaps.append("Frontend: onRenameChat ausente")
+    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+    if "COPY alembic" not in dockerfile:
+        gaps.append("Deploy: alembic/ não copiado no Dockerfile")
     classifier = Path("pkf/classifier.py").read_text(encoding="utf-8")
     if "_is_spec_complaint" not in classifier:
         gaps.append("Classificador: _is_spec_complaint ausente")
