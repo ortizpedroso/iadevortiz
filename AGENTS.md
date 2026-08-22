@@ -28,10 +28,10 @@ Após deploy, `update.sh` executa `alembic upgrade head` automaticamente (migra�
 ## Arquitetura (pipeline)
 
 1. **`/spec`** — arquiteto entrevista, `save_spec`, aprovação manual na UI.
-2. **`/build`** — planner → fases paralelas (`backend`+`logic` juntos → `frontend` → `tester`) → verificação T3 → loop review→fix.
-3. **`/review`** — revisor compara código com spec, `save_review`, status APROVADO/REPROVADO.
+2. **`/build`** — planner DAG (`depends_on`) → ordenação topológica (`run_build_dag`, `asyncio.gather` por grau zero) → handoff compacto entre agentes → verificação T3 → loop review→fix.
+3. **`/review`** — revisor compara código com spec (escopo BFS via `impact_graph` quando há mutações), `save_review`, status APROVADO/REPROVADO.
 
-Orquestrador: `pkf/workflow/orchestrator.py` (`asyncio.gather` por fase). Grafo piloto opcional: `PKF_USE_LANGGRAPH_BUILD=1`.
+Orquestrador: `pkf/workflow/orchestrator.py` (`run_build_dag`). Grafo piloto LangGraph opcional: `PKF_USE_LANGGRAPH_BUILD=1`. Coordenação entre agentes: **handoff** (`pkf/workflow/handoff.py`) — sem pub/sub PostgreSQL.
 
 Estado de execução local fica em **`.pkf/`** (specs, reviews, tasks, `last_verify.json`) — **gitignored**, nunca versionar.
 
@@ -87,7 +87,7 @@ Consolidado de `CHANGELOG_MELHORIAS.md` — não inventar além disso:
 | Tema | Regra |
 |------|-------|
 | Classificador | Perguntas conversacionais antes de `FEATURE_HINTS`; arquiteto não cria spec vazia |
-| Build paralelo | `PHASE_GROUPS`: backend+logic juntos; frontend e tester sequenciais |
+| Build paralelo | DAG: `backend`+`logic` em grau zero; `frontend` após deps; `tester` após frontend; handoff substitui histórico bruto |
 | Gateway | Saudações locais sem LLM; `get_last_verification` antes de hipóteses sobre falha T3 |
 | OmniRoute | `NINEROUTER_MODEL` só default na 1ª instalação |
 | Produção | Token forte obrigatório; preview sem `allow-same-origin`; health público mínimo |

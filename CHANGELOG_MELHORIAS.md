@@ -20,6 +20,34 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 - [x] `test_platform_build_review_cycle` → APROVADO
 - [x] `python3 -m pytest tests/ -q` → 253+ passed
 
+## Remoção do Grupo D (LISTEN/NOTIFY) — handoff como único mecanismo
+
+**Data:** 2026-08-22  
+**Branch:** `cursor/pkf-remove-pubsub`
+
+### Por que foi removido
+
+O PR #26 introduziu dois mecanismos para o mesmo problema (coordenação de estado entre agentes):
+
+1. **Handoff (Grupo A2)** — resumo compacto em arquivo/DB (`pkf/workflow/handoff.py`)
+2. **Pub/Sub PostgreSQL (Grupo D)** — `LISTEN/NOTIFY` via `asyncpg` (`pkf/web/state_events.py`)
+
+O Grupo D foi removido porque duplicava o handoff e exigia `asyncpg` apenas para NOTIFY.
+
+### O que permanece
+
+| Componente | Status |
+|------------|--------|
+| DAG + `depends_on` + topological sort | Mantido |
+| Handoff (`handoff.py`, `session_handoffs`) | Mantido |
+| `ast_parser` + grafo de impacto (BFS reviewer) | Mantido |
+| Migração Alembic `002_session_handoffs` | Mantida |
+
+### Arquivos removidos
+
+- `pkf/web/state_events.py`
+- Referências em `pkf/web/server.py` e `pkf/workflow/orchestrator.py`
+
 ---
 
 ## Arquitetura de Grafos (DAG) e Sincronia Autônoma

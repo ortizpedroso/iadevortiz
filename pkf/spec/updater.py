@@ -58,7 +58,8 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
   - **DAG clássica** (padrão): `plan_build` com `depends_on` → `run_build_dag` (ordenação topológica + `asyncio.gather` por grau zero); falha upstream **bloqueia** dependentes (`Pulado: dependência … falhou`)
   - **Grafo piloto** (`PKF_USE_LANGGRAPH_BUILD=1`): plan → build → review em `build_graph.py`
 - **Build em DAG**: `backend` e `logic` em paralelo (grau zero); `frontend` após ambos; `tester` após `frontend`
-- **Handoff entre agentes**: resumo em `.pkf/session_handoffs.json` + `artifacts` verificados via `changes.json`; entradas `failed` não injetadas em dependentes
+- **Handoff entre agentes**: resumo em `.pkf/session_handoffs.json` + `artifacts` verificados via `changes.json`; entradas `failed` não injetadas em dependentes; `handoff_context_for_deps()` injeta contexto nas tarefas dependentes
+- **Grafo de impacto AST**: `ast_parser.py` + BFS em `impact_graph.py` limita escopo do `reviewer` a arquivos afetados
 - **Memória lazy**: agentes de memória criados sob demanda (`_ensure_memory_agent`); índice limitado por `PKF_MEMORY_MAX_ENTRIES` (padrão 50, eviction FIFO)
 - **Validação de DAG**: ciclos em `depends_on` rejeitados com `DagValidationError` antes da execução
 - **Planner LLM** com fallback heurístico por keywords na spec
@@ -134,7 +135,7 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 
 1. Brainstorm (architect, sem código) — omitido em `/build resume`
 2. Planner (LLM ou heurística) → DAG com `depends_on` (`dag_v1`)
-3. `run_build_dag`: paralelo no grau zero; handoff com artifacts; dependentes bloqueados se upstream falhar
+3. `run_build_dag`: paralelo no grau zero; handoff com artifacts; dependentes bloqueados se upstream falhar; reviewer com escopo BFS quando há mutações
 4. Verificação de arquivos + retry por agente (`prepare_for_build`; retomada pula agentes `done`)
 5. Loop review → correção → review até **Status: APROVADO**
 6. Juiz independente (/goal) + resposta amigável na UI

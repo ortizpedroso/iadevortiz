@@ -38,6 +38,13 @@ def test_spec_file_contains_rodada2_features(tmp_path: Path):
         "DagValidationError",
         "sob demanda",
         "AUDITORIA_AGENTES",
+        "depends_on",
+        "handoff_context_for_deps",
+        "impact_graph",
+        "run_build_dag",
+        "validate_spec_substance",
+        "PATCH /api/chats",
+        "alembic upgrade head",
     ):
         assert keyword.lower() in text.lower() or keyword in text
 
