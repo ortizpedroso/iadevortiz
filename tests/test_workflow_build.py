@@ -141,6 +141,9 @@ async def test_run_build_phases_parallel_backend_logic(tmp_path):
     router.ui_mode = False
     router.provider_name = "test"
     router.model_to_use = "m"
+    router.workspace = MagicMock()
+    router.workspace.root = tmp_path
+    router.db = None
     router.emit = AsyncMock()
     router.emit_task_tree = AsyncMock()
     router.bind_agent_provider = MagicMock()
@@ -154,8 +157,8 @@ async def test_run_build_phases_parallel_backend_logic(tmp_path):
     router.agents = {"backend": backend, "logic": logic}
 
     phase_tasks = [
-        BuildTask(agent="backend", node_id="backend", instruction="api"),
-        BuildTask(agent="logic", node_id="logic", instruction="rules"),
+        BuildTask(agent="backend", node_id="backend", task_id="backend", instruction="api", depends_on=[]),
+        BuildTask(agent="logic", node_id="logic", task_id="logic", instruction="rules", depends_on=[]),
     ]
     tracker = TaskTracker(tmp_path)
 
