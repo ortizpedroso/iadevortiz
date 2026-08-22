@@ -77,6 +77,33 @@ def handoff_context_for_deps(workspace_root: Path, depends_on: list[str]) -> str
     return "\n\n## Contexto de handoff (dependências concluídas)\n" + "\n\n".join(blocks)
 
 
+def completed_handoff_ids(workspace_root: Path) -> list[str]:
+    """task_ids com handoff ok persistido (usado na retomada de build)."""
+    store = load_handoffs(workspace_root)
+    return [
+        task_id
+        for task_id, entry in store.items()
+        if isinstance(entry, dict) and entry.get("status") == "ok"
+    ]
+
+
+def resume_handoff_summary(workspace_root: Path, task_ids: list[str]) -> str:
+    """Resumo dos handoffs disponíveis ao retomar um build interrompido."""
+    if not task_ids:
+        return ""
+    store = load_handoffs(workspace_root)
+    lines = ["Handoffs persistidos para retomada:"]
+    for task_id in task_ids:
+        entry = store.get(task_id)
+        if not entry or entry.get("status") != "ok":
+            lines.append(f"- `{task_id}`: (sem handoff ok)")
+            continue
+        agent = entry.get("agent", task_id)
+        summary = str(entry.get("summary", ""))[:120]
+        lines.append(f"- `{task_id}` ({agent}): {summary}")
+    return "\n".join(lines)
+
+
 def merge_db_handoffs(local: dict[str, Any], db_handoffs: dict[str, Any] | None) -> dict[str, Any]:
     if not db_handoffs:
         return local
