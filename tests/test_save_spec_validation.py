@@ -24,11 +24,18 @@ def _valid_spec_md() -> str:
 ---
 
 # Contexto
-Cardápio digital para restaurantes.
+Cardápio digital para restaurantes com vitrine pública, painel administrativo e gestão de pedidos.
+O sistema deve suportar múltiplos estabelecimentos em modelo whitelabel.
 
 # Requisitos
-- Vitrine pública
-- Painel admin
+- Vitrine pública com categorias e busca
+- Painel admin para cardápio, preços e disponibilidade
+- Fluxo de pedido com carrinho e confirmação
+- Autenticação básica para operadores do restaurante
+
+# Critérios de aceite
+- Visitante consegue navegar cardápio sem login
+- Admin altera item e mudança aparece na vitrine em até 1 minuto
 """
 
 
@@ -61,6 +68,31 @@ Teste
     result = save_spec(ws, "cardapio-digital", content)
     assert result.startswith("Erro")
     assert "lista" in result.lower() or "rótulos" in result.lower() or "rotulos" in result.lower()
+    assert not list((tmp_path / ".pkf" / "specs").glob("*.md"))
+
+
+def test_save_spec_rejects_minimal_landing_page(tmp_path: Path):
+    ws = _workspace(tmp_path)
+    content = """---
+{
+  "title": "Landing Page",
+  "status": "pending_approval",
+  "suggested_stack": {
+    "frontend": "HTML/CSS",
+    "backend": "PHP",
+    "database": "MySQL",
+    "deploy": "Docker"
+  },
+  "confirmed_stack": {}
+}
+---
+
+# Contexto
+Especificação da landing page.
+"""
+    result = save_spec(ws, "landing-page", content)
+    assert result.startswith("Erro")
+    assert "substância" in result.lower() or "substant" in result.lower()
     assert not list((tmp_path / ".pkf" / "specs").glob("*.md"))
 
 

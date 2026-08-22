@@ -46,6 +46,23 @@ class SpecDocument:
         }
 
 
+def validate_spec_substance(content: str) -> str | None:
+    """Rejeita specs sem corpo substancial (além do frontmatter JSON)."""
+    doc = parse_spec(content)
+    body = doc.body.strip()
+    if len(body) >= 300:
+        return None
+    sections = re.split(r"^#{1,3}\s+.+$", body, flags=re.MULTILINE)
+    substantive = [part.strip() for part in sections if part.strip() and len(part.strip()) >= 40]
+    if len(substantive) >= 2:
+        return None
+    return (
+        "Erro: spec sem substância suficiente. Inclua contexto, requisitos e critérios de aceite "
+        "(mínimo ~300 caracteres no corpo ou pelo menos 2 seções com conteúdo real). "
+        "Não salve apenas uma frase genérica."
+    )
+
+
 def parse_spec_meta(content: str) -> dict | None:
     match = FRONTMATTER_RE.match(content or "")
     if not match:
