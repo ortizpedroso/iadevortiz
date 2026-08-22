@@ -384,6 +384,18 @@ class Router:
 
         if command == "/build":
             self.cycle = DevCycle.load(self.workspace.root)
+            resume = False
+            build_remainder = remainder
+            lower_remainder = remainder.strip().lower()
+            if lower_remainder in {"resume", "retomar"}:
+                resume = True
+                build_remainder = ""
+            elif lower_remainder.startswith("resume "):
+                resume = True
+                build_remainder = remainder.strip()[7:].strip()
+            elif lower_remainder.startswith("retomar "):
+                resume = True
+                build_remainder = remainder.strip()[8:].strip()
             if self.cycle.active_spec:
                 preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
                 if preview and preview.get("status") != "approved":
@@ -397,9 +409,33 @@ class Router:
                         "A spec precisa ser aprovada antes do /build. "
                         "Revise o painel à direita, ajuste a stack se quiser e clique em Aprovar."
                     )
-            return await self._run_parallel_build(remainder)
+            return await self._run_parallel_build(build_remainder, resume=resume)
 
         intent = await self._classify(user_input)
+        if intent.kind == "resume_request":
+            self.cycle = DevCycle.load(self.workspace.root)
+            if not self.cycle.active_spec:
+                return (
+                    "Não há spec ativa para retomar. Crie ou selecione uma spec com /spec "
+                    "e aprove na UI antes de continuar o build."
+                )
+            preview = active_spec_preview(self.workspace.root, self.cycle.active_spec)
+            if preview and preview.get("status") != "approved":
+                await self.emit("spec_preview", spec=preview)
+                return (
+                    "A spec precisa ser aprovada antes de retomar o build. "
+                    "Revise o painel de especificação e clique em Aprovar."
+                )
+            tracker = TaskTracker(self.workspace.root, db_context=self.db)
+            if not tracker.tree:
+                return (
+                    "Nenhum build anterior encontrado para esta spec. "
+                    "Use /build para iniciar a implementação."
+                )
+            if self.ui_mode:
+                await self._emit_progress("Retomando build de onde parou…")
+            return await self._run_parallel_build("", resume=True)
+
         if intent.kind in {"feature", "change"} or command == "/spec":
             self._ensure_project(user_input)
         agent = self.agents.get(intent.agent) or self.agents["generalista"]
@@ -430,7 +466,7 @@ class Router:
             await self.emit("spec_preview", spec=preview)
         return self._user_reply(reply) if self.ui_mode and reply else reply
 
-    async def _run_parallel_build(self, remainder: str) -> str:
+    async def _run_parallel_build(self, remainder: str, *, resume: bool = False) -> str:
         import os
 
         if os.getenv("PKF_USE_LANGGRAPH_BUILD", "").strip() in {"1", "true", "yes"}:
@@ -445,12 +481,14 @@ class Router:
             self.workspace.root,
             "BUILD",
             self.cycle.active_spec,
-            "Iniciando pipeline em fases",
+            "Retomando pipeline em fases" if resume else "Iniciando pipeline em fases",
         )
 
-        if self.ui_mode:
+        if self.ui_mode and not resume:
             await self._emit_progress("Analisando contexto do projeto…")
-        brainstorm = await run_brainstorm(self, self.cycle.active_spec)
+        elif self.ui_mode and resume:
+            await self._emit_progress("Retomando build — reutilizando plano existente…")
+        brainstorm = await run_brainstorm(self, self.cycle.active_spec) if not resume else ""
         if brainstorm:
             write_checkpoint(
                 self.workspace.root,
@@ -465,21 +503,35 @@ class Router:
         phases = group_tasks_into_phases(tasks)
 
         tracker = TaskTracker(self.workspace.root, db_context=self.db)
-        tracker.reset_for_build(self.cycle.active_spec, [t.agent for t in tasks])
+        agent_list = [t.agent for t in tasks]
+        done_agents = tracker.prepare_for_build(self.cycle.active_spec, agent_list, resume=resume)
         await self.emit_task_tree(tracker)
         await self.emit(
             "plan",
             tasks=[{"agent": t.agent, "node": t.node_id, "phase": t.phase} for t in tasks],
         )
+        if resume and done_agents:
+            skipped = ", ".join(sorted(done_agents))
+            await self.emit("build_resume", skipped_agents=list(done_agents))
+            if self.ui_mode:
+                await self._emit_progress(f"Retomando build — pulando agentes concluídos: {skipped}")
 
         begin_build_session(self.workspace)
         if self.ui_mode:
-            await self._emit_progress("Implementando em fases (backend → lógica → frontend)…")
+            if resume:
+                await self._emit_progress("Retomando implementação em fases…")
+            else:
+                await self._emit_progress("Implementando em fases (backend → lógica → frontend)…")
+
+        agents_to_run: set[str] | None = None
+        if resume:
+            pending = {t.agent for t in tasks} - done_agents
+            agents_to_run = pending or None
 
         results: list[tuple[str, str]] = []
         verify = ""
         attempt = 0
-        pending_agents: set[str] | None = None
+        pending_agents: set[str] | None = agents_to_run
         while attempt < MAX_BUILD_RETRIES:
             attempt += 1
             if attempt > 1:
@@ -676,6 +728,7 @@ def help_text() -> str:
 Comandos:
   /spec [nome]     Abre ou continua a especificação
   /build [nome]    Implementa a spec (fases + review→fix loop)
+  /build resume    Retoma build interrompido (pula agentes concluídos)
   /review          Revisa o código contra a spec
   /goal [meta]     Define condição de parada para o build
   /status          Mostra fase, spec e agente

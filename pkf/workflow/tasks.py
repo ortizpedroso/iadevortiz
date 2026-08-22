@@ -15,6 +15,14 @@ _TASK_LABELS = {
     "tester": "Testes",
 }
 
+_TITLE_TO_AGENT = {
+    "frontend": "frontend",
+    "backend": "backend",
+    "lógica": "logic",
+    "logica": "logic",
+    "testes": "tester",
+}
+
 
 @dataclass
 class TaskNode:
@@ -72,6 +80,61 @@ class TaskTracker:
         if database_enabled() and self.db and self.tree:
             await self.db.setup()
             await self.db.save_tasks([self.tree.to_dict()])
+
+    def _agent_from_child_title(self, title: str) -> str | None:
+        lower = title.lower()
+        for prefix, agent in _TITLE_TO_AGENT.items():
+            if lower.startswith(prefix):
+                return agent
+        return None
+
+    def agent_statuses(self) -> dict[str, str]:
+        """Mapa agente → status na fase T2 (implementação)."""
+        if not self.tree:
+            return {}
+        impl = next((c for c in self.tree.children if c.id == "T2"), None)
+        if not impl:
+            return {}
+        out: dict[str, str] = {}
+        for child in impl.children:
+            agent = self._agent_from_child_title(child.title)
+            if agent:
+                out[agent] = child.status
+        return out
+
+    def done_agents(self) -> set[str]:
+        return {agent for agent, status in self.agent_statuses().items() if status == "done"}
+
+    def prepare_for_build(self, spec_name: str | None, agents: list[str], *, resume: bool = False) -> set[str]:
+        """Inicializa ou retoma a árvore de tarefas. Retorna agentes já concluídos (para pular)."""
+        spec_label = spec_name or "projeto"
+        if resume and self.tree:
+            spec_node = next((c for c in self.tree.children if c.id == "T1.1"), None)
+            if spec_node and spec_node.title == f"Spec: {spec_label}":
+                done = self.done_agents()
+                statuses = self.agent_statuses()
+                impl = next((c for c in self.tree.children if c.id == "T2"), None)
+                if impl:
+                    existing = {self._agent_from_child_title(c.title): c for c in impl.children}
+                    new_children: list[TaskNode] = []
+                    for i, agent in enumerate(agents):
+                        prev = existing.get(agent)
+                        if prev:
+                            new_children.append(prev)
+                        else:
+                            new_children.append(
+                                TaskNode(id=f"T2.{i + 1}", title=_agent_label(agent), status="pending")
+                            )
+                    impl.children = new_children
+                    for agent in agents:
+                        if statuses.get(agent) == "failed":
+                            self.set_child_status(agent, "pending")
+                    self.tree.status = "running"
+                    impl.status = "running"
+                    self.persist()
+                    return done
+        self.reset_for_build(spec_name, agents)
+        return set()
 
     def reset_for_build(self, spec_name: str | None, agents: list[str]) -> None:
         spec_label = spec_name or "projeto"

@@ -188,6 +188,13 @@ TOOL_DEFINITIONS: dict[str, dict] = {
         ),
         "parameters": {"type": "object", "properties": {}},
     },
+    "get_build_status": {
+        "description": (
+            "Retorna o progresso atual do build: fase do ciclo, spec ativa, árvore de tarefas "
+            "(agentes done/running/pending), última verificação T3 e checkpoint."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
     "skill_search": {
         "description": "Busca skills Markdown por relevância BM25 e auto-carrega a melhor.",
         "parameters": {
@@ -256,6 +263,7 @@ AGENT_TOOLS = {
         "web_search",
         "graph_view",
         "get_last_verification",
+        "get_build_status",
     ],
 }
 

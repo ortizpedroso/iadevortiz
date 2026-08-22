@@ -373,6 +373,66 @@ def verify_build(workspace: Workspace, phase: str = "T3") -> str:
     return text
 
 
+def get_build_status(workspace: Workspace) -> str:
+    from pkf.workflow.cycle import DevCycle
+    from pkf.workflow.tasks import TaskTracker
+
+    cycle = DevCycle.load(workspace.root)
+    lines = [
+        "# Status do build",
+        "",
+        f"- Fase: {cycle.phase}",
+        f"- Spec ativa: {cycle.active_spec or '(nenhuma)'}",
+        f"- Status da spec: {cycle.spec_status or '(não definido)'}",
+        f"- Meta (/goal): {cycle.goal or '(nenhuma)'}",
+        f"- Último agente: {cycle.last_agent or '(nenhum)'}",
+        "",
+    ]
+
+    tracker = TaskTracker(workspace.root)
+    tasks = tracker.to_list()
+    if tasks:
+        lines.append("## Árvore de tarefas")
+        lines.extend(_format_task_nodes(tasks[0], depth=0))
+        statuses = tracker.agent_statuses()
+        if statuses:
+            lines.append("")
+            lines.append("## Agentes")
+            for agent, status in sorted(statuses.items()):
+                lines.append(f"- {agent}: {status}")
+    else:
+        lines.append("Nenhum build em andamento registrado (tasks.json ausente ou vazio).")
+
+    verify = load_last_verification(workspace.root)
+    if verify:
+        lines.append("")
+        status = "sucesso" if verify.get("ok") else "falha"
+        lines.append(f"## Última verificação ({verify.get('phase', 'T3')}) — {status}")
+        lines.append(f"Timestamp: {verify.get('timestamp', 'desconhecido')}")
+        result_text = str(verify.get("result") or "").strip()
+        if result_text:
+            lines.append(result_text[:800])
+
+    checkpoint = pkf_dir(workspace.root) / "checkpoint.md"
+    if checkpoint.exists():
+        text = checkpoint.read_text(encoding="utf-8").strip()
+        if text:
+            lines.append("")
+            lines.append("## Checkpoint")
+            lines.append(text[:600])
+
+    return "\n".join(lines)
+
+
+def _format_task_nodes(node: dict, depth: int = 0) -> list[str]:
+    indent = "  " * depth
+    status = node.get("status", "pending")
+    lines = [f"{indent}- [{status}] {node.get('title', node.get('id', '?'))}"]
+    for child in node.get("children", []):
+        lines.extend(_format_task_nodes(child, depth + 1))
+    return lines
+
+
 def get_last_verification(workspace: Workspace) -> str:
     data = load_last_verification(workspace.root)
     if not data:
@@ -448,6 +508,8 @@ def dispatch(workspace: Workspace, name: str, arguments: dict) -> str:
             return verify_build(workspace, arguments.get("phase", "T3"))
         if name == "get_last_verification":
             return get_last_verification(workspace)
+        if name == "get_build_status":
+            return get_build_status(workspace)
         if name == "code_index":
             return code_index(workspace, arguments.get("query", ""))
         if name == "skill_search":

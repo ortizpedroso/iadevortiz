@@ -4,6 +4,38 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Retomada de build e coerência de progresso
+
+**Data:** 2026-08-22  
+**Branch:** `cursor/pkf-resume-build-1cb2`
+
+### Problema
+
+- `/build` sempre chamava `reset_for_build()`, apagando progresso de agentes já concluídos.
+- Frases como "continue de onde parou" iam para o `generalista` sem contexto de build.
+- Não havia ferramenta para o generalista consultar o progresso real do pipeline.
+
+### O que mudou
+
+| Área | Mudança |
+|------|---------|
+| `pkf/classifier.py` | Novo kind `resume_request` para "continue/retomar/de onde parou" |
+| `pkf/router.py` | `/build resume`, intent `resume_request` → `_run_parallel_build(resume=True)`; pula agentes `done` |
+| `pkf/workflow/tasks.py` | `prepare_for_build()`, `agent_statuses()`, `done_agents()` |
+| `pkf/tools/impl.py` | Ferramenta `get_build_status` (fase, spec, árvore, verificação T3, checkpoint) |
+| `pkf/tools/registry.py` | `get_build_status` disponível para `generalista` |
+
+### Definition of Done
+
+- [x] Classificador detecta intenção de retomada em português
+- [x] Build retoma sem resetar agentes já `done`
+- [x] Agentes `failed` voltam a `pending` na retomada
+- [x] Spec não aprovada bloqueia retomada com mensagem clara
+- [x] `get_build_status` expõe progresso real do workspace
+- [x] `python3 -m pytest tests/ -q` → **244 passed**
+
+---
+
 ## Remediação de segurança (auditoria C/H/M/B/L/P)
 
 **Data:** 2026-08-22  
