@@ -4,6 +4,24 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Ciclo /build → /review — spec e documentação sincronizadas
+
+**Data:** 2026-08-22  
+**Branch:** `cursor/pkf-build-review-cycle-1cb2`
+
+### O que mudou
+
+- `pkf/spec/updater.py` — spec pkf-platform atualizada: rename chat, `validate_spec_substance`, Alembic no deploy, UI tema claro
+- `docs/ARQUITETURA.md` — `PATCH /api/chats/{id}`, nota sobre `alembic upgrade head`
+- `tests/test_platform_build_review_cycle.py` — checks para substância spec, rename chat, Alembic
+
+### Definition of Done
+
+- [x] `test_platform_build_review_cycle` → APROVADO
+- [x] `python3 -m pytest tests/ -q` → 253+ passed
+
+---
+
 ## Arquitetura de Grafos (DAG) e Sincronia Autônoma
 
 **Data:** 2026-08-22  

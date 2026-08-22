@@ -21,6 +21,8 @@ Prompts de agente (`pkf/agents/prompts.py`) definem comportamento por papel — 
 | Frontend build | `cd frontend && npm run build` |
 | Deploy VPS | `cd /opt/pkf && git pull origin main && bash deploy/hostinger/update.sh` |
 
+Após deploy, `update.sh` executa `alembic upgrade head` automaticamente (migrações em `/app/alembic`).
+
 ---
 
 ## Arquitetura (pipeline)
