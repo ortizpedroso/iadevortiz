@@ -44,7 +44,10 @@ export default function App() {
   const wsConnectedRef = useRef(false);
   const useHttpFallbackRef = useRef(false);
   const [useHttpFallback, setUseHttpFallback] = useState(false);
+  const specAutoShownRef = useRef(false);
+  const userChoseProjectPanelRef = useRef(false);
   const applySessionRef = useRef<(data: SessionSnapshot, replace?: boolean) => void>(() => {});
+  const maybeOpenSpecPanelRef = useRef<(preview: SpecPreview, force?: boolean) => void>(() => {});
   const loadChangesRef = useRef<() => Promise<void>>(async () => {});
   const chatScrollRef = useRef<HTMLElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -81,14 +84,23 @@ export default function App() {
     }
   }, []);
 
+  const maybeOpenSpecPanel = useCallback((preview: SpecPreview, force = false) => {
+    if (preview.status !== "pending_approval") return;
+    if (force || (!userChoseProjectPanelRef.current && !specAutoShownRef.current)) {
+      setPanel("spec");
+      specAutoShownRef.current = true;
+    }
+  }, []);
+
   const applySession = useCallback((data: SessionSnapshot, replace = false) => {
     setSession(replace ? data : (current) => ({ ...current, ...data }));
     if ("tasks" in data) setTasks(data.tasks || []);
     if (data.spec_preview) {
       setSpecPreview(data.spec_preview);
-      if (data.spec_preview.status === "pending_approval") setPanel("spec");
+      maybeOpenSpecPanel(data.spec_preview);
     } else if (replace) {
       setSpecPreview(null);
+      specAutoShownRef.current = false;
       if (panel === "spec") setPanel("project");
     }
     if (data.project_preview?.available && data.project_preview.path) {
@@ -105,9 +117,10 @@ export default function App() {
       setPreviewOpen(false);
     }
     if (data.active_agent) setActiveAgent(data.active_agent);
-  }, [panel]);
+  }, [panel, maybeOpenSpecPanel]);
 
   applySessionRef.current = applySession;
+  maybeOpenSpecPanelRef.current = maybeOpenSpecPanel;
   loadChangesRef.current = loadChanges;
 
   const scrollChatToBottom = useCallback((force = false) => {
@@ -219,7 +232,7 @@ export default function App() {
       }
       if (event.type === "spec_preview" && event.spec) {
         setSpecPreview(event.spec);
-        setPanel("spec");
+        maybeOpenSpecPanelRef.current(event.spec, true);
         return;
       }
       if (event.type === "progress" || event.type === "task_progress") {
@@ -592,6 +605,18 @@ export default function App() {
     }
   }
 
+  async function renameChat(id: string, title: string) {
+    const res = await fetch(`/api/chats/${id}`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    applyLibrary(data.library);
+    if (data.session) applySession(data.session, true);
+  }
+
   async function renameProject(slug: string, name: string) {
     const res = await fetch(`/api/projects/${slug}`, {
       method: "PATCH",
@@ -649,6 +674,7 @@ export default function App() {
         projects={projects}
         onSelectChat={selectChat}
         onDeleteChat={deleteChat}
+        onRenameChat={renameChat}
         onAttachChat={attachChat}
         onSelectProject={selectProject}
         onDeleteProject={deleteProject}
@@ -664,7 +690,10 @@ export default function App() {
             type="button"
             className="pkf-btn-icon grid h-10 w-10 place-items-center rounded-lg md:hidden"
             aria-label="Abrir menu"
-            onClick={() => setPanel(panel === "project" ? null : "project")}
+            onClick={() => {
+              userChoseProjectPanelRef.current = true;
+              setPanel(panel === "project" ? null : "project");
+            }}
           >
             ☰
           </button>
@@ -693,10 +722,28 @@ export default function App() {
             ) : null}
           </div>
           <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              className={`min-h-9 rounded-lg border px-3 text-xs font-medium sm:inline-flex sm:items-center ${
+                panel === "project"
+                  ? "border-[var(--pkf-accent)]/60 bg-[var(--pkf-accent)]/10 text-[var(--pkf-text)]"
+                  : "border-[var(--pkf-border)] hover:border-[var(--pkf-accent)]/50"
+              }`}
+              onClick={() => {
+                userChoseProjectPanelRef.current = true;
+                setPanel(panel === "project" ? null : "project");
+              }}
+            >
+              Projetos
+            </button>
             {specPreview && specPreview.status !== "approved" ? (
               <button
                 type="button"
-                className="hidden min-h-9 rounded-lg border border-[var(--pkf-border)] px-3 text-xs font-medium hover:border-[var(--pkf-accent)]/50 sm:inline-flex sm:items-center"
+                className={`min-h-9 rounded-lg border px-3 text-xs font-medium sm:inline-flex sm:items-center ${
+                  panel === "spec"
+                    ? "border-[var(--pkf-accent)]/60 bg-[var(--pkf-accent)]/10 text-[var(--pkf-text)]"
+                    : "border-[var(--pkf-border)] hover:border-[var(--pkf-accent)]/50"
+                }`}
                 onClick={() => setPanel(panel === "spec" ? null : "spec")}
               >
                 Spec

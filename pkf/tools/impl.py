@@ -14,7 +14,7 @@ from pkf.config import COMMAND_TIMEOUT, MAX_FILE_BYTES, MAX_SEARCH_MATCHES, is_p
 from pkf.graph.project import ProjectGraph
 from pkf.semantic_index import update_file_index
 from pkf.skills.search import skill_search_tool_output
-from pkf.spec.document import parse_spec, parse_spec_meta, validate_suggested_stack
+from pkf.spec.document import parse_spec, parse_spec_meta, validate_spec_substance, validate_suggested_stack
 from pkf.spec.store import save_spec_document
 from pkf.verify_store import load_last_verification, save_last_verification
 from pkf.web_search import web_search
@@ -316,6 +316,9 @@ def save_spec(workspace: Workspace, name: str, content: str) -> str:
     stack_error = validate_suggested_stack(meta, doc.suggested_stack)
     if stack_error:
         return f"Erro ao salvar spec: {stack_error}"
+    substance_error = validate_spec_substance(content)
+    if substance_error:
+        return substance_error
     slug = _slug(name or doc.title)
     if doc.status not in {"pending_approval", "approved", "draft"}:
         doc.status = "pending_approval"
