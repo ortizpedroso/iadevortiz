@@ -10,7 +10,7 @@ from typing import Any
 from pkf.config import pkf_dir
 
 HANDOFF_FILE = "session_handoffs.json"
-MAX_SUMMARY = 2000
+MAX_SUMMARY = 2000  # Resumos maiores são truncados; detalhes além deste limite são perdidos.
 
 
 def _handoff_path(workspace_root: Path) -> Path:
@@ -35,6 +35,7 @@ def save_handoff(
     agent: str,
     summary: str,
     artifacts: list[str] | None = None,
+    status: str = "ok",
 ) -> dict[str, Any]:
     """Grava resumo compacto ao fim da execução de um agente."""
     store = load_handoffs(workspace_root)
@@ -42,6 +43,7 @@ def save_handoff(
         "agent": agent,
         "summary": (summary or "").strip()[:MAX_SUMMARY],
         "artifacts": artifacts or [],
+        "status": status,
         "updated_at": datetime.now(UTC).isoformat(),
     }
     store[task_id] = entry
@@ -61,12 +63,14 @@ def handoff_context_for_deps(workspace_root: Path, depends_on: list[str]) -> str
         entry = store.get(dep_id)
         if not entry:
             continue
+        if entry.get("status") == "failed":
+            continue
         agent = entry.get("agent", dep_id)
         summary = entry.get("summary", "")
         artifacts = entry.get("artifacts") or []
         block = f"### Handoff de `{dep_id}` ({agent})\n{summary}"
         if artifacts:
-            block += "\nArtefatos: " + ", ".join(artifacts[:12])
+            block += "\nArtefatos verificados: " + ", ".join(artifacts[:12])
         blocks.append(block)
     if not blocks:
         return ""
