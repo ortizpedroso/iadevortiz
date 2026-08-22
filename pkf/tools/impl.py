@@ -386,6 +386,12 @@ def verify_build(workspace: Workspace, phase: str = "T3") -> str:
     return text
 
 
+def get_prior_phase_response(workspace: Workspace, task_id: str = "", agent: str = "") -> str:
+    from pkf.workflow.build_results import format_prior_phase_response
+
+    return format_prior_phase_response(workspace.root, task_id=task_id, agent=agent)
+
+
 def get_build_status(workspace: Workspace) -> str:
     from pkf.workflow.cycle import DevCycle
     from pkf.workflow.tasks import TaskTracker
@@ -523,6 +529,12 @@ def dispatch(workspace: Workspace, name: str, arguments: dict) -> str:
             return get_last_verification(workspace)
         if name == "get_build_status":
             return get_build_status(workspace)
+        if name == "get_prior_phase_response":
+            return get_prior_phase_response(
+                workspace,
+                arguments.get("task_id", ""),
+                arguments.get("agent", ""),
+            )
         if name == "code_index":
             return code_index(workspace, arguments.get("query", ""))
         if name == "skill_search":

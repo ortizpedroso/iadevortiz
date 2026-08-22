@@ -43,6 +43,7 @@ from pkf.workflow.compose import (
     verify_ok,
 )
 from pkf.workflow.cycle import DevCycle, parse_command
+from pkf.workflow.handoff import resume_handoff_summary
 from pkf.workflow.orchestrator import failed_agents, run_build_dag
 from pkf.workflow.planner import (
     plan_build,
@@ -538,6 +539,17 @@ class Router:
         if resume and done_agents:
             skipped = ", ".join(sorted(done_agents))
             await self.emit("build_resume", skipped_agents=list(done_agents))
+            tracker.mark_resume_agents(done_agents)
+            completed_ids = [t.task_id for t in tasks if t.agent in done_agents]
+            handoff_note = resume_handoff_summary(self.workspace.root, completed_ids)
+            if handoff_note:
+                write_checkpoint(
+                    self.workspace.root,
+                    "BUILD",
+                    self.cycle.active_spec,
+                    handoff_note,
+                )
+            await self.emit_task_tree(tracker)
             if self.ui_mode:
                 await self._emit_progress(f"Retomando build — pulando agentes concluídos: {skipped}")
 

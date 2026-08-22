@@ -43,7 +43,6 @@ from pkf.web.library import (
 from pkf.web.preview import preview_info, redirect_preview_entry, serve_preview_file
 from pkf.web.preview_tokens import issue_preview_token
 from pkf.web.rate_limit import limiter
-from pkf.web.state_events import format_events_for_llm, pending_events, start_state_listener, stop_state_listener
 from pkf.web_search import web_search_configured
 from pkf.workflow.cycle import DevCycle
 from pkf.workflow.tasks import TaskTracker
@@ -126,16 +125,9 @@ async def process_user_message(
     if lock.locked():
         return {"type": "error", "content": "Aguarde a resposta anterior terminar."}
     async with lock:
-        session_id = None
-        if database_enabled() and history.db_context.session_id:
-            session_id = str(history.db_context.session_id)
-        state_note = format_events_for_llm(pending_events(session_id))
-        payload = text
-        if state_note:
-            payload = f"{state_note}\n\n{text}"
         await history.append({"role": "user", "content": text})
         try:
-            reply = await router.handle(payload)
+            reply = await router.handle(text)
         except Exception as exc:  # noqa: BLE001 — surface any agent/provider failure to the client
             return {
                 "type": "error",
@@ -182,7 +174,6 @@ def create_app(router: Router) -> FastAPI:
         validate_production_config()
         if database_enabled():
             await init_db()
-            await start_state_listener()
         history: ChatHistory = app.state.history
         await history.load()
         if database_enabled():
@@ -191,7 +182,6 @@ def create_app(router: Router) -> FastAPI:
             if cycle:
                 router.cycle = cycle
         yield
-        await stop_state_listener()
         if database_enabled():
             await close_db()
 

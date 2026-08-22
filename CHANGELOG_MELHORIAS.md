@@ -20,6 +20,58 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 - [x] `test_platform_build_review_cycle` → APROVADO
 - [x] `python3 -m pytest tests/ -q` → 253+ passed
 
+## Remoção do Grupo D (LISTEN/NOTIFY) — handoff como único mecanismo
+
+**Data:** 2026-08-22  
+**Branch:** `cursor/pkf-remove-pubsub`
+
+### Por que foi removido
+
+O PR #26 introduziu dois mecanismos para o mesmo problema (coordenação de estado entre agentes):
+
+1. **Handoff (Grupo A2)** — resumo compacto em arquivo/DB (`pkf/workflow/handoff.py`)
+2. **Pub/Sub PostgreSQL (Grupo D)** — `LISTEN/NOTIFY` via `asyncpg` (`pkf/web/state_events.py`)
+
+O Grupo D foi removido porque duplicava o handoff e exigia `asyncpg` apenas para NOTIFY.
+
+### O que permanece
+
+| Componente | Status |
+|------------|--------|
+| DAG + `depends_on` + topological sort | Mantido |
+| Handoff (`handoff.py`, `session_handoffs`) | Mantido |
+| `ast_parser` + grafo de impacto (BFS reviewer) | Mantido |
+| Migração Alembic `002_session_handoffs` | Mantida |
+
+### Arquivos removidos
+
+- `pkf/web/state_events.py`
+- Referências em `pkf/web/server.py` e `pkf/workflow/orchestrator.py`
+
+## Fechar lacunas restantes — handoff/resume, consulta barata, UI
+
+**Data:** 2026-08-22  
+**Branch:** `cursor/pkf-close-remaining-gaps-1cb2`  
+**Spec:** `specs/fechar-lacunas-restantes.md`
+
+### O que mudou
+
+| Tarefa | Mudança |
+|--------|---------|
+| **1** | Retomada de build documenta handoffs no checkpoint; `mark_resume_agents` na árvore; orquestrador já injeta `handoff_context_for_deps` ao retomar |
+| **2** | `get_prior_phase_response` + `build_agent_responses.json` (máx. 20 entradas, 50k chars/resposta) |
+| **3** | 6 achados Média: AUD-004..008 herdados da remediação; consulta barata implementada |
+| **4** | `TaskTree.tsx` exibe `detail` (handoff, pulado, retomado) e status `skipped` |
+
+### Achados Média — status
+
+- AUD-004 — corrigido (herdado)
+- AUD-005 — corrigido + teste de truncamento
+- AUD-006 — corrigido (herdado)
+- AUD-007 — corrigido (herdado)
+- AUD-008 — corrigido (herdado)
+- Consulta barata — corrigido neste PR
+
 ---
 
 ## Arquitetura de Grafos (DAG) e Sincronia Autônoma

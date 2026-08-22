@@ -45,6 +45,15 @@ SPEC_CHECKS = (
     ("Limite memória", "PKF_MEMORY_MAX_ENTRIES"),
     ("Validação DAG", "DagValidationError"),
     ("Auditoria agentes", "AUDITORIA_AGENTES"),
+    ("DAG depends_on", "depends_on"),
+    ("Handoff agentes", "handoff_context_for_deps"),
+    ("Grafo impacto AST", "impact_graph"),
+    ("Orquestrador DAG", "run_build_dag"),
+    ("save_spec substância", "validate_spec_substance"),
+    ("PATCH rename chat", "PATCH /api/chats"),
+    ("Alembic deploy", "alembic upgrade head"),
+    ("Consulta barata", "get_prior_phase_response"),
+    ("Handoff resume", "mark_resume_agents"),
 )
 
 
@@ -139,6 +148,10 @@ def _implementation_gaps(spec_text: str) -> list[str]:
         gaps.append("Orquestrador: bloqueio de dependentes após falha (AUD-001) ausente")
     if "change_paths_since" not in orchestrator:
         gaps.append("Orquestrador: artifacts de handoff (AUD-002) ausente")
+    if "run_build_dag" not in orchestrator:
+        gaps.append("Orquestrador: run_build_dag ausente")
+    if "handoff_context_for_deps" not in orchestrator:
+        gaps.append("Orquestrador: handoff_context_for_deps não integrado")
     handoff = Path("pkf/workflow/handoff.py").read_text(encoding="utf-8")
     if 'get("status") == "failed"' not in handoff:
         gaps.append("Handoff: status failed (AUD-006) ausente")
@@ -147,6 +160,8 @@ def _implementation_gaps(spec_text: str) -> list[str]:
         gaps.append("Router: memória lazy (AUD-003) ausente")
     if "DagValidationError" not in router_py:
         gaps.append("Router: tratamento DagValidationError (AUD-004) ausente")
+    if "load_review_scope" not in router_py:
+        gaps.append("Router: escopo BFS do reviewer ausente")
     if "MEMORY_MAX_ENTRIES" not in Path("pkf/config.py").read_text(encoding="utf-8"):
         gaps.append("Config: PKF_MEMORY_MAX_ENTRIES (AUD-008) ausente")
     compact = Path("pkf/agents/compact.py").read_text(encoding="utf-8")
@@ -156,6 +171,23 @@ def _implementation_gaps(spec_text: str) -> list[str]:
         gaps.append("Docs: AUDITORIA_AGENTES.md ausente")
     if not Path("specs/remediacao-auditoria-agentes.md").is_file():
         gaps.append("Spec: remediacao-auditoria-agentes.md ausente")
+    if not Path("pkf/workflow/task_graph.py").is_file():
+        gaps.append("Workflow: task_graph.py ausente")
+    if not Path("pkf/workflow/handoff.py").is_file():
+        gaps.append("Workflow: handoff.py ausente")
+    planner = Path("pkf/workflow/planner.py").read_text(encoding="utf-8")
+    if "AGENT_DEPENDS" not in planner or "depends_on" not in planner:
+        gaps.append("Planner: DAG depends_on ausente")
+    if not Path("pkf/utils/ast_parser.py").is_file():
+        gaps.append("Utils: ast_parser.py ausente")
+    if not Path("pkf/utils/impact_graph.py").is_file():
+        gaps.append("Utils: impact_graph.py ausente")
+    if Path("pkf/web/state_events.py").is_file():
+        gaps.append("Web: state_events.py ainda presente (Grupo D removido)")
+    if "get_prior_phase_response" not in impl:
+        gaps.append("Tools: get_prior_phase_response ausente")
+    if not Path("pkf/workflow/build_results.py").is_file():
+        gaps.append("Workflow: build_results.py ausente")
     return gaps
 
 
@@ -176,9 +208,9 @@ def run_build_review_cycle(workspace: Path) -> tuple[int, bool, list[str], str]:
 
 Ciclo {cycles}/{MAX_REVIEW_FIX_CYCLES}. Spec alinhada com menu de contexto, PATCH rename,
 confirmacao de exclusao, variaveis CSS, Headroom, 9Router skip 401, tier qualidade, benchmark,
-build DAG (bloqueio falha, handoff artifacts, memória lazy), get_last_verification,
-coerencia /spec (save_spec, classificador, arquiteto), auto-scroll e composer largo,
-hardening de producao (auth, preview, deploy, remediação auditoria agentes).
+build DAG (bloqueio falha, handoff artifacts, memória lazy, depends_on, run_build_dag), grafo de impacto AST,
+get_last_verification, coerencia /spec (save_spec, classificador, arquiteto), auto-scroll e composer largo,
+hardening de producao (auth, preview, deploy, remediação auditoria agentes, sem pub/sub Grupo D).
 
 Status: {"APROVADO" if approved else "REPROVADO"}
 """

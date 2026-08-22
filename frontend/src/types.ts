@@ -25,6 +25,7 @@ export type TaskNode = {
   id: string;
   title: string;
   status?: string;
+  detail?: string;
   children?: TaskNode[];
 };
 

@@ -29,15 +29,19 @@ class TaskNode:
     id: str
     title: str
     status: str = "pending"
+    detail: str = ""
     children: list[TaskNode] = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "id": self.id,
             "title": self.title,
             "status": self.status,
             "children": [c.to_dict() for c in self.children],
         }
+        if self.detail:
+            out["detail"] = self.detail
+        return out
 
 
 class TaskTracker:
@@ -156,14 +160,30 @@ class TaskTracker:
         )
         self.persist()
 
-    def set_child_status(self, agent: str, status: str) -> None:
+    def set_child_status(self, agent: str, status: str, *, detail: str = "") -> None:
         if not self.tree:
             return
         for child in self._walk(self.tree):
             if child.title.lower().startswith(_agent_label(agent).lower()[:8]):
                 child.status = status
+                if detail:
+                    child.detail = detail
                 self._write_progress(child)
         self.persist()
+
+    def set_child_detail(self, agent: str, detail: str) -> None:
+        if not self.tree:
+            return
+        for child in self._walk(self.tree):
+            if child.title.lower().startswith(_agent_label(agent).lower()[:8]):
+                child.detail = detail
+                self._write_progress(child)
+        self.persist()
+
+    def mark_resume_agents(self, agents: set[str]) -> None:
+        """Marca agentes já concluídos ao retomar build."""
+        for agent in agents:
+            self.set_child_status(agent, "done", detail="retomado — handoff preservado")
 
     def set_phase_status(self, phase_id: str, status: str) -> None:
         if not self.tree:
@@ -206,5 +226,6 @@ def _node_from_dict(data: dict) -> TaskNode:
         id=data["id"],
         title=data["title"],
         status=data.get("status", "pending"),
+        detail=data.get("detail", ""),
         children=[_node_from_dict(c) for c in data.get("children", [])],
     )

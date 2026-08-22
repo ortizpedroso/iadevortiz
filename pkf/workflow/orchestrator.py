@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 
+from pkf.workflow.build_results import save_build_result
 from pkf.workflow.handoff import handoff_context_for_deps, load_handoffs, save_handoff
 from pkf.workflow.planner import BuildTask
 from pkf.workflow.task_graph import DagValidationError, ready_tasks, validate_dag
@@ -24,6 +25,7 @@ def _propagate_skipped_due_to_failed(
     failed: set[str],
     skipped: set[str],
     results: list[tuple[str, str]],
+    tracker: TaskTracker,
 ) -> None:
     """Marca dependentes de tarefas falhas como puladas (transitivo)."""
     changed = True
@@ -35,6 +37,8 @@ def _propagate_skipped_due_to_failed(
                 if dep in failed:
                     pending.pop(task_id)
                     skipped.add(task_id)
+                    detail = f"pulado — dependência '{dep}' falhou"
+                    tracker.set_child_status(task.agent, "skipped", detail=detail)
                     results.append(
                         (task.agent, f"Pulado: dependência '{dep}' falhou.")
                     )
@@ -43,6 +47,8 @@ def _propagate_skipped_due_to_failed(
                 if dep in skipped:
                     pending.pop(task_id)
                     skipped.add(task_id)
+                    detail = f"pulado — dependência '{dep}' não concluída"
+                    tracker.set_child_status(task.agent, "skipped", detail=detail)
                     results.append(
                         (task.agent, f"Pulado: dependência '{dep}' não concluída.")
                     )
@@ -120,6 +126,17 @@ async def run_build_dag(
             return task.agent, f"Erro: Agente '{task.agent}' indisponível.", False
         router.bind_agent_provider(task.agent)
         await router.emit("parallel_start", agent=task.agent, node=task.node_id)
+        if task.depends_on:
+            store = load_handoffs(router.workspace.root)
+            deps_ready = [
+                dep_id
+                for dep_id in task.depends_on
+                if store.get(dep_id, {}).get("status") == "ok"
+            ]
+            if deps_ready:
+                dep_label = ", ".join(deps_ready)
+                tracker.set_child_detail(task.agent, f"recebendo contexto de {dep_label}")
+                await router.emit_task_tree(tracker)
         handoff_block = handoff_context_for_deps(router.workspace.root, task.depends_on)
         payload = task.instruction + handoff_block if handoff_block else task.instruction
         task_started_at = datetime.now(UTC).isoformat()
@@ -135,13 +152,19 @@ async def run_build_dag(
                 artifacts=artifacts,
                 status="ok",
             )
+            save_build_result(
+                router.workspace.root,
+                task.task_id,
+                agent=task.agent,
+                response=reply or "(sem resposta)",
+                status="ok",
+            )
             if router.db and hasattr(router.db, "save_handoffs"):
                 store = load_handoffs(router.workspace.root)
                 await router.db.save_handoffs(store)
             tracker.set_child_status(task.agent, "done")
             await router.emit("parallel_done", agent=task.agent, node=task.node_id)
             await router.emit_task_tree(tracker)
-            await _notify_agent_done(router, task)
             return task.agent, reply or "(sem resposta)", True
         except (APIConnectionError, APIStatusError, APITimeoutError, RuntimeError, ValueError) as exc:
             tracker.set_child_status(task.agent, "failed")
@@ -155,10 +178,17 @@ async def run_build_dag(
                 artifacts=[],
                 status="failed",
             )
+            save_build_result(
+                router.workspace.root,
+                task.task_id,
+                agent=task.agent,
+                response=f"Erro: {exc}",
+                status="failed",
+            )
             return task.agent, f"Erro: {exc}", False
 
     while pending:
-        _propagate_skipped_due_to_failed(pending, failed, skipped, results)
+        _propagate_skipped_due_to_failed(pending, failed, skipped, results, tracker)
 
         batch = ready_tasks(list(pending.values()), succeeded)
         if only_agents is not None:
@@ -174,7 +204,7 @@ async def run_build_dag(
                 succeeded.add(task.task_id)
             batch = runnable
         if not batch:
-            _propagate_skipped_due_to_failed(pending, failed, skipped, results)
+            _propagate_skipped_due_to_failed(pending, failed, skipped, results, tracker)
             blocked = [t for t in pending.values() if t.task_id not in skipped]
             if not blocked:
                 break
@@ -222,22 +252,6 @@ async def run_build_dag(
                     failed.add(task.task_id)
 
     return results
-
-
-async def _notify_agent_done(router, task: BuildTask) -> None:
-    from pkf.web.state_events import emit_state_event
-
-    session_id = None
-    if router.db and getattr(router.db, "session_id", None):
-        session_id = str(router.db.session_id)
-    await emit_state_event(
-        {
-            "kind": "agent_phase_done",
-            "task_id": task.task_id,
-            "agent": task.agent,
-            "session_id": session_id,
-        }
-    )
 
 
 def failed_agents(results: list[tuple[str, str]]) -> set[str]:
