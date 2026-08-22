@@ -28,12 +28,20 @@ class MemoryStore:
         self.index: dict[str, str] = {}
         self._load()
 
+    def _sanitize_summary(self, summary: str, max_len: int = 2000) -> str:
+        cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", summary or "")
+        if len(cleaned) > max_len:
+            return cleaned[:max_len] + "…"
+        return cleaned
+
     def _load(self) -> None:
         if self.path.exists():
             try:
                 data = json.loads(self.path.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
-                    self.index = {str(k): str(v) for k, v in data.items()}
+                    self.index = {
+                        str(k): self._sanitize_summary(str(v)) for k, v in data.items()
+                    }
             except json.JSONDecodeError:
                 self.index = {}
 

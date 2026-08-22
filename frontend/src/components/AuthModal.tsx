@@ -44,7 +44,7 @@ export function AuthModal({ open, onSubmit }: Props) {
           value={token}
           onChange={(e) => setToken(e.target.value)}
           className="pkf-input mt-2 w-full px-4 py-3 text-sm"
-          placeholder="ex.: teste123"
+          placeholder="Cole o token gerado no deploy (ex.: openssl rand -hex 24)"
         />
         <button
           type="submit"

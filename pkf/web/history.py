@@ -51,6 +51,7 @@ class ChatHistory:
             await self._save_file()
 
     async def replace_messages(self, messages: list[dict]) -> None:
+        # Pendência (L3): diff/bulk insert em vez de apagar+reinserir tudo.
         self.messages = list(messages)
         if database_enabled():
             await self.db.setup()

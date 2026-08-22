@@ -450,7 +450,7 @@ async def delete_project(workspace: Workspace, slug: str, db: DbContext | None =
         factory = get_session_factory()
         async with factory() as session:
             user = await ensure_default_user(session)
-            await delete_project_record(session, user, slug)
+            await delete_project_record(session, user, slug, workspace_root=workspace.global_root)
             await session.commit()
 
     global_root = workspace.global_root

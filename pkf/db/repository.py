@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import uuid
 from pathlib import Path
 
@@ -326,11 +327,28 @@ async def rename_project_record(session: AsyncSession, user: User, slug: str, na
     project.name = name
 
 
-async def delete_project_record(session: AsyncSession, user: User, slug: str) -> None:
+async def delete_project_record(
+    session: AsyncSession,
+    user: User,
+    slug: str,
+    *,
+    workspace_root: Path | None = None,
+) -> None:
     result = await session.execute(
         select(Project).where(Project.user_id == user.id, Project.slug == slug)
     )
     project = result.scalar_one_or_none()
     if not project:
         return
+    stored_path = project.workspace_path
     await session.delete(project)
+    if workspace_root is None:
+        return
+    candidates = []
+    if stored_path:
+        candidates.append(workspace_root / stored_path)
+    candidates.append(workspace_root / "projects" / slug)
+    for path in candidates:
+        if path.is_dir():
+            shutil.rmtree(path)
+            break

@@ -26,6 +26,8 @@ async def init_db() -> None:
     global _engine, _session_factory
     if not database_enabled():
         return
+    if _engine is not None:
+        return
     url = _normalize_url(database_url() or "")
     _engine = create_async_engine(url, echo=False, pool_pre_ping=True)
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
