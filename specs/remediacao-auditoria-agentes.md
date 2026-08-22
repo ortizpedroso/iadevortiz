@@ -94,3 +94,15 @@ Corrigir achados de severidade **Alta** e **Média** da auditoria de agentes, pr
 2. AUD-002  
 3. AUD-003 (+ AUD-008)  
 4. AUD-004, AUD-005, AUD-006, AUD-007 (Média)
+
+## Status da implementação (review 2026-08-22)
+
+- [x] AUD-001 — `tests/test_audit_remediation.py::test_dag_blocks_frontend_when_backend_fails`
+- [x] AUD-002 — `tests/test_audit_remediation.py::test_handoff_artifacts_from_recorded_changes`
+- [x] AUD-003 — `tests/test_audit_remediation.py::test_router_boot_does_not_create_all_memory_agents`
+- [x] AUD-004 — `tests/test_audit_remediation.py::test_dag_cycle_raises_validation_error`
+- [x] AUD-005 — docstring `MAX_SUMMARY` em `handoff.py`
+- [x] AUD-006 — `tests/test_audit_remediation.py::test_failed_handoff_not_injected_to_dependents`
+- [x] AUD-007 — `tests/test_audit_remediation.py::test_compact_llm_includes_recent_file_changes`
+- [x] AUD-008 — `tests/test_audit_remediation.py::test_memory_store_enforces_max_entries`
+- [x] `tests/test_platform_build_review_cycle.py` — APROVADO

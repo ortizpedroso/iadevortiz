@@ -34,6 +34,10 @@ def test_spec_file_contains_rodada2_features(tmp_path: Path):
         "REQUIRE_API_KEY",
         "PKF_REQUIRE_AUTH",
         "rate limit",
+        "PKF_MEMORY_MAX_ENTRIES",
+        "DagValidationError",
+        "sob demanda",
+        "AUDITORIA_AGENTES",
     ):
         assert keyword.lower() in text.lower() or keyword in text
 
