@@ -65,6 +65,8 @@ Toda mudança relevante exige entrada em **`CHANGELOG_MELHORIAS.md`** com:
 
 Não escreva só “atualizei X”.
 
+**Documentação de arquitetura:** mudanças que alterem schema de banco (`pkf/db/models.py`), endpoints (`pkf/web/server.py`), ou fluxo de roteamento/orquestração (`pkf/router.py`, `pkf/workflow/`) devem atualizar `docs/ARQUITETURA.md` como parte do DoD — mesma disciplina aplicada a este changelog.
+
 ---
 
 ## Git e entrega
