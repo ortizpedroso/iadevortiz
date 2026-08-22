@@ -47,6 +47,20 @@ def record_change(workspace: Workspace, path: str, action: str, snippet: str = "
         log_path.write_text(json.dumps(entries[-50:], ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def change_paths_since(workspace: Workspace, since_iso: str) -> list[str]:
+    """Paths únicos alterados em ``changes.json`` desde ``since_iso`` (ISO UTC)."""
+    paths: list[str] = []
+    seen: set[str] = set()
+    for entry in list_changes(workspace, limit=50):
+        if entry.get("at", "") < since_iso:
+            continue
+        path = str(entry.get("path") or "").replace("\\", "/")
+        if path and path not in seen:
+            seen.add(path)
+            paths.append(path)
+    return paths
+
+
 def list_changes(workspace: Workspace, limit: int = 20) -> list[dict]:
     log_path = pkf_dir(workspace.root) / "changes.json"
     if not log_path.exists():

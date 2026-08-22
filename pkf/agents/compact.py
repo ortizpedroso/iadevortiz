@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError
@@ -58,6 +59,7 @@ async def compact_messages_llm(
     messages: list[dict],
     model: str,
     client: AsyncOpenAI,
+    workspace_root: Path | None = None,
 ) -> list[dict]:
     """Compacta histórico antigo via resumo estruturado LLM; fallback mecânico se falhar."""
     budget = compaction_budget(model)
@@ -72,7 +74,7 @@ async def compact_messages_llm(
     previous = _extract_previous_summary(system_msgs)
 
     try:
-        summary = await _llm_structured_summary(client, model, old, previous)
+        summary = await _llm_structured_summary(client, model, old, previous, workspace_root)
     except (APIConnectionError, APIStatusError, APITimeoutError, RuntimeError, ValueError, AttributeError):
         return _compact_messages_mechanical(messages, model)
 
@@ -148,6 +150,7 @@ async def _llm_structured_summary(
     model: str,
     old_messages: list[dict],
     previous_summary: str | None,
+    workspace_root: Path | None = None,
 ) -> str:
     transcript = _format_messages_for_summary(old_messages)
     user_parts: list[str] = []
@@ -158,6 +161,18 @@ async def _llm_structured_summary(
             f"{previous_summary}"
         )
     user_parts.append(f"Mensagens a resumir:\n\n{transcript}")
+    if workspace_root is not None:
+        from pkf.workspace import Workspace
+        from pkf.workspace_index import list_changes
+
+        recent = list_changes(Workspace(workspace_root), limit=15)
+        paths = [str(c.get("path") or "") for c in recent if c.get("path")]
+        if paths:
+            user_parts.append(
+                "Arquivos alterados recentemente no workspace (verificados em changes.json, "
+                "não inferidos — use esta lista em ## Arquivos Relevantes quando aplicável):\n"
+                + "\n".join(f"- {p}" for p in paths)
+            )
 
     completion = await client.chat.completions.create(
         model=model,

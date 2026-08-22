@@ -55,9 +55,12 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 
 - Pipeline **/spec → aprovação manual → /build → review→fix loop** até aprovação
 - **Duas implementações de /build**:
-  - **Clássica** (padrão): fases backend → logic → frontend → tester, brainstorm, juiz /goal, changelog
+  - **DAG clássica** (padrão): `plan_build` com `depends_on` → `run_build_dag` (ordenação topológica + `asyncio.gather` por grau zero); falha upstream **bloqueia** dependentes (`Pulado: dependência … falhou`)
   - **Grafo piloto** (`PKF_USE_LANGGRAPH_BUILD=1`): plan → build → review em `build_graph.py`
-- **Build em fases**: backend → logic → frontend → tester (dependências respeitadas)
+- **Build em DAG**: `backend` e `logic` em paralelo (grau zero); `frontend` após ambos; `tester` após `frontend`
+- **Handoff entre agentes**: resumo em `.pkf/session_handoffs.json` + `artifacts` verificados via `changes.json`; entradas `failed` não injetadas em dependentes
+- **Memória lazy**: agentes de memória criados sob demanda (`_ensure_memory_agent`); índice limitado por `PKF_MEMORY_MAX_ENTRIES` (padrão 50, eviction FIFO)
+- **Validação de DAG**: ciclos em `depends_on` rejeitados com `DagValidationError` antes da execução
 - **Planner LLM** com fallback heurístico por keywords na spec
 - **Handoff API**: backend documenta `.pkf/handoff/api.md` → frontend consome
 - **Retry inteligente**: reexecuta só agentes que falharam (até `PKF_BUILD_RETRIES`)
@@ -79,13 +82,13 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - **Verificação T3 persistida** (`.pkf/last_verify.json`) + ferramenta `get_last_verification` para respostas fundamentadas pós-build
 - **Retomada de build**: `/build resume` ou linguagem natural ("continue de onde parou", "retomar") preserva agentes já `done` em `tasks.json`; classificador `resume_request`
 - **Progresso do build**: ferramenta `get_build_status` (fase, spec, árvore de tarefas, verificação T3, checkpoint) para o `generalista`
-- **Documentação técnica**: `docs/ARQUITETURA.md` (schema DB, endpoints, fluxos Mermaid) — manter em sync com mudanças de schema/API/roteamento
+- **Documentação técnica**: `docs/ARQUITETURA.md`, `docs/AUDITORIA_AGENTES.md`, `specs/remediacao-auditoria-agentes.md`
 - **Saudações locais** (`oi`, `olá`) sem chamar gateway de IA
 - **Classificador de intenção**: perguntas conversacionais (`você consegue…`, `dá pra…`) tratadas antes de `FEATURE_HINTS`; fallback LLM só quando keywords não resolvem
 - **Arquiteto entrevista**: uma pergunta por vez; sem `save_spec` até objetivo, requisitos, restrições e critério de “concluído” claros; pedido já detalhado pode ir direto à spec
 - **Memória de sessão**: índice `.pkf/memory/index.json`; match por **proporção** de sobreposição (≥45%, mín. 3 termos) com stopwords de domínio (`sistema`, `projeto`, `quero`, `desenvolver`, …) para evitar falso-positivo entre projetos parecidos
 - **Agentes de memória**: restaurados com `project_context`, `list_dir`, `read_file`, `search_code`; prompt exige checar o workspace atual antes de afirmar que algo está implementado — resumo antigo não é estado atual
-- **Compactação de contexto**: `compact_messages_llm` (resumo estruturado) com fallback mecânico quando o gateway falha
+- **Compactação de contexto**: `compact_messages_llm` (resumo estruturado) com fallback mecânico; injeta paths de `changes.json` como contexto verificável
 - **Coerência no /spec**:
   - Arquiteto: **uma pergunta por vez** (few-shot CORRETO vs ERRADO); proíbe tabela/lista numerada de perguntas
   - Delegação: quando usuário pede *"sugira você"* / *"decida por mim"*, sintetiza respostas e cria spec **completa** (não vazia)
@@ -129,9 +132,9 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 ## Fluxo /build
 
 1. Brainstorm (architect, sem código) — omitido em `/build resume`
-2. Planner (LLM ou heurística) → fases ordenadas
-3. Implementação em fases com handoff API (`prepare_for_build`; retomada pula agentes `done`)
-4. Verificação de arquivos + retry por agente
+2. Planner (LLM ou heurística) → DAG com `depends_on` (`dag_v1`)
+3. `run_build_dag`: paralelo no grau zero; handoff com artifacts; dependentes bloqueados se upstream falhar
+4. Verificação de arquivos + retry por agente (`prepare_for_build`; retomada pula agentes `done`)
 5. Loop review → correção → review até **Status: APROVADO**
 6. Juiz independente (/goal) + resposta amigável na UI
 
@@ -180,6 +183,7 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 | `NINEROUTER_DASHBOARD_NEW_PASSWORD` | Senha do dashboard OmniRoute (gerada, sem default fraco) |
 | `PKF_RELEVANCE_THRESHOLD` | Proporção mínima (padrão `0.45`) para rotear mensagem a agente de memória |
 | `PKF_MEMORY_MIN_OVERLAP` | Mínimo de termos significativos em comum (padrão `3`) no match de memória |
+| `PKF_MEMORY_MAX_ENTRIES` | Máximo de entradas em `.pkf/memory/index.json` (padrão `50`, eviction FIFO) |
 | `PKF_NINEROUTER_MODEL_CHAIN` | Cadeia de fallback de modelos no gateway OmniRoute |
 
 ## Stack

@@ -36,6 +36,12 @@ SPEC_CHECKS = (
     ("Rate limiting", "Rate limiting"),
     ("Auth loopback", "PKF_REQUIRE_AUTH"),
     ("Scroll pausado", "Auto-scroll pausado"),
+    ("DAG bloqueio falha", "bloqueia"),
+    ("Handoff artifacts", "verificados via"),
+    ("Memória lazy", "sob demanda"),
+    ("Limite memória", "PKF_MEMORY_MAX_ENTRIES"),
+    ("Validação DAG", "DagValidationError"),
+    ("Auditoria agentes", "AUDITORIA_AGENTES"),
 )
 
 
@@ -114,6 +120,28 @@ def _implementation_gaps(spec_text: str) -> list[str]:
         gaps.append("Frontend: Composer sem max-w-4xl")
     if "max-w-4xl" not in message_list:
         gaps.append("Frontend: MessageList sem max-w-4xl")
+    orchestrator = Path("pkf/workflow/orchestrator.py").read_text(encoding="utf-8")
+    if "_propagate_skipped_due_to_failed" not in orchestrator:
+        gaps.append("Orquestrador: bloqueio de dependentes após falha (AUD-001) ausente")
+    if "change_paths_since" not in orchestrator:
+        gaps.append("Orquestrador: artifacts de handoff (AUD-002) ausente")
+    handoff = Path("pkf/workflow/handoff.py").read_text(encoding="utf-8")
+    if 'get("status") == "failed"' not in handoff:
+        gaps.append("Handoff: status failed (AUD-006) ausente")
+    router_py = Path("pkf/router.py").read_text(encoding="utf-8")
+    if "_ensure_memory_agent" not in router_py:
+        gaps.append("Router: memória lazy (AUD-003) ausente")
+    if "DagValidationError" not in router_py:
+        gaps.append("Router: tratamento DagValidationError (AUD-004) ausente")
+    if "MEMORY_MAX_ENTRIES" not in Path("pkf/config.py").read_text(encoding="utf-8"):
+        gaps.append("Config: PKF_MEMORY_MAX_ENTRIES (AUD-008) ausente")
+    compact = Path("pkf/agents/compact.py").read_text(encoding="utf-8")
+    if "workspace_root" not in compact or "changes.json" not in compact:
+        gaps.append("Compact: contexto de arquivos verificados (AUD-007) ausente")
+    if not Path("docs/AUDITORIA_AGENTES.md").is_file():
+        gaps.append("Docs: AUDITORIA_AGENTES.md ausente")
+    if not Path("specs/remediacao-auditoria-agentes.md").is_file():
+        gaps.append("Spec: remediacao-auditoria-agentes.md ausente")
     return gaps
 
 
@@ -134,8 +162,9 @@ def run_build_review_cycle(workspace: Path) -> tuple[int, bool, list[str], str]:
 
 Ciclo {cycles}/{MAX_REVIEW_FIX_CYCLES}. Spec alinhada com menu de contexto, PATCH rename,
 confirmacao de exclusao, variaveis CSS, Headroom, 9Router skip 401, tier qualidade, benchmark,
-build graph, get_last_verification, coerencia /spec (save_spec, classificador, arquiteto),
-auto-scroll e composer largo, hardening de producao (auth, preview, deploy, remediação segurança).
+build DAG (bloqueio falha, handoff artifacts, memória lazy), get_last_verification,
+coerencia /spec (save_spec, classificador, arquiteto), auto-scroll e composer largo,
+hardening de producao (auth, preview, deploy, remediação auditoria agentes).
 
 Status: {"APROVADO" if approved else "REPROVADO"}
 """

@@ -86,7 +86,9 @@ class Agent:
         native_tools = self.supports_tools and not is_reasoning_model(self.model)
         for _ in range(self.max_tool_rounds):
             messages = prepare_messages_for_api(
-                await compact_messages_llm(self.messages, self.model, self.client),
+                await compact_messages_llm(
+                    self.messages, self.model, self.client, self.router.workspace.root
+                ),
                 self.model,
                 self.name,
             )

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import networkx as nx
 
-from pkf.config import MEMORY_DOMAIN_STOPWORDS, MEMORY_MIN_OVERLAP_WORDS, pkf_dir
+from pkf.config import MEMORY_DOMAIN_STOPWORDS, MEMORY_MAX_ENTRIES, MEMORY_MIN_OVERLAP_WORDS, pkf_dir
 
 
 def _memory_tokens(text: str) -> set[str]:
@@ -50,7 +50,12 @@ class MemoryStore:
         self.path.write_text(json.dumps(self.index, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def register(self, name: str, summary: str) -> None:
-        self.index[name] = summary
+        if name in self.index:
+            del self.index[name]
+        self.index[name] = self._sanitize_summary(summary)
+        while len(self.index) > MEMORY_MAX_ENTRIES:
+            oldest = next(iter(self.index))
+            del self.index[oldest]
         self.save()
 
     def find(self, user_input: str, threshold: float) -> tuple[str | None, int]:
