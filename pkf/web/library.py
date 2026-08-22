@@ -207,6 +207,37 @@ def _validate_project_name(name: str) -> str:
     return name
 
 
+def _custom_titles_path(workspace_root: Path) -> Path:
+    return _chats_dir(workspace_root) / "custom_titles.json"
+
+
+def _load_custom_titles(workspace_root: Path) -> dict[str, str]:
+    path = _custom_titles_path(workspace_root)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_custom_titles(workspace_root: Path, titles: dict[str, str]) -> None:
+    path = _custom_titles_path(workspace_root)
+    path.write_text(json.dumps(titles, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _apply_custom_chat_titles(chats: list[dict], workspace_root: Path) -> list[dict]:
+    custom = _load_custom_titles(workspace_root)
+    if not custom:
+        return chats
+    for chat in chats:
+        title = custom.get(str(chat.get("id", "")))
+        if title:
+            chat["title"] = title
+    return chats
+
+
 async def library_snapshot(workspace: Workspace, db: DbContext | None = None) -> dict:
     if database_enabled() and db:
         await db.setup()
@@ -231,6 +262,7 @@ async def library_snapshot(workspace: Workspace, db: DbContext | None = None) ->
                 )
         projects.sort(key=lambda p: (p.get("name") or p["slug"]).lower())
         projects = sort_projects(projects, workspace.global_root)
+        chats = _apply_custom_chat_titles(chats, workspace.global_root)
         return {"chats": chats, "projects": projects, "active_chat_id": str(db.session_id) if db.session_id else None}
 
     global_root = workspace.global_root
@@ -433,6 +465,48 @@ async def rename_project(
     if not project_path.is_dir():
         raise ValueError("Projeto não encontrado")
     save_project_name(workspace.global_root, slug, display_name)
+
+
+async def rename_chat(
+    workspace: Workspace,
+    chat_id: str,
+    title: str,
+    db: DbContext | None = None,
+) -> None:
+    chat_id = _validate_chat_id(chat_id)
+    display_title = _validate_project_name(title)
+    global_root = workspace.global_root
+    data = _load_index(global_root)
+    found = False
+    for chat in data.get("chats", []):
+        if chat.get("id") == chat_id:
+            chat["title"] = display_title
+            chat["updated_at"] = datetime.now(UTC).isoformat()
+            found = True
+            break
+    if found:
+        _save_index(global_root, data)
+    elif not database_enabled():
+        raise ValueError("Chat não encontrado")
+    if database_enabled() and db:
+        await db.setup()
+        factory = get_session_factory()
+        async with factory() as session:
+            user = await ensure_default_user(session)
+            from pkf.db.models import ChatSession
+            import uuid as uuid_mod
+
+            try:
+                cid = uuid_mod.UUID(chat_id)
+            except ValueError as exc:
+                raise ValueError("Chat não encontrado") from exc
+            chat_row = await session.get(ChatSession, cid)
+            if not chat_row or chat_row.user_id != user.id:
+                raise ValueError("Chat não encontrado")
+            await session.commit()
+    titles = _load_custom_titles(global_root)
+    titles[chat_id] = display_title
+    _save_custom_titles(global_root, titles)
 
 
 async def pin_project(workspace: Workspace, slug: str, pinned: bool) -> None:

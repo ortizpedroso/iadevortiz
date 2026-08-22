@@ -18,6 +18,7 @@ type Props = {
   projects: ProjectItem[];
   onSelectChat: (id: string) => void;
   onDeleteChat: (id: string) => void;
+  onRenameChat: (id: string, title: string) => void;
   onAttachChat: (chatId: string, projectSlug: string | null) => void;
   onSelectProject: (slug: string) => void;
   onDeleteProject: (slug: string) => void;
@@ -200,17 +201,26 @@ function ChatRow({
   projects,
   onSelect,
   onDelete,
+  onRename,
   onAttach,
 }: {
   chat: ChatItem;
   projects: ProjectItem[];
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  onRename: (id: string, title: string) => void;
   onAttach: (chatId: string, projectSlug: string | null) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(chat.title || "Chat");
   const menuRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const label = chat.title || "Chat";
+
+  useEffect(() => {
+    setDraft(chat.title || "Chat");
+  }, [chat.title]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -230,6 +240,17 @@ function ChatRow({
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  function commitRename() {
+    const next = draft.trim();
+    setEditing(false);
+    if (next && next !== label) onRename(chat.id, next);
+    else setDraft(label);
+  }
+
   return (
     <li className="group relative">
       <div
@@ -239,20 +260,38 @@ function ChatRow({
             : "text-[var(--pkf-muted)] hover:bg-[var(--pkf-bg-panel)]/80 hover:text-[var(--pkf-text)]"
         }`}
       >
-        <button
-          type="button"
-          className="min-w-0 flex-1 truncate text-left text-sm"
-          onClick={() => onSelect(chat.id)}
-        >
-          <span className="line-clamp-2">{label}</span>
-        </button>
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") {
+                setDraft(label);
+                setEditing(false);
+              }
+            }}
+            className="pkf-input min-w-0 flex-1 text-sm"
+            aria-label="Renomear chat"
+          />
+        ) : (
+          <button
+            type="button"
+            className="min-w-0 flex-1 truncate text-left text-sm"
+            onClick={() => onSelect(chat.id)}
+          >
+            <span className="line-clamp-2">{label}</span>
+          </button>
+        )}
         <div ref={menuRef} className="relative shrink-0">
           <button
             type="button"
             aria-label={`Ações do chat ${label}`}
             aria-expanded={menuOpen}
             aria-haspopup="menu"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--pkf-border-soft)] bg-white text-base leading-none text-[var(--pkf-muted)] shadow-sm hover:border-[var(--pkf-border)] hover:text-[var(--pkf-text)]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--pkf-border-soft)] bg-[var(--pkf-bg-panel)] text-base leading-none text-[var(--pkf-muted)] hover:border-[var(--pkf-border)] hover:text-[var(--pkf-text)]"
             onClick={(e) => {
               e.stopPropagation();
               setMenuOpen((open) => !open);
@@ -263,7 +302,7 @@ function ChatRow({
           {menuOpen ? (
             <div
               role="menu"
-              className="absolute right-0 top-full z-40 mt-1 min-w-[10.5rem] rounded-xl border border-[var(--pkf-border)] bg-white py-1 shadow-lg"
+              className="absolute right-0 top-full z-40 mt-1 min-w-[9.5rem] rounded-xl border border-[var(--pkf-border)] bg-[var(--pkf-bg-elevated)] py-1 shadow-2xl"
             >
               {projects.length ? (
                 <div className="border-b border-[var(--pkf-border-soft)] px-3 py-2">
@@ -291,13 +330,24 @@ function ChatRow({
               <button
                 type="button"
                 role="menuitem"
+                className="pkf-menu-item block w-full px-3 py-2 text-left text-sm"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setEditing(true);
+                }}
+              >
+                Renomear
+              </button>
+              <button
+                type="button"
+                role="menuitem"
                 className="pkf-menu-item block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
                 onClick={() => {
                   setMenuOpen(false);
                   onDelete(chat.id);
                 }}
               >
-                Excluir chat
+                Excluir
               </button>
             </div>
           ) : null}
@@ -323,6 +373,7 @@ export function Sidebar({
   projects,
   onSelectChat,
   onDeleteChat,
+  onRenameChat,
   onAttachChat,
   onSelectProject,
   onDeleteProject,
@@ -514,6 +565,7 @@ export function Sidebar({
                     projects={projects}
                     onSelect={onSelectChat}
                     onDelete={onDeleteChat}
+                    onRename={onRenameChat}
                     onAttach={onAttachChat}
                   />
                 ))

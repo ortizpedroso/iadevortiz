@@ -29,6 +29,7 @@ def test_server_exposes_library_routes():
     assert '"/api/chats"' in source
     assert '"/api/chats/{chat_id}/activate"' in source
     assert '"/api/chats/{chat_id}/attach"' in source
+    assert '"/api/chats/{chat_id}"' in source or "chats_rename" in source
     assert '"/api/projects/{slug}/activate"' in source
     assert '"/api/projects/{slug}"' in source
     assert "projects_rename" in source or '@app.patch("/api/projects/{slug}")' in source
@@ -44,6 +45,7 @@ def test_sidebar_frontend_wired():
     for prop in (
         "onSelectChat",
         "onDeleteChat",
+        "onRenameChat",
         "onAttachChat",
         "onSelectProject",
         "onDeleteProject",

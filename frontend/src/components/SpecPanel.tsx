@@ -50,7 +50,7 @@ export function SpecPanel({ spec, specName, onApproved }: Props) {
         <h2 className="font-serif text-lg font-semibold">{spec.title || "Spec do projeto"}</h2>
         <p className="mt-1 text-xs text-[var(--pkf-accent)]">Aguardando aprovação</p>
       </header>
-      <div className="min-h-0 flex-1 overflow-auto px-4 py-3 text-sm leading-relaxed text-[#cfcfcf]">
+      <div className="min-h-0 flex-1 overflow-auto px-4 py-3 text-sm leading-relaxed text-[var(--pkf-text)]">
         <pre className="whitespace-pre-wrap font-sans">{spec.body?.slice(0, 4000) || "—"}</pre>
         {Object.keys(stack).length ? (
           <div className="mt-4 space-y-2">

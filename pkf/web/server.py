@@ -331,6 +331,26 @@ def create_app(router: Router) -> FastAPI:
             "messages": history.messages,
         }
 
+    @app.patch("/api/chats/{chat_id}")
+    async def chats_rename(chat_id: str, payload: dict | None = None):
+        payload = payload or {}
+        history: ChatHistory = app.state.history
+        title = (payload.get("title") or "").strip()
+        if not title:
+            return JSONResponse({"ok": False, "error": "Título inválido"}, status_code=400)
+        try:
+            async with app.state.lock:
+                from pkf.web.library import rename_chat
+
+                await rename_chat(router.workspace, chat_id, title, history.db_context)
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        return {
+            "ok": True,
+            "library": await library_snapshot(router.workspace, history.db_context),
+            "session": router.snapshot(),
+        }
+
     @app.post("/api/chats/{chat_id}/attach")
     async def chats_attach(chat_id: str, payload: dict | None = None):
         payload = payload or {}
