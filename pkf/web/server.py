@@ -55,22 +55,30 @@ logger = logging.getLogger(__name__)
 
 def _allowed_ws_origins() -> set[str]:
     raw = os.getenv("PKF_ALLOWED_ORIGINS", "").strip()
+    allowed: set[str] = set()
     if raw:
-        return {item.strip().rstrip("/") for item in raw.split(",") if item.strip()}
+        allowed.update(item.strip().rstrip("/") for item in raw.split(",") if item.strip())
     domain = os.getenv("PKF_HOST_DOMAIN", "").strip()
     if domain:
-        return {f"https://{domain}", f"http://{domain}"}
-    return set()
+        allowed.add(f"https://{domain}")
+        allowed.add(f"http://{domain}")
+    return allowed
 
 
 def _ws_origin_allowed(websocket: WebSocket) -> bool:
     allowed = _allowed_ws_origins()
-    if not allowed:
-        return True
     origin = (websocket.headers.get("origin") or "").rstrip("/")
     if not origin:
         return True
-    return origin in allowed
+    if allowed and origin in allowed:
+        return True
+    host = (websocket.headers.get("x-forwarded-host") or websocket.headers.get("host") or "").split(",")[0].strip()
+    proto = (websocket.headers.get("x-forwarded-proto") or "https").split(",")[0].strip()
+    if host:
+        derived = f"{proto}://{host}".rstrip("/")
+        if origin == derived:
+            return True
+    return not allowed
 
 
 def _ws_accept_subprotocol(websocket: WebSocket) -> str | None:
@@ -85,7 +93,9 @@ def _ws_accept_subprotocol(websocket: WebSocket) -> str | None:
 async def build_session_snapshot(router: Router, history: ChatHistory) -> dict:
     """Snapshot consistente entre HTTP e WebSocket (DB tasks/cycle têm prioridade)."""
     snapshot = router.snapshot()
-    if database_enabled():
+    if not database_enabled():
+        return snapshot
+    try:
         await history.db_context.setup()
         snapshot["tasks"] = await history.db_context.load_tasks()
         cycle = await history.db_context.load_dev_cycle()
@@ -95,6 +105,9 @@ async def build_session_snapshot(router: Router, history: ChatHistory) -> dict:
             snapshot["spec_status"] = cycle.spec_status
             snapshot["goal"] = cycle.goal
             snapshot["last_agent"] = cycle.last_agent or snapshot.get("last_agent")
+    except Exception:
+        logger.exception("Snapshot degradado: falha ao ler Postgres")
+        snapshot["database_degraded"] = True
     return snapshot
 
 

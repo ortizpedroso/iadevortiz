@@ -22,10 +22,17 @@ class ChatHistory:
 
     async def load(self) -> None:
         if database_enabled():
-            await self.db.setup()
-            self.messages = await self.db.get_messages()
-            self.active_chat_id = str(self.db.session_id) if self.db.session_id else None
-            return
+            try:
+                await self.db.setup()
+                self.messages = await self.db.get_messages()
+                self.active_chat_id = str(self.db.session_id) if self.db.session_id else None
+                return
+            except Exception:
+                import logging
+
+                logging.getLogger(__name__).exception(
+                    "Falha ao carregar histórico do Postgres; usando fallback em arquivo"
+                )
         self.active_chat_id, self.messages = load_file_messages(self.workspace.global_root)
 
     def _load_legacy_file(self) -> list[dict]:

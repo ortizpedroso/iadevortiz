@@ -221,6 +221,13 @@ repair_postgres_env_if_needed() {
 migrate_omniroute_password
 migrate_postgres_password
 repair_postgres_env_if_needed
+
+sync_database_url() {
+  local pg_pass=""
+  pg_pass="$(grep '^POSTGRES_PASSWORD=' .env 2>/dev/null | tail -n1 | cut -d= -f2- || echo pkf)"
+  set_kv DATABASE_URL "postgresql+asyncpg://pkf:${pg_pass}@postgres:5432/pkf"
+}
+sync_database_url
 set_kv PKF_FALLBACK "${PKF_FALLBACK:-}"
 
 set_kv PKF_PROVIDER "${PKF_PROVIDER:-ninerouter}"

@@ -31,7 +31,8 @@ def _extract_ws_token(websocket: WebSocket) -> str | None:
         candidate = part.strip()
         if candidate.startswith("pkf-token."):
             return candidate[len("pkf-token.") :]
-    return websocket.headers.get("X-PKF-Token")
+    token = websocket.query_params.get("token") or websocket.headers.get("X-PKF-Token")
+    return token
 
 
 def require_auth_token(token: str | None) -> None:
@@ -76,7 +77,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; "
                 "script-src 'self' 'unsafe-inline'; "
-                "style-src 'self' 'unsafe-inline'; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src 'self' https://fonts.gstatic.com data:; "
                 "img-src 'self' data: blob:; "
                 "connect-src 'self' ws: wss:; "
                 "frame-src 'self'; "

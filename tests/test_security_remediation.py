@@ -78,6 +78,14 @@ def test_ws_auth_via_subprotocol(monkeypatch):
     assert check_ws_auth(ws) is False
 
 
+def test_ws_auth_via_query_fallback(monkeypatch):
+    monkeypatch.setenv("PKF_AUTH_TOKEN", "ws-token-32-characters-minimum")
+    ws = MagicMock()
+    ws.query_params = {"token": "ws-token-32-characters-minimum"}
+    ws.headers = {}
+    assert check_ws_auth(ws) is True
+
+
 def test_secret_filename_patterns():
     assert is_secret_filename(".env")
     assert is_secret_filename(".env.production")

@@ -187,7 +187,12 @@ export default function App() {
         return;
       }
       if (ev.code === 1011) {
-        setStatus("Erro de sessão");
+        setThinking(false);
+        setBusy(false);
+        setProgress("");
+        useHttpFallbackRef.current = true;
+        setUseHttpFallback(true);
+        setStatus("Modo HTTP (erro de sessão WS)");
         return;
       }
       reconnectAttemptsRef.current += 1;
