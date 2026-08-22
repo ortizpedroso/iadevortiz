@@ -26,6 +26,8 @@ RUN apt-get update \
 
 COPY requirements-prod.txt pyproject.toml ./
 COPY pkf ./pkf
+COPY alembic.ini ./
+COPY alembic ./alembic
 COPY --from=frontend /frontend/dist ./frontend/dist
 
 RUN pip install --no-cache-dir -r requirements-prod.txt \

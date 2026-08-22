@@ -72,7 +72,12 @@ if [ "$_health_ok" -eq 0 ]; then
   docker compose --profile "$PROFILE" logs pkf --tail 40 2>/dev/null || true
   echo "AVISO: token fraco (ex.: teste123) derruba o boot em PKF_ENV=production."
   echo "       Rode: bash deploy/hostinger/set-env-keys.sh && docker compose --profile $PROFILE up -d pkf --force-recreate"
+  echo "ERRO: PKF não healthy — abortando antes das migrações."
+  exit 1
 fi
+
+echo "==> Rodando migrações pendentes"
+docker compose --profile "$PROFILE" exec -T -w /app pkf alembic upgrade head
 
 echo "==> Auto-configurar OmniRoute (chave + provedores free)"
 bash deploy/hostinger/fix-ninerouter-key.sh || echo "AVISO: fix-ninerouter-key falhou"
