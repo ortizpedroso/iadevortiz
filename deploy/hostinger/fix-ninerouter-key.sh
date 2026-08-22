@@ -116,7 +116,14 @@ function extractKey(data) {
     return { attempt, data };
   }
 
-  const passwordCandidates = [...new Set([newPass, dashPass].filter(Boolean))];
+  const passwordCandidates = [...new Set(
+    [
+      newPass,
+      dashPass,
+      process.env.ALLOW_LEGACY_OMNI_PASSWORD === "1" ? "pkf-admin-2026" : "",
+      process.env.ALLOW_LEGACY_OMNI_PASSWORD === "1" ? "123456" : "",
+    ].filter(Boolean)
+  )];
   let activePass = passwordCandidates[0];
   let login = await tryLogin(activePass);
   let loginData = login.data;

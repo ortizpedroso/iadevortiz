@@ -157,16 +157,20 @@ migrate_weak_auth_token
 migrate_omniroute_password() {
   local current=""
   current="$(grep '^NINEROUTER_DASHBOARD_NEW_PASSWORD=' .env 2>/dev/null | tail -n1 | cut -d= -f2- || true)"
-  local weak=0
   case "${current,,}" in
-    ""|pkf-admin-2026|123456) weak=1 ;;
+    pkf-admin-2026|123456) ;;
+    "")
+      if docker volume ls 2>/dev/null | grep -Eq 'omniroute-data|pkf_omniroute-data'; then
+        echo "==> OmniRoute: volume existente — mantendo senha persistida (não gera nova no .env)"
+        return 0
+      fi
+      ;;
+    *)
+      if [ "${#current}" -ge 12 ]; then
+        return 0
+      fi
+      ;;
   esac
-  if [ -n "$current" ] && [ "${#current}" -lt 12 ]; then
-    weak=1
-  fi
-  if [ "$weak" -eq 0 ] && [ -n "$current" ]; then
-    return 0
-  fi
   local new_pass=""
   new_pass="$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))' 2>/dev/null || openssl rand -hex 16)"
   set_kv NINEROUTER_DASHBOARD_NEW_PASSWORD "$new_pass"
@@ -175,17 +179,48 @@ migrate_omniroute_password() {
 }
 
 migrate_postgres_password() {
+  sync_database_url() {
+    local pg_pass=""
+    pg_pass="$(grep '^POSTGRES_PASSWORD=' .env 2>/dev/null | tail -n1 | cut -d= -f2- || echo pkf)"
+    set_kv DATABASE_URL "postgresql+asyncpg://pkf:${pg_pass}@postgres:5432/pkf"
+  }
+
   if grep -q '^POSTGRES_PASSWORD=' .env; then
+    sync_database_url
     return 0
   fi
+
+  if docker volume ls 2>/dev/null | grep -Eq 'pkf-postgres|pkf_pkf-postgres'; then
+    set_kv POSTGRES_PASSWORD "pkf"
+    echo "==> POSTGRES_PASSWORD=pkf (volume Postgres existente — compatibilidade)"
+    sync_database_url
+    return 0
+  fi
+
   local pass=""
   pass="$(python3 -c 'import secrets; print(secrets.token_urlsafe(16))' 2>/dev/null || openssl rand -hex 16)"
   set_kv POSTGRES_PASSWORD "$pass"
-  echo "==> POSTGRES_PASSWORD gerado automaticamente na primeira instalação"
+  echo "==> POSTGRES_PASSWORD gerado automaticamente (instalação nova)"
+  sync_database_url
+}
+
+repair_postgres_env_if_needed() {
+  if ! docker volume ls 2>/dev/null | grep -Eq 'pkf-postgres|pkf_pkf-postgres'; then
+    return 0
+  fi
+  local current=""
+  current="$(grep '^POSTGRES_PASSWORD=' .env 2>/dev/null | tail -n1 | cut -d= -f2- || true)"
+  if [ "$current" = "pkf" ]; then
+    return 0
+  fi
+  echo "==> Reparando POSTGRES_PASSWORD/DATABASE_URL para volume legacy (pkf)"
+  set_kv POSTGRES_PASSWORD "pkf"
+  set_kv DATABASE_URL "postgresql+asyncpg://pkf:pkf@postgres:5432/pkf"
 }
 
 migrate_omniroute_password
 migrate_postgres_password
+repair_postgres_env_if_needed
 set_kv PKF_FALLBACK "${PKF_FALLBACK:-}"
 
 set_kv PKF_PROVIDER "${PKF_PROVIDER:-ninerouter}"

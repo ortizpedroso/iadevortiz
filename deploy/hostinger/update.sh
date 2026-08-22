@@ -26,6 +26,20 @@ git pull origin main
 echo "==> Mesclar .env (preserva GROQ/GEMINI/NINEROUTER existentes)"
 bash deploy/hostinger/set-env-keys.sh
 
+if docker volume ls 2>/dev/null | grep -Eq 'pkf-postgres|pkf_pkf-postgres'; then
+  if ! grep -q '^POSTGRES_PASSWORD=' .env 2>/dev/null || ! grep '^POSTGRES_PASSWORD=pkf' .env >/dev/null 2>&1; then
+    echo "==> Volume Postgres detectado — garantindo POSTGRES_PASSWORD=pkf"
+    if grep -q '^POSTGRES_PASSWORD=' .env; then
+      sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=pkf/' .env
+    else
+      echo 'POSTGRES_PASSWORD=pkf' >> .env
+    fi
+    if grep -q '^DATABASE_URL=' .env; then
+      sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql+asyncpg://pkf:pkf@postgres:5432/pkf|' .env
+    fi
+  fi
+fi
+
 echo "==> OmniRoute/9Router no .env (se ainda faltar URL)"
 grep -q '^NINEROUTER_URL=' .env || cat >> .env << 'EOF'
 

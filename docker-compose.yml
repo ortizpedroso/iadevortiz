@@ -10,7 +10,7 @@ services:
 
       POSTGRES_USER: pkf
 
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pkf}
 
       POSTGRES_DB: pkf
 
