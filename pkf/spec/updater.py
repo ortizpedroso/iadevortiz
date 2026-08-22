@@ -77,6 +77,9 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - PostgreSQL, memória persistente, skills BM25, juiz /goal
 - Headers de segurança; changelog automático na spec após build
 - **Verificação T3 persistida** (`.pkf/last_verify.json`) + ferramenta `get_last_verification` para respostas fundamentadas pós-build
+- **Retomada de build**: `/build resume` ou linguagem natural ("continue de onde parou", "retomar") preserva agentes já `done` em `tasks.json`; classificador `resume_request`
+- **Progresso do build**: ferramenta `get_build_status` (fase, spec, árvore de tarefas, verificação T3, checkpoint) para o `generalista`
+- **Documentação técnica**: `docs/ARQUITETURA.md` (schema DB, endpoints, fluxos Mermaid) — manter em sync com mudanças de schema/API/roteamento
 - **Saudações locais** (`oi`, `olá`) sem chamar gateway de IA
 - **Classificador de intenção**: perguntas conversacionais (`você consegue…`, `dá pra…`) tratadas antes de `FEATURE_HINTS`; fallback LLM só quando keywords não resolvem
 - **Arquiteto entrevista**: uma pergunta por vez; sem `save_spec` até objetivo, requisitos, restrições e critério de “concluído” claros; pedido já detalhado pode ir direto à spec
@@ -121,12 +124,13 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - `run_command`: sandbox shlex, allowlist, env filtrado; bloqueado em produção por padrão
 - `search_code`: modo semântico (`mode=semantic`) via índice local
 - `get_last_verification`: último resultado real da fase Verificação (T3)
+- `get_build_status`: progresso atual do pipeline (fase, spec, agentes done/pending, checkpoint)
 
 ## Fluxo /build
 
-1. Brainstorm (architect, sem código)
+1. Brainstorm (architect, sem código) — omitido em `/build resume`
 2. Planner (LLM ou heurística) → fases ordenadas
-3. Implementação em fases com handoff API
+3. Implementação em fases com handoff API (`prepare_for_build`; retomada pula agentes `done`)
 4. Verificação de arquivos + retry por agente
 5. Loop review → correção → review até **Status: APROVADO**
 6. Juiz independente (/goal) + resposta amigável na UI
