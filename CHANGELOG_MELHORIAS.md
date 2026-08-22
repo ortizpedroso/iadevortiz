@@ -4,6 +4,40 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Remoção do Grupo D (LISTEN/NOTIFY) — handoff como único mecanismo
+
+**Data:** 2026-08-22  
+**Branch:** `cursor/pkf-remove-pubsub`
+
+### Por que foi removido
+
+O PR #26 introduziu dois mecanismos para o mesmo problema (coordenação de estado entre agentes):
+
+1. **Handoff (Grupo A2)** — resumo compacto em arquivo/DB (`pkf/workflow/handoff.py`)
+2. **Pub/Sub PostgreSQL (Grupo D)** — `LISTEN/NOTIFY` via `asyncpg` (`pkf/web/state_events.py`)
+
+O Grupo D foi removido porque:
+
+- **Duplicava** o handoff, que já injeta contexto nas tarefas dependentes via `handoff_context_for_deps()`.
+- Introduzia **`asyncpg` como dependência** usada apenas pelo listener NOTIFY (o driver async do SQLAlchemy permanece via `pyproject.toml`).
+- O fallback in-memory **não é compartilhado entre processos**; com PKF em processo único, o benefício real era nulo.
+
+### O que permanece
+
+| Componente | Status |
+|------------|--------|
+| DAG + `depends_on` + topological sort | Mantido |
+| Handoff (`handoff.py`, `session_handoffs`) | Mantido |
+| `ast_parser` + grafo de impacto (BFS reviewer) | Mantido |
+| Migração Alembic `002_session_handoffs` | Mantida (coluna do handoff, não do pub/sub) |
+
+### Arquivos removidos
+
+- `pkf/web/state_events.py`
+- Referências em `pkf/web/server.py` e `pkf/workflow/orchestrator.py`
+
+---
+
 ## Arquitetura de Grafos (DAG) e Sincronia Autônoma
 
 **Data:** 2026-08-22  

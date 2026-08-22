@@ -101,7 +101,6 @@ async def run_build_dag(
             tracker.set_child_status(task.agent, "done")
             await router.emit("parallel_done", agent=task.agent, node=task.node_id)
             await router.emit_task_tree(tracker)
-            await _notify_agent_done(router, task)
             return task.agent, reply or "(sem resposta)"
         except (APIConnectionError, APIStatusError, APITimeoutError, RuntimeError, ValueError) as exc:
             tracker.set_child_status(task.agent, "failed")
@@ -166,22 +165,6 @@ async def run_build_dag(
                 completed.add(task.task_id)
 
     return results
-
-
-async def _notify_agent_done(router, task: BuildTask) -> None:
-    from pkf.web.state_events import emit_state_event
-
-    session_id = None
-    if router.db and getattr(router.db, "session_id", None):
-        session_id = str(router.db.session_id)
-    await emit_state_event(
-        {
-            "kind": "agent_phase_done",
-            "task_id": task.task_id,
-            "agent": task.agent,
-            "session_id": session_id,
-        }
-    )
 
 
 def failed_agents(results: list[tuple[str, str]]) -> set[str]:
