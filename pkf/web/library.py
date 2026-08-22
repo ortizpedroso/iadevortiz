@@ -494,10 +494,9 @@ async def rename_chat(
         async with factory() as session:
             user = await ensure_default_user(session)
             from pkf.db.models import ChatSession
-            import uuid as uuid_mod
 
             try:
-                cid = uuid_mod.UUID(chat_id)
+                cid = uuid.UUID(chat_id)
             except ValueError as exc:
                 raise ValueError("Chat não encontrado") from exc
             chat_row = await session.get(ChatSession, cid)
