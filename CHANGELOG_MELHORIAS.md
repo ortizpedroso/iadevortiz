@@ -4,6 +4,45 @@ Documento reescrito na **Fase 0 (rodada 2)** para registrar tudo que mudou entre
 
 ---
 
+## Arquitetura de Grafos (DAG) e Sincronia Autônoma
+
+**Data:** 2026-08-22  
+**Branch:** `cursor/pkf-graph-orchestration`
+
+### Contexto
+
+O pipeline `/build` usava `PHASE_GROUPS` sequenciais rígidos e repassava histórico bruto entre agentes. A refatoração introduz DAG com `depends_on`, handoff compacto e pub/sub PostgreSQL.
+
+### O que mudou
+
+| Grupo | Mudança |
+|-------|---------|
+| **A** | `session_handoffs` JSONB em `chat_sessions`; schema DAG (`depends_on`) em `task_trees`; módulos `task_graph.py` e `handoff.py` |
+| **B** | `plan_build` gera topologia DAG; `run_build_dag` com ordenação topológica dinâmica + `asyncio.gather` por grau zero |
+| **C** | `pkf/utils/ast_parser.py` extrai imports; `impact_graph.py` + BFS limita escopo do `reviewer` |
+| **D** | `LISTEN pkf_state_events` via asyncpg; `NOTIFY` ao concluir fase de agente; injeção no próximo turno LLM |
+
+### Handoff e carga de contexto
+
+Ao fim de cada tarefa, o orquestrador grava em `session_handoffs` (e `.pkf/session_handoffs.json`) um resumo de até 2000 caracteres. Tarefas dependentes recebem apenas esses handoffs via `handoff_context_for_deps()`, em vez do histórico completo de mensagens do agente anterior.
+
+### Limitações técnicas
+
+- Listener `asyncpg` exige `DATABASE_URL` com Postgres real; sem DB, eventos ficam em memória (`_pending_by_session`).
+- Grafo de impacto AST cobre apenas arquivos `.py` no workspace do projeto.
+- Migração Alembic `002_session_handoffs` necessária em deploys com Postgres existente.
+
+### Definition of Done
+
+- [x] DAG com `depends_on` no planner e payload `dag_v1` persistido
+- [x] Orquestrador não executa tarefa antes das dependências
+- [x] `ast_parser` testado; reviewer recebe escopo BFS
+- [x] Pub/Sub NOTIFY/LISTEN integrado ao ciclo de mensagens
+- [x] `python3 -m pytest tests/ -q` → **251 passed**
+- [x] `pkf/agents/prompts.py` não alterado
+
+---
+
 ## Investigação WS 1011 — causa real e restauração H2
 
 **Data:** 2026-08-22  
