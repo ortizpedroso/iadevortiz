@@ -195,6 +195,25 @@ TOOL_DEFINITIONS: dict[str, dict] = {
         ),
         "parameters": {"type": "object", "properties": {}},
     },
+    "get_prior_phase_response": {
+        "description": (
+            "Retorna a resposta completa (não truncada) de um agente de fase anterior do build. "
+            "Use task_id (ex.: backend) ou agent (ex.: backend). Não reinvoca o agente."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {
+                    "type": "string",
+                    "description": "ID da tarefa no DAG (ex.: backend, logic).",
+                },
+                "agent": {
+                    "type": "string",
+                    "description": "Nome do agente se task_id não for conhecido.",
+                },
+            },
+        },
+    },
     "skill_search": {
         "description": "Busca skills Markdown por relevância BM25 e auto-carrega a melhor.",
         "parameters": {
@@ -229,9 +248,9 @@ AGENT_TOOLS = {
         "graph_view",
         "graph_add_node",
     ],
-    "frontend": _SHARED_CORE,
+    "frontend": _SHARED_CORE + ["get_prior_phase_response"],
     "backend": _SHARED_CORE,
-    "logic": _SHARED_CORE,
+    "logic": _SHARED_CORE + ["get_prior_phase_response"],
     "reviewer": [
         "project_context",
         "list_dir",
@@ -254,6 +273,7 @@ AGENT_TOOLS = {
         "run_command",
         "get_spec",
         "verify_build",
+        "get_prior_phase_response",
     ],
     "generalista": [
         "project_context",

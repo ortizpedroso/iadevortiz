@@ -83,6 +83,8 @@ Assistente multiagente para especificar, implementar, revisar e testar software 
 - **Verificação T3 persistida** (`.pkf/last_verify.json`) + ferramenta `get_last_verification` para respostas fundamentadas pós-build
 - **Retomada de build**: `/build resume` ou linguagem natural ("continue de onde parou", "retomar") preserva agentes já `done` em `tasks.json`; classificador `resume_request`
 - **Progresso do build**: ferramenta `get_build_status` (fase, spec, árvore de tarefas, verificação T3, checkpoint) para o `generalista`
+- **Consulta barata**: `get_prior_phase_response` lê resposta integral de fase anterior (`.pkf/build_agent_responses.json`, máx. 20 entradas)
+- **Retomada + handoff**: checkpoint documenta handoffs disponíveis; `mark_resume_agents` na árvore; status `skipped` para dependentes bloqueados
 - **Documentação técnica**: `docs/ARQUITETURA.md`, `docs/AUDITORIA_AGENTES.md`, `specs/remediacao-auditoria-agentes.md`
 - **Saudações locais** (`oi`, `olá`) sem chamar gateway de IA
 - **Classificador de intenção**: perguntas conversacionais (`você consegue…`, `dá pra…`) tratadas antes de `FEATURE_HINTS`; fallback LLM só quando keywords não resolvem

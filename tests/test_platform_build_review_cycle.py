@@ -52,6 +52,8 @@ SPEC_CHECKS = (
     ("save_spec substância", "validate_spec_substance"),
     ("PATCH rename chat", "PATCH /api/chats"),
     ("Alembic deploy", "alembic upgrade head"),
+    ("Consulta barata", "get_prior_phase_response"),
+    ("Handoff resume", "mark_resume_agents"),
 )
 
 
@@ -182,6 +184,10 @@ def _implementation_gaps(spec_text: str) -> list[str]:
         gaps.append("Utils: impact_graph.py ausente")
     if Path("pkf/web/state_events.py").is_file():
         gaps.append("Web: state_events.py ainda presente (Grupo D removido)")
+    if "get_prior_phase_response" not in impl:
+        gaps.append("Tools: get_prior_phase_response ausente")
+    if not Path("pkf/workflow/build_results.py").is_file():
+        gaps.append("Workflow: build_results.py ausente")
     return gaps
 
 
